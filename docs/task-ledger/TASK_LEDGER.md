@@ -20,7 +20,11 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-002 | ADMIN | Platform/auth/notification compatibility spikes, proven matrix and blockers | FND-001 | **PARTIAL** | parent task; documentation/static/host portion delivered by FND-002A. Device/Windows/emulator portions outstanding |
 | FND-002A | ADMIN | Host-available capability spike: upstream recheck, capability contracts, dated matrix, runtime test plan | FND-001 | **DONE** | [FND-002A report](FND-002A-completion-report.md) · [evidence register](../platform-matrix/FND-002A-capability-evidence.md) |
 | FND-002B | ADMIN | Device/runner execution of the runtime test plan | FND-002A, **D1–D3**, O2/O3/O5 | **BLOCKED** | needs a decision *and* hardware — see [runtime test plan](../platform-matrix/FND-002-runtime-test-plan.md) |
-| FND-003 | ADMIN | Shared schemas, exhaustive transitions, permissions, policies, money/custody invariants | FND-001 (only) | **TODO — dependencies met** | does *not* depend on FND-002 runtime evidence; see [FND-003 dependency note](#fnd-003-dependency-note) |
+| FND-003 | ADMIN | Shared schemas, exhaustive transitions, permissions, policies, money/custody invariants | FND-001 | **PARTIAL** | parent task; command/authorization slice delivered by FND-003A. Lifecycle, inventory, money and proof slices outstanding |
+| FND-003A | ADMIN | Command and event envelopes, identity/membership/scope, permission matrix, authorization invariants | FND-001 | **DONE** | [FND-003A report](FND-003A-completion-report.md) · contract **0.2** |
+| FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **TODO** | not blocked by hardware or O6 |
+| FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
+| FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
 
 ### FND-002 status after FND-002A
@@ -53,24 +57,28 @@ support and `awesome_notifications_fcm` states users "MUST not use
 `firebase_messaging`" with it. No dependency was substituted. See
 [ADR-0005](../decisions/ADR-0005-notification-stack-decision-required.md).
 
-### FND-003 dependency note
+### FND-003 status after FND-003A
 
-FND-003 (shared schemas, exhaustive transitions, permissions, policies,
-money/custody invariants) depends on **FND-001 only**. It does **not** require
-FND-002's physical, Windows or emulator evidence to be complete: defining the
-contract is a design and specification activity, and its own prerequisites are
-met.
+FND-003 is a **parent** contract task, split into slices so the work not
+needing owner decisions could land immediately.
 
-Two constraints on that freedom:
+**FND-003A — DONE (2026-09-09).** Command and event envelopes, idempotency
+semantics, identity/membership/scope vocabulary, 35 stable permission ids, one
+canonical least-privilege matrix, and a pure-Dart authorization evaluator with
+deny-path tests. Contract version **0.1 → 0.2** (additive). No lifecycle,
+inventory or money rule was guessed.
 
-- FND-003 must not encode a platform capability as settled when FND-002 has not
-  proven it. Where a contract decision depends on notification or Windows
-  behaviour, it records the open question rather than assuming an answer.
-- FND-003 needs owner decision **O6** (currency, fee policy, commission
-  ownership) before the money and settlement invariants can be finalised.
+**Remaining slices:**
 
-FND-003 must **not** be selected as next merely because part of FND-002 is
-blocked. The ADMIN scheduler chooses the next bounded task.
+| Slice | Owns | Status |
+|---|---|---|
+| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **TODO** — not blocked |
+| FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
+| FND-003D proof/dispute | Customer OTP/proof format and fallback workflow | **TODO** — needed before delivery confirmation is coded |
+
+FND-003A depended on FND-001 only. It did **not** require FND-002 runtime
+evidence, notification decisions D1–D3, devices, a Windows runner, Firebase
+credentials or the emulator — and none were used.
 
 ## End-to-end proof
 
@@ -102,7 +110,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.1** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. Only `ContractVersion` exists. No schemas, no transition tables yet. |
+| Wire contract (`cp_contracts`) | **0.2** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) adds command/event envelopes, identity, membership, scope, 35 permissions and the authorization model — additive, so minor only. No lifecycle, inventory or money rules yet. See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships
@@ -120,7 +128,7 @@ These need a human; no executor can do them.
 | O4 | Install Firebase CLI + FlutterFire CLI | FND-004 emulator/security tests |
 | O5 | Create Firebase projects per environment and supply config | FND-004 |
 | O6 | Decide currency, fee policy and commission ownership | FND-003 money invariants |
-| O7 | Decide the git remote / hosting and branch protection | CI in FND-004 |
+| O7 | **Configure branch protection / CI governance** on `main`. The remote and hosting are settled: `github.com/mdmohiuddin655/commerce_platform`, pushed 2026-09-09. Branch protection itself is **unverified** — no GitHub evidence was gathered, so it must not be assumed configured. | CI in FND-004 |
 | D1 | **Decide: is web push required at launch?** Settles the notification stack (ADR-0005) | FND-002B, FND-004 |
 | D2 | If the Awesome path is wanted: establish `awesome_notifications_fcm`'s license — it is not stated on its package page | FND-002B |
 | D3 | **Decide Windows closed-app push:** fund a WNS route (Azure/Entra or Store registration, with lead time) or accept local-toast + durable-inbox only | FND-002B (C6) |

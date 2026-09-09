@@ -10,8 +10,19 @@ import 'package:meta/meta.dart';
 class ContractVersion implements Comparable<ContractVersion> {
   const ContractVersion(this.major, this.minor);
 
-  /// Contract shipped by this build. Bumped by FND-003 and later tasks.
-  static const ContractVersion current = ContractVersion(0, 1);
+  /// Contract shipped by this build.
+  ///
+  /// History — see `docs/contracts/version-history.md`:
+  ///
+  /// - **0.1** (FND-001) — this type only. No vocabulary.
+  /// - **0.2** (FND-003A) — additive: command envelope, idempotency,
+  ///   event envelope, principal/role/membership/scope, permissions and the
+  ///   authorization decision model.
+  ///
+  /// 0.1 → 0.2 is a **minor** bump because [canRead] keys on [major] alone:
+  /// nothing defined at 0.1 changed meaning, and every addition is new. A 0.1
+  /// reader ignores what it does not know; a 0.2 reader reads 0.1 payloads.
+  static const ContractVersion current = ContractVersion(0, 2);
 
   final int major;
   final int minor;
