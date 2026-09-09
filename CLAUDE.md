@@ -1,42 +1,36 @@
-# Working in this repository
+# CLAUDE.md
 
-Read `SHARED_BLUEPRINT.md` first — it is the architecture baseline. Then
-`CONSTRAINTS.md` and `docs/task-ledger/TASK_LEDGER.md` for current state.
+**The repository-wide rules live in [`AGENTS.md`](AGENTS.md). Read it first.**
 
-## Non-negotiable
+`AGENTS.md` is canonical for architecture, layering, server authority,
+contracts, generated code, validation, evidence/honesty rules, task workflow
+and operational limits. This file adds only Claude-Code-specific working notes
+and deliberately does not restate those rules, so the two cannot drift apart.
 
-- Structure comes from the blueprint. Features live at
-  `apps/<app>/lib/features/<feature>/{domain,application,data,presentation}`.
-  Renaming a blueprint directory requires an ADR in `docs/decisions/`.
-- Packages never import apps. `domain` never imports Flutter. `presentation`
-  never imports `data`. Run `./tools/check_layering.sh`.
-- Money is `cp_core`'s `Money` — integer minor units, explicit currency. Never
-  a `double`, never a bare `int` passed around as "amount".
-- Never invent a contract field, status string, fee amount or policy. If
-  `docs/contracts/` does not define it, the work is blocked on FND-003 — report
-  that instead of guessing.
-- Never claim a check passed without running it. Anything unrunnable is
-  reported **NOT RUN**, with the reason.
-- No cloud deployment, no Firebase project creation, no secret committed.
+## Claude-specific notes
 
-## Before finishing any task
+- Before finishing any task run `./tools/run_checks.sh` and paste the real
+  output into the completion report. Do not summarise a run you did not do.
+- The Bash tool runs **zsh** here. `for x in $VAR` does not word-split — quote,
+  use an array, or `${=VAR}`. The gate scripts themselves are bash.
+- Prefer editing files with the dedicated tools over shell heredocs when a
+  file already exists, so an accidental overwrite cannot lose committed work.
+- Long commands: `flutter pub get`, `flutter analyze` and `flutter test` can
+  each take minutes on a cold cache. Set a generous timeout rather than
+  retrying and leaving two resolutions racing.
+- Use the session scratchpad for logs and intermediate output. Never write
+  scratch files into the repository tree.
+- When a task's scope is bounded (a FIX task, for example), stay inside its
+  declared file list and say so explicitly if a required repair falls outside
+  it — do not silently widen scope.
 
-```bash
-./tools/run_checks.sh
-```
+## Quick map
 
-Then update `docs/task-ledger/TASK_LEDGER.md` and write
-`docs/task-ledger/<TASK-ID>-completion-report.md` in the shape given in
-`CONTRIBUTING.md`.
-
-## Environment notes
-
-- The shell is **zsh**: `for x in $VAR` does not word-split. Quote, or use
-  arrays, or `${=VAR}`.
-- Pub **workspace**: run `flutter pub get` at the root; one root
-  `pubspec.lock`. Do not add `melos` or per-package lockfiles (ADR-0002).
-- Dart package names carry a `cp_` prefix while directories keep the blueprint
-  names (ADR-0003).
-- Not installed here: Firebase CLI, FlutterFire CLI, `gh`, Docker. No Windows
-  runner, no physical device, Android licenses unaccepted. See
-  `docs/architecture/toolchain.md`.
+| Need | File |
+|---|---|
+| All executor rules | [`AGENTS.md`](AGENTS.md) |
+| Architecture baseline | [`SHARED_BLUEPRINT.md`](SHARED_BLUEPRINT.md) |
+| Release-blocking constraints | [`CONSTRAINTS.md`](CONSTRAINTS.md) |
+| Current task state | [`docs/task-ledger/TASK_LEDGER.md`](docs/task-ledger/TASK_LEDGER.md) |
+| What is installed / missing | [`docs/architecture/toolchain.md`](docs/architecture/toolchain.md) |
+| Report shape, branches | [`CONTRIBUTING.md`](CONTRIBUTING.md) |

@@ -4,7 +4,9 @@
 - **Owner project:** ADMIN
 - **Date:** 2026-09-09
 - **Host:** macOS 26.6.2 (darwin-arm64), zsh
-- **Status:** **DONE** — with the environment gaps below recorded as blockers for FND-002/FND-004
+- **Status:** **DONE** — amended by FND-001-FIX-001 on 2026-09-09; see
+  [§7 Corrections](#7-corrections-fnd-001-fix-001-2026-09-09) for what this report got wrong
+- **Environment gaps** below are blockers for FND-002/FND-004, not for FND-001
 
 ## 1. Repository inspection (before any change)
 
@@ -64,11 +66,13 @@ each app's `lib/features/README.md` and shipped as a copyable template at
 
 ### Tooling
 
-- `tools/check_layering.sh` — six guard rules (packages↛apps, client↛backend,
-  `domain`↛Flutter, `presentation`↛`data`, `application`↛`presentation`, no
-  key-shaped secrets), non-zero exit on any hit.
+- `tools/check_layering.sh` — guard rules with non-zero exit on any hit.
+  **Six at the time of this commit**; FND-001-FIX-001 added a seventh
+  (app↛app) and widened the `domain` rule to Firebase/UI packages.
 - `tools/run_checks.sh` — the single gate: resolve → analyze → dart test →
   flutter test → guards. FND-004's CI must call this, not redefine it.
+  **Corrected by FND-001-FIX-001**: at this commit it discovered members by
+  filesystem glob and could silently skip a declared member (see §8).
 
 ### Documentation
 
@@ -139,7 +143,45 @@ O3 attach physical Android/iOS devices · O4 install Firebase + FlutterFire CLI
 currency, fee policy and commission ownership (FND-003 input) · O7 decide git
 remote/hosting and branch protection.
 
-## 7. Honest scope statement
+## 7. Corrections (FND-001-FIX-001, 2026-09-09)
+
+A recheck of this commit against the FND-001 acceptance criteria found four
+gaps. Recorded here so the report is not left overstating what existed.
+
+1. **`AGENTS.md` was missing.** This report never claimed it existed — it
+   listed only `CLAUDE.md` — so the report was not false, but the deliverable
+   was absent. FND-001 requires a repository-wide executor instruction file.
+   `git ls-tree e82e932` confirms no path matching `agents` at any depth.
+   FND-001-FIX-001 **created** `AGENTS.md` as the canonical rule set and
+   reduced `CLAUDE.md` to Claude-specific notes that reference it, so the two
+   cannot diverge.
+
+2. **`run_checks.sh` could silently skip a declared workspace member.** It
+   discovered members with `for d in apps/*/ packages/*/`, a filesystem glob,
+   not the `workspace:` declaration. A member declared outside those two
+   directories would never have been tested, and the gate would still have
+   printed `ALL CHECKS PASSED`. Proven by negative control, then repaired to
+   derive members from configuration via the new `tools/check_workspace.sh`.
+   Members with no tests are now printed as `NO TESTS` and counted instead of
+   being invisible.
+
+3. **Two required failure modes were unguarded.** `check_layering.sh` had no
+   app-to-app import rule, and its `domain` rule caught only
+   `package:flutter/`, not Firebase, Drift or the design system. Both were
+   added and proven to fire.
+
+4. **ADR-0002 did not justify the Melos deviation.** The shared baseline
+   defaults to workspaces *plus* Melos, so omitting Melos needed an explicit
+   decision with evidence. The ADR stated the choice but not the replacement
+   mechanism, the measured evidence, the Windows/CI shell implication or
+   revisit triggers. Strengthened; the decision itself stands.
+
+**Verification claims in §3 remain accurate as of this commit** — the 15
+declared workspace members, the 17 passing tests and the six negative controls
+were all really run. What §3 could not know is that the gate producing them
+had a coverage hole; that is what correction 2 fixes.
+
+## 8. Honest scope statement
 
 This is bootstrapped scaffolding with a verified toolchain and mechanically
 enforced boundaries. It is **not** capacity-certified software, no platform

@@ -71,6 +71,17 @@ lockfile.
 ```bash
 flutter pub get                 # resolve the whole workspace (run at root)
 flutter analyze                 # analyze every app and package
-./tools/run_checks.sh           # analyze + all tests + layering guard
+./tools/run_checks.sh           # the full gate: resolve + membership + analyze + tests + guards
+./tools/check_workspace.sh      # workspace membership only (--list prints the members)
 ./tools/check_layering.sh       # structural guard rails only
 ```
+
+The gate discovers workspace members from the root `pubspec.yaml`
+`workspace:` block, so a newly declared member cannot be silently skipped.
+See ADR-0002 (evidence E2, E5) and `AGENTS.md` §6.
+
+**Shell requirement.** `run_checks.sh`, `check_workspace.sh` and
+`check_layering.sh` are `#!/usr/bin/env bash` and use bash-only syntax. On
+macOS and Linux they run as-is. On Windows they need Git Bash or WSL; a CI job
+must declare a bash shell explicitly. This is a known trade-off of not adopting
+Melos — ADR-0002, revisit trigger R3.
