@@ -1,0 +1,17 @@
+# Shared package: cp_core  (directory: packages/core)
+# Layering rules: docs/architecture/layering-rules.md
+name: cp_core
+description: "Cross-cutting primitives: Result, failures, Money minor units, clock and id ports."
+publish_to: "none"
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+
+dependencies:
+  meta: ^1.16.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  test: ^1.25.0

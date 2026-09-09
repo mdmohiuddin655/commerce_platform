@@ -1,0 +1,19 @@
+# Shared package: cp_observability  (directory: packages/observability)
+# Layering rules: docs/architecture/layering-rules.md
+name: cp_observability
+description: "Structured logging, tracing and crash-report ports."
+publish_to: "none"
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+
+dependencies:
+  cp_core:
+    path: ../core
+  meta: ^1.16.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  test: ^1.25.0

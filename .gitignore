@@ -1,0 +1,90 @@
+# ---- Dart / Flutter ----
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+pubspec_overrides.yaml
+*.dart_tool
+coverage/
+doc/api/
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/
+
+# ---- Generated code (regenerate, never commit) ----
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+*.gr.dart
+
+# ---- IDE / editors ----
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.iml
+*.ipr
+*.iws
+.history/
+
+# ---- macOS / OS noise ----
+.DS_Store
+Thumbs.db
+
+# ---- Android ----
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/app/*.jks
+**/android/app/*.keystore
+**/android/captures/
+**/android/.cxx/
+
+# ---- iOS / macOS native ----
+**/ios/Pods/
+**/macos/Pods/
+**/ios/.symlinks/
+**/macos/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/App.framework
+**/ios/Flutter/flutter_export_environment.sh
+**/Podfile.lock
+*.mobileprovision
+*.p8
+*.p12
+*.cer
+*.certSigningRequest
+xcuserdata/
+
+# ---- Windows / Linux desktop ----
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# ---- Web ----
+**/web/build/
+
+# ---- Node (backend) ----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# ---- Firebase / secrets: NEVER commit ----
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+**/firebase-debug.log
+**/.firebase/
+**/serviceAccountKey*.json
+**/*-service-account*.json
+secrets/
+*.pem
+
+# ---- Local scratch ----
+/scratch/
+/tmp/

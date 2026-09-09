@@ -1,0 +1,23 @@
+# Shared package: cp_design_system  (directory: packages/design_system)
+# Layering rules: docs/architecture/layering-rules.md
+name: cp_design_system
+description: "Tokens, themes and shared widgets for all five apps."
+publish_to: "none"
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.0"
+
+dependencies:
+  cp_core:
+    path: ../core
+  flutter:
+    sdk: flutter
+  meta: ^1.16.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

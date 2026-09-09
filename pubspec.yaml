@@ -1,0 +1,31 @@
+# Pub workspace root — one lockfile, one resolved dependency set for all
+# five apps and all shared packages. Pinned toolchain: docs/architecture/toolchain.md
+name: commerce_platform
+description: >-
+  Shared monorepo root for the five-app commerce platform
+  (admin, user, agent, picker, rider). Contains no application code itself.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+
+workspace:
+  - apps/admin
+  - apps/agent
+  - apps/picker
+  - apps/rider
+  - apps/user
+  - packages/auth
+  - packages/contracts
+  - packages/core
+  - packages/design_system
+  - packages/feature_flags
+  - packages/local_store
+  - packages/networking
+  - packages/notifications
+  - packages/observability
+  - packages/sync
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
