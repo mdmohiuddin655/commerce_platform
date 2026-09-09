@@ -2,6 +2,7 @@
 /// adapter. Depends on nothing else in this repository.
 library;
 
+export 'package:cp_core/src/capability_platform.dart';
 export 'package:cp_core/src/clock.dart';
 export 'package:cp_core/src/failure.dart';
 export 'package:cp_core/src/money.dart';

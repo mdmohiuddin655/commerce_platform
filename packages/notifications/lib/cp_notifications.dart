@@ -1,6 +1,13 @@
-/// Push and durable-inbox transport abstraction.
+/// Platform-neutral notification boundary and the dated capability table that
+/// says what each platform can actually do.
 ///
-/// Not implemented at FND-001. Owner task: **FND-002 (spike) / FND-004**.
-/// This library exists so that workspace resolution, analysis and the
-/// dependency direction are verifiable before any feature work starts.
+/// This package intentionally depends on **no** notification vendor SDK. The
+/// choice between the Firebase Messaging stack and the Awesome Notifications
+/// stack is unresolved and is an owner decision — see
+/// `docs/decisions/ADR-0005-notification-stack-decision-required.md`. Adapters
+/// arrive in FND-004, after that decision and after device validation.
 library;
+
+export 'package:cp_notifications/src/notification_capability.dart';
+export 'package:cp_notifications/src/notification_dedupe.dart';
+export 'package:cp_notifications/src/notification_service.dart';

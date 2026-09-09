@@ -53,6 +53,16 @@ while IFS= read -r hit; do
   report "$hit"
 done < <(grep -rn --include='*.dart' -E "features/[a-z_]+/presentation/" /dev/null apps/*/lib/features/*/application/ 2>/dev/null)
 
+echo "==> no direct notification-vendor SDK import outside an adapter"
+# The FCM-vs-Awesome decision is open (ADR-0005). Until it is made and an
+# adapter package exists, business code must reach notifications only through
+# cp_notifications' platform-neutral NotificationService.
+while IFS= read -r hit; do
+  report "$hit"
+done < <(grep -rn --include='*.dart' \
+  -E "package:(firebase_messaging|awesome_notifications|awesome_notifications_fcm|flutter_local_notifications)/" \
+  /dev/null apps/ packages/ 2>/dev/null)
+
 echo "==> no committed secrets in tracked source"
 while IFS= read -r hit; do
   report "$hit"

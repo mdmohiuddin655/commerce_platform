@@ -1,6 +1,9 @@
-/// Drift-backed local cache and durable queue.
+/// Local persistence capability description.
 ///
-/// Not implemented at FND-001. Owner task: **FND-004**.
-/// This library exists so that workspace resolution, analysis and the
-/// dependency direction are verifiable before any feature work starts.
+/// FND-002A delivers the documented tier model only. No Drift dependency, no
+/// schema and no offline command queue is implemented here: the web WASM
+/// backend cannot be exercised without generated web platform folders, and the
+/// durable queue is later foundation work.
 library;
+
+export 'package:cp_local_store/src/persistence_capability.dart';

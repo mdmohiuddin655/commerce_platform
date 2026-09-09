@@ -17,41 +17,41 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 |---|---|---|---|---|---|
 | FND-001 | ADMIN | Inspect/bootstrap repository, task ledger, pinned toolchain and constraints | — | **DONE** | [FND-001 report](FND-001-completion-report.md) |
 | FND-001-FIX-001 | ADMIN | Recheck `e82e932`; close foundation evidence gaps (AGENTS.md, ADR-0002, workspace coverage, ledger accuracy) | FND-001 | **DONE** | [FND-001-FIX-001 report](FND-001-FIX-001-completion-report.md) |
-| FND-002 | ADMIN | Platform/auth/notification compatibility spikes, proven matrix and blockers | FND-001 | **PARTIALLY ELIGIBLE** | host-runnable portion is *not* blocked — see [FND-002 scope split](#fnd-002-is-not-wholly-blocked) |
+| FND-002 | ADMIN | Platform/auth/notification compatibility spikes, proven matrix and blockers | FND-001 | **PARTIAL** | parent task; documentation/static/host portion delivered by FND-002A. Device/Windows/emulator portions outstanding |
+| FND-002A | ADMIN | Host-available capability spike: upstream recheck, capability contracts, dated matrix, runtime test plan | FND-001 | **DONE** | [FND-002A report](FND-002A-completion-report.md) · [evidence register](../platform-matrix/FND-002A-capability-evidence.md) |
+| FND-002B | ADMIN | Device/runner execution of the runtime test plan | FND-002A, **D1–D3**, O2/O3/O5 | **BLOCKED** | needs a decision *and* hardware — see [runtime test plan](../platform-matrix/FND-002-runtime-test-plan.md) |
 | FND-003 | ADMIN | Shared schemas, exhaustive transitions, permissions, policies, money/custody invariants | FND-001 (only) | **TODO — dependencies met** | does *not* depend on FND-002 runtime evidence; see [FND-003 dependency note](#fnd-003-dependency-note) |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
 
-### FND-002 is not wholly blocked
+### FND-002 status after FND-002A
 
-Correction (FND-001-FIX-001). FND-002 was previously marked **BLOCKED** in
-full. That was wrong: only specific *checks* are unavailable, not the whole
-task. Blockage is recorded per capability, not per task.
+FND-002 is a **parent** capability task, split so that the evidence not
+requiring hardware could be produced immediately.
 
-**Blocked checks — require hardware or a CLI this host does not have:**
+**FND-002A — DONE (2026-09-09).** Rechecked every material platform claim
+against current upstream primary sources; built platform-neutral capability
+contracts in `cp_notifications`, `cp_auth` and `cp_local_store` with tests;
+produced a dated evidence register, an evidence-classed platform matrix and a
+concrete runtime test plan. Host-runnable checks were executed, including a
+browser capability probe in Chrome 152.
 
-| Check | Blocker | Owner action |
+**FND-002B — BLOCKED.** Device, Windows-runner and emulator execution. Blocked
+on hardware *and* on an owner decision, so hardware alone does not unblock it.
+
+| Blocked check | Missing | Owner action |
 |---|---|---|
-| Windows runtime validation (Auth REST + PKCE, notification transport, Drift SQLite on Windows) | no Windows machine or CI runner; host is macOS | O2 |
-| Physical-device push delivery, Android and iOS | no physical device attached; simulators are not push evidence | O3 |
-| Firebase emulator / Firestore rules and security tests | Firebase CLI and FlutterFire CLI not installed | O4 |
+| Android/iOS push behaviour | physical devices; Firebase project + APNs key | O3, O5 |
+| Windows build, auth REST/PKCE, toast, Drift native | Windows machine or CI runner | O2 |
+| Windows closed-app push | Azure/Entra or Store registration | **D3** |
+| Firestore rules / emulator suites | Firebase CLI, FlutterFire CLI | O4 |
+| Web FCM delivery | Firebase project, VAPID key, generated `web/` folders | O5, FND-004 |
 
-**Still executable now, on this host — eligible for a later bounded task:**
-
-- Package and API compatibility investigation: whether `firebase_messaging`
-  and `awesome_notifications` can coexist, read from current package sources,
-  changelogs, issue trackers and platform metadata — recorded as *desk
-  evidence*, explicitly not as a runtime pass.
-- Confirming `firebase_messaging` platform support declarations, and the
-  documented status of the Firebase Windows SDK.
-- Web-target checks that need only Chrome, which is present: Drift WASM
-  behaviour, service-worker notification display, browser storage eviction and
-  private-browsing behaviour.
-- macOS/Chrome-target auth and navigation semantics.
-- Designing the Windows OAuth PKCE flow and its test plan, so the work is ready
-  the moment a Windows runner exists.
-
-Rule: desk evidence never becomes a **PROVEN** row in the platform matrix. It
-narrows risk and sequences the spikes; a runtime row still needs a runtime run.
+**Headline finding.** The blueprint's *mandatory* `firebase_messaging` +
+`awesome_notifications` coexistence is **DECISION REQUIRED**, not merely
+untested: the `awesome_notifications` vendor deprecates `firebase_messaging`
+support and `awesome_notifications_fcm` states users "MUST not use
+`firebase_messaging`" with it. No dependency was substituted. See
+[ADR-0005](../decisions/ADR-0005-notification-stack-decision-required.md).
 
 ### FND-003 dependency note
 
@@ -121,3 +121,6 @@ These need a human; no executor can do them.
 | O5 | Create Firebase projects per environment and supply config | FND-004 |
 | O6 | Decide currency, fee policy and commission ownership | FND-003 money invariants |
 | O7 | Decide the git remote / hosting and branch protection | CI in FND-004 |
+| D1 | **Decide: is web push required at launch?** Settles the notification stack (ADR-0005) | FND-002B, FND-004 |
+| D2 | If the Awesome path is wanted: establish `awesome_notifications_fcm`'s license — it is not stated on its package page | FND-002B |
+| D3 | **Decide Windows closed-app push:** fund a WNS route (Azure/Entra or Store registration, with lead time) or accept local-toast + durable-inbox only | FND-002B (C6) |
