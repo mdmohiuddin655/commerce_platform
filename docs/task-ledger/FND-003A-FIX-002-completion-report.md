@@ -8,7 +8,9 @@
   `fnd/FND-003A-command-auth-contracts`, working tree clean
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** **0.2, corrected in place** (not bumped)
-- **Status:** **DONE**
+- **Status:** **DONE** — its type-forgery fix stands; an *integration*
+  overclaim found on recheck was corrected by **FND-003A-FIX-003**
+  (2026-09-10). See [§10 Recheck](#10-recheck-fnd-003a-fix-003).
 
 Neither published commit was amended. This is one new commit on the same
 branch.
@@ -208,3 +210,45 @@ backend handler or Firebase rule was introduced. Offer/assignment semantics,
 approval binding and `ContractVersion` semantics were left as FIX-001 set them.
 **FND-003B remains NOT STARTED.** Nothing was merged to `main`, pushed or
 deployed.
+
+## 10. Recheck (FND-003A-FIX-003, 2026-09-10)
+
+**The type-forgery fix in this report is correct and unchanged.**
+`AuthorizationGrant` being `final` with a library-private constructor does
+prevent external fabrication, and the compile-failure regression test proves
+it.
+
+**What was overclaimed was its reach.** This report described the grant as
+though unforgeability settled the authorization question. It does not. A grant
+proves only:
+
+> `evaluateAuthorization` returned *allow* for the inputs it was given.
+
+It proves nothing about whether those inputs were trustworthy or current — that
+the token was verified, that `Membership` came from authoritative storage and
+reflected the **current** status, that `ResourceScope` and its offer/assignment
+facts were freshly loaded, that `ApprovalEvidence` was server-resolved, or that
+the right `Permission` was chosen for the command type. A grant computed from
+stale inputs is a perfectly valid grant.
+
+Concretely: **nothing stopped an application retaining a grant across
+requests.** `evaluateIdempotency` has no clock, storage or freshness context,
+so a grant obtained while a rider was active still "covers" a later retry after
+their membership is revoked, and the stored result would replay.
+
+This report's §6 also listed a test named *"a revoked actor cannot obtain a
+grant to replay an old success"*. It never exercised an old grant — it only
+checked that a fresh evaluation of a revoked actor yields none. Renamed and
+supplemented by FIX-003 with a test that demonstrates the retained-grant gap
+explicitly instead of implying it is closed.
+
+FND-003A-FIX-003 adds the missing rules: fresh authorization on **every**
+request including replays, an explicit prohibition on caching/persisting/reusing
+a grant, the trusted command-type → permission routing boundary, and backend
+checklist items **R33–R40**. Full detail:
+[FND-003A-FIX-003 report](FND-003A-FIX-003-completion-report.md).
+
+**Lesson, now for the third review running:** each fix closed a real hole and
+then described its guarantee slightly wider than the mechanism supported. A
+type boundary, a trust boundary and a request-lifetime boundary are three
+different things, and only the first is enforced by Dart.

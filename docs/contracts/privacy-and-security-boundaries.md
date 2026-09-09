@@ -76,8 +76,10 @@ shop or region by comparing error messages. Tested.
 
 ## Checklist for FND-004 — Rules and API authorization tests
 
-Each item is a test FND-004 must write against the Firebase emulator or the
-API. None can run today: the Firebase CLI is not installed (owner action O4).
+Each item is a test FND-004 — or the bounded backend slice implementing the
+command pipeline — must write against the Firebase emulator or the API. **None
+can run today**: no backend exists and the Firebase CLI is not installed (owner
+action O4). Every item below is **NOT RUN**.
 
 ### Deny-by-default
 
@@ -145,3 +147,35 @@ API. None can run today: the Firebase CLI is not installed (owner action O4).
 
 - [ ] R32 — Authorization succeeds and fails identically with and without an
       App Check token; absence never grants more.
+
+### Command routing and authorization freshness
+
+Added by **FND-003A-FIX-003**. These close the gap between what the contract's
+*types* guarantee and what a correct backend must actually do: an
+`AuthorizationGrant` being unforgeable says nothing about whether its inputs
+were fresh, nor whether an application retained one from an earlier request.
+
+- [ ] R33 — Every accepted `commandType` maps to exactly one expected
+      `Permission` in the trusted backend command router.
+- [ ] R34 — An unknown or unmapped `commandType` **fails closed** and never
+      reaches mutation.
+- [ ] R35 — A client cannot select or override the `Permission` used for
+      authorization, by payload, header or any other route.
+- [ ] R36 — Every new command request authorizes from **current** trusted
+      `Principal` / `Membership` / `ResourceScope` facts before execution.
+- [ ] R37 — Every idempotent retry or replay performs **fresh** authorization
+      before the stored result is returned.
+- [ ] R38 — A command that originally succeeded **cannot** replay after the
+      actor's membership is suspended or revoked.
+- [ ] R39 — A command **cannot** replay after the relevant assignment or
+      resource scope is removed or reassigned.
+- [ ] R40 — `AuthorizationGrant` is request-local: backend code does not
+      persist, cache or reuse it across command requests.
+
+**Owner:** FND-004, or the bounded backend slice that implements the command
+pipeline — whichever lands first. They need a trusted backend and a suitable
+emulator or integration runner.
+
+**Status: all NOT RUN.** None of this can be executed today: no backend
+implementation exists, and the Firebase CLI is not installed (owner action O4).
+They are required future tests, not results.

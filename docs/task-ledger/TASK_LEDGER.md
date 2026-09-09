@@ -21,7 +21,8 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-002A | ADMIN | Host-available capability spike: upstream recheck, capability contracts, dated matrix, runtime test plan | FND-001 | **DONE** | [FND-002A report](FND-002A-completion-report.md) · [evidence register](../platform-matrix/FND-002A-capability-evidence.md) |
 | FND-002B | ADMIN | Device/runner execution of the runtime test plan | FND-002A, **D1–D3**, O2/O3/O5 | **BLOCKED** | needs a decision *and* hardware — see [runtime test plan](../platform-matrix/FND-002-runtime-test-plan.md) |
 | FND-003 | ADMIN | Shared schemas, exhaustive transitions, permissions, policies, money/custody invariants | FND-001 | **PARTIAL** | parent task; command/authorization slice delivered by FND-003A. Lifecycle, inventory, money and proof slices outstanding |
-| FND-003A | ADMIN | Command and event envelopes, identity/membership/scope, permission matrix, authorization invariants | FND-001 | **DONE** (as corrected twice) | Accepted state = **`de19dc9` + `228409d` + the FND-003A-FIX-002 commit**. Reports: [FND-003A](FND-003A-completion-report.md) + [FIX-001](FND-003A-FIX-001-completion-report.md) + [FIX-002](FND-003A-FIX-002-completion-report.md) · contract **0.2**. **No earlier commit alone is the accepted contract.** |
+| FND-003A | ADMIN | Command and event envelopes, identity/membership/scope, permission matrix, authorization invariants | FND-001 | **DONE** (as corrected three times) | Accepted state = **`de19dc9` + `228409d` + `25e6186` + the FND-003A-FIX-003 commit**. Reports: [FND-003A](FND-003A-completion-report.md) + [FIX-001](FND-003A-FIX-001-completion-report.md) + [FIX-002](FND-003A-FIX-002-completion-report.md) + [FIX-003](FND-003A-FIX-003-completion-report.md) · contract **0.2**. **No earlier commit alone is the accepted contract.** |
+| FND-003A-FIX-003 | ADMIN | Require fresh authorization before replay; separate type/trust/request-lifetime boundaries; command-router and stale-grant backend tests (R33–R40) | FND-003A-FIX-002 | **DONE** | [FND-003A-FIX-003 report](FND-003A-FIX-003-completion-report.md) |
 | FND-003A-FIX-002 | ADMIN | Make successful authorization unforgeable and request-bound before idempotency replay | FND-003A-FIX-001 | **DONE** | [FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md) |
 | FND-003A-FIX-001 | ADMIN | Fix offer-vs-assignment scope, approval binding, idempotency principal isolation, version-compatibility semantics | FND-003A | **DONE** | [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md) |
 | FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **TODO** | not blocked by hardware or O6 |
@@ -83,6 +84,16 @@ did not exist — callers, including the contract's own tests, could fabricate
 success, and an allow carried no binding to what had been authorized.
 Successful authorization is now an unforgeable, request-bound
 `AuthorizationGrant`.
+
+A third review of `25e6186` found the remaining gap, fixed by
+**FND-003A-FIX-003**: unforgeable is not the same as *current*. The grant's
+private constructor proves only that `evaluateAuthorization` allowed the inputs
+it was given — not that those inputs were verified, authoritative or fresh —
+and nothing stopped an application retaining a grant across requests, so a
+revoked actor's earlier success could still replay. The contract now requires
+**fresh authorization on every request including replays**, forbids caching or
+reusing a grant, assigns command-type → permission mapping to the trusted
+backend router, and adds backend checklist items **R33–R40** (all NOT RUN).
 
 **Cite all three commits; no earlier one alone is the accepted contract.** No
 lifecycle, inventory or money rule was guessed at any point.

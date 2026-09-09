@@ -20,21 +20,138 @@ can rescue an earlier failure**:
    `ScopeRequirement` declaration order for a deterministic deny reason.
 5. **Procedure** — reason required? dual-control approval required?
 
-## Obtaining a decision
+## Three separate boundaries
+
+Conflating these is how a type-system win gets mistaken for a security
+guarantee. Each covers a different failure, and **only the first is enforced by
+Dart**.
+
+### 1. Type boundary — enforced by the compiler
 
 `evaluateAuthorization` is the only entry point. `AuthorizationDecision` and
 `AuthorizationGrant` are both `final` with library-private constructors, so no
 external code can construct or impersonate either.
-
 `AuthorizationDecision.grant` is non-null **exactly when** the request was
-allowed; `allowed` is derived from it rather than stored separately, so there
-is no second flag that could disagree with the artifact.
+allowed; `allowed` derives from it, so no second flag can disagree.
 
-> Until FND-003A-FIX-002 this section overclaimed. `AuthorizationDecision` had
-> a public `allow()` constructor, so any caller — including the contract's own
-> tests — could fabricate success. The guarantee is now enforced by the type
-> system and proven by a compile-failure regression test
-> (`test/forgery_probe_test.dart`), not asserted in prose.
+Proven by a compile-failure regression test
+(`packages/contracts/test/forgery_probe_test.dart`).
+
+**What this proves, exactly:** `evaluateAuthorization` returned *allow* for the
+inputs it was given, and nobody manufactured that result afterwards.
+
+**What it does not prove — any of it:**
+
+- that the auth token was verified;
+- that `Principal` was derived from that verified token;
+- that `Membership` was loaded from authoritative storage;
+- that the membership status was **current**;
+- that `ResourceScope` was freshly loaded;
+- that offered/assigned relationships were current;
+- that `ApprovalEvidence` came from a trusted approval record;
+- that the required `Permission` was the correct one for the incoming command.
+
+A grant computed from stale or attacker-influenced inputs is a perfectly valid
+grant. **Garbage in, authentically-signed garbage out.**
+
+### 2. Trust boundary — a server integration duty
+
+The eight items above are the backend's responsibility, per request. The type
+boundary prevents fabrication *after* evaluation; it says nothing about the
+quality of the inputs *before* it. Client payload data remains never
+authority — that rule is unchanged and still enforced by the evaluator taking
+no payload.
+
+### 3. Request-lifetime boundary — a discipline, not a type
+
+An `AuthorizationGrant` is **ephemeral**. It is valid only inside the
+command-processing flow of the request that produced it. See *Fresh
+authorization on every request* below. Dart cannot enforce this: a retained
+grant still "covers" a later matching request, and
+`packages/contracts/test/idempotency_test.dart` demonstrates exactly that
+rather than pretending otherwise.
+
+> **History.** Until FND-003A-FIX-002 this section overclaimed in a different
+> way: `AuthorizationDecision` had a public `allow()` constructor, so anyone —
+> including the contract's own tests — could fabricate success. FIX-002 closed
+> that. FND-003A-FIX-003 then corrected the remaining overclaim: the private
+> constructor is a type boundary, **not** evidence that the evaluator's inputs
+> were trustworthy or fresh.
+
+## Fresh authorization on every request
+
+**Every command request performs authorization from current, trusted inputs
+before it either executes a new command or replays a stored idempotent
+result.** There is no exception for retries.
+
+Per request, the backend must:
+
+1. verify the current authentication context;
+2. derive the `Principal` from it;
+3. resolve the current `Membership` from authoritative storage;
+4. resolve current `ResourceScope` — owner, shop, region, offered and assigned
+   relationships;
+5. resolve required `ApprovalEvidence` from trusted storage where applicable;
+6. map the incoming `commandType` to its required `Permission`;
+7. call `evaluateAuthorization`;
+8. use the resulting grant **only** within that request's command-processing
+   flow.
+
+### Prohibited
+
+- Caching an `AuthorizationGrant` across requests.
+- Persisting one.
+- Reusing an earlier grant for a retry or replay.
+- Treating a grant as a session capability.
+- Authorizing once and replaying indefinitely.
+
+**A previously valid grant does not mean authority is still valid.**
+
+### Worked example — revocation
+
+1. A rider executes a command successfully; the result is stored against
+   `(principalId, commandId)`.
+2. Their membership is later revoked.
+3. The rider retries the **same** `commandId`.
+4. The backend loads the **current** membership and authorizes again.
+5. Fresh authorization denies — `membershipNotActive`, no grant.
+6. The stored result is **not** replayed.
+
+Step 4 is the whole mechanism. Skip it and step 6 fails silently: the retained
+grant would still match, and the rider would receive a success they are no
+longer entitled to.
+
+The same sequence applies when an assignment is lost or reassigned, when shop
+membership is removed, and when an admin privilege is revoked.
+
+No grant expiry duration or timestamp policy is invented here. **Fresh
+per-request evaluation is the rule** — a lifetime would only bound the window
+in which a stale grant still works.
+
+## Command type maps to permission on the server
+
+```text
+incoming commandType
+  → trusted backend command router
+  → exact required Permission
+  → fresh AuthorizationRequest
+  → evaluateAuthorization
+  → AuthorizationGrant
+  → idempotency / state / revision transaction
+```
+
+- **The client never supplies the authoritative required `Permission`.** A
+  caller that could choose which permission is checked could choose one it
+  holds.
+- **An unknown or unmapped `commandType` fails closed** before any mutation.
+- A grant's stored `permission` is **binding and audit evidence**. It is *not*
+  proof that the backend selected the correct permission for that command type;
+  it records which permission was evaluated, nothing more.
+
+`evaluateIdempotency` deliberately does not check the permission, and no
+command-type registry was invented in the contract to make it look mechanical.
+That mapping is trusted-server responsibility, and it is a required backend
+test (checklist R33–R35).
 
 ## Deny reasons
 
@@ -87,7 +204,9 @@ one identical public message.
    issued for, and consumers re-check those bindings — a grant for principal A
    on resource X cannot serve principal B or resource Y. Idempotency is also
    partitioned by trusted principal — see
-   `docs/contracts/command-and-event-envelopes.md`.
+   `docs/contracts/command-and-event-envelopes.md`. This is a **type**
+   guarantee only: freshness and input trust are backend duties, described
+   under *Three separate boundaries* below.
 9. **Server authorization is unconditional.** It does not depend on App Check,
    on platform, or on the client having hidden a button.
 

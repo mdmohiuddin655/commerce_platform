@@ -106,11 +106,40 @@ The grant's **permission is not checked here**, and the contract does not
 pretend otherwise: no command-type → permission mapping exists yet, so such a
 check would be theatre. The trusted backend router maps the command type to the
 required permission *before* authorization is evaluated; the binding is
-retained on the grant for that dispatch and for audit.
+retained on the grant for that dispatch and for audit. A client never supplies
+the authoritative permission, and an unmapped command type fails closed. See
+*Command type maps to permission on the server* in
+`docs/contracts/authorization-invariants.md`, and checklist R33–R35.
 
-> Until FND-003A-FIX-002 this section claimed there was "no way to call this
-> without having evaluated authorization first". That was false:
-> `AuthorizationDecision.allow()` was public.
+### Fresh authorization happens before replay, on every request
+
+**The grant must be produced by *this* request.** On every API call — including
+a retry of a `commandId` that already succeeded — the backend re-verifies
+authentication, reloads membership and resource/offer/assignment scope from
+authoritative storage, and calls `evaluateAuthorization` again, *before* any
+stored result is returned.
+
+A grant is **request-local**: it must not be cached, persisted, reused for a
+retry, or treated as a session capability. A previously valid grant does not
+mean authority is still valid.
+
+This is what stops a rider whose membership was revoked from replaying an
+earlier success: fresh evaluation denies, so there is no grant, so
+`evaluateIdempotency` is never reached. The same applies when an assignment is
+lost or reassigned, or a shop membership or admin privilege is removed.
+
+`evaluateIdempotency` **cannot detect a stale grant on its own** — it has no
+clock, no storage and no freshness context, so a retained grant still "covers"
+a later matching request. `packages/contracts/test/idempotency_test.dart`
+demonstrates that boundary explicitly rather than implying a guarantee the
+contract does not provide. Preventing it is a backend duty, tested by checklist
+items **R37–R40**.
+
+> **History.** Until FND-003A-FIX-002 this section claimed there was "no way to
+> call this without having evaluated authorization first". That was false:
+> `AuthorizationDecision.allow()` was public. FND-003A-FIX-003 then added the
+> freshness rule above: FIX-002 made a grant unforgeable, which is not the same
+> as making it current.
 
 ### Outcomes
 

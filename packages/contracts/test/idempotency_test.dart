@@ -242,7 +242,11 @@ void main() {
       expect(decision.reason, DenyReason.membershipNotActive);
     });
 
-    test('a revoked actor cannot obtain a grant to replay an old success', () {
+    test('fresh authorization after revocation yields no grant', () {
+      // Renamed by FND-003A-FIX-003. This does NOT test reuse of an old
+      // grant; it tests that re-authorizing a revoked actor produces nothing
+      // to pass on. That is the whole mechanism by which a revoked actor is
+      // stopped — provided the backend actually re-authorizes.
       final AuthorizationDecision decision = decideFor(
         principalA,
         resourceId,
@@ -250,10 +254,51 @@ void main() {
       );
 
       expect(decision.grant, isNull);
+      expect(decision.reason, DenyReason.membershipNotActive);
       expect(
         () => grantFor(principalA, resourceId),
         returnsNormally,
-        reason: 'an active principal can still obtain one',
+        reason: 'the same actor while active can still obtain one',
+      );
+    });
+
+    test('a retained grant is NOT detected as stale by this pure function', () {
+      // Documents the boundary honestly rather than implying a guarantee the
+      // contract does not provide.
+      //
+      // A grant obtained while the actor was active still "covers" a later
+      // request for the same principal and resource. evaluateIdempotency has
+      // no clock, no storage and no freshness context, so it cannot know the
+      // membership was revoked in between — and no fake expiry field was
+      // added to make this look mechanical.
+      final AuthorizationGrant grantWhileActive = grantFor(
+        principalA,
+        resourceId,
+      );
+
+      // Meanwhile the membership is revoked. Fresh evaluation refuses:
+      expect(
+        decideFor(principalA, resourceId,
+                status: MembershipStatus.revoked)
+            .grant,
+        isNull,
+      );
+
+      // But the retained grant still passes the pure check. This is exactly
+      // why the contract requires the BACKEND to re-authorize on every
+      // request, including replays, and forbids caching or reusing a grant
+      // across requests (see docs/contracts/authorization-invariants.md,
+      // "request-lifetime boundary", and checklist items R37-R40).
+      expect(
+        evaluateIdempotency(
+          grant: grantWhileActive,
+          principal: user(principalA),
+          incoming: envelope(),
+          stored: stored(envelope()),
+        ),
+        IdempotencyOutcome.replayStoredResult,
+        reason: 'stale-grant prevention is a backend integration duty, '
+            'not something this pure function can enforce',
       );
     });
 
