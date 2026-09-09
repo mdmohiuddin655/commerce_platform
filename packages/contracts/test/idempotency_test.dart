@@ -2,25 +2,22 @@ import 'package:cp_contracts/cp_contracts.dart';
 import 'package:cp_core/cp_core.dart';
 import 'package:test/test.dart';
 
-const String principalA = 'usr_alpha01Aa-Bb22Cc3';
-const String principalB = 'usr_bravo01Aa-Bb22Cc3';
-const String resourceId = 'ord_Xa91ZZ0plQ7rTt4B';
+import 'support/authz_fixtures.dart';
 
-Principal user(String id) => Principal.fromVerifiedSubject(id);
-
-const AuthorizationDecision allowed = AuthorizationDecision.allow();
-const AuthorizationDecision denied =
-    AuthorizationDecision.deny(DenyReason.membershipNotActive);
+const String principalA = customerA;
+const String principalB = customerB;
+const String resourceId = resourceX;
 
 CommandEnvelope envelope({
   String commandId = 'cmd_7Kd93ba-Qz18Xu2P',
   String commandType = 'order.place',
   int expectedRevision = 0,
+  String resource = resourceId,
   Map<String, Object?> payload = const <String, Object?>{'qty': 2},
 }) => CommandEnvelope.create(
   commandId: commandId,
   commandType: commandType,
-  resourceId: resourceId,
+  resourceId: resource,
   expectedRevision: expectedRevision,
   payload: payload,
 ).fold((CommandEnvelope e) => e, (Failure f) => throw StateError(f.message));
@@ -41,13 +38,17 @@ IdempotencyOutcome evaluate({
   required String actingPrincipal,
   StoredCommandRecord? record,
   CommandEnvelope? incoming,
-  AuthorizationDecision authorization = allowed,
-}) => evaluateIdempotency(
-  authorization: authorization,
-  principal: user(actingPrincipal),
-  incoming: incoming ?? envelope(),
-  stored: record,
-);
+  AuthorizationGrant? grant,
+}) {
+  final CommandEnvelope command = incoming ?? envelope();
+  return evaluateIdempotency(
+    // A real grant from the real evaluator — it cannot be fabricated.
+    grant: grant ?? grantFor(actingPrincipal, command.resourceId),
+    principal: user(actingPrincipal),
+    incoming: command,
+    stored: record,
+  );
+}
 
 void main() {
   group('CommandFingerprint', () {
@@ -180,37 +181,105 @@ void main() {
     });
   });
 
-  group('authorization precedes replay', () {
-    test('a denied caller cannot replay their own stored result', () {
-      // Membership revoked since the original command succeeded.
+  group('authorization evidence cannot be forged or borrowed', () {
+    test('a genuine grant permits normal execution', () {
       expect(
-        evaluate(
-          actingPrincipal: principalA,
-          record: stored(envelope()),
-          authorization: denied,
-        ),
-        IdempotencyOutcome.rejectNotAuthorized,
+        evaluate(actingPrincipal: principalA),
+        IdempotencyOutcome.executeNew,
       );
     });
 
-    test('a denied caller cannot execute a new command either', () {
-      expect(
-        evaluate(actingPrincipal: principalA, authorization: denied),
-        IdempotencyOutcome.rejectNotAuthorized,
-      );
-    });
-
-    test('authorization is checked before the namespace', () {
-      // Denied and foreign: the authorization failure is reported, so a
-      // stored record is never even consulted for an unauthorized caller.
+    test("principal A's grant cannot be used for principal B", () {
+      // B holds a grant that was issued to A. Even though B is otherwise a
+      // legitimate principal, the grant does not cover them.
       expect(
         evaluate(
           actingPrincipal: principalB,
-          record: stored(envelope()),
-          authorization: denied,
+          grant: grantFor(principalA, resourceId),
         ),
-        IdempotencyOutcome.rejectNotAuthorized,
+        IdempotencyOutcome.rejectAuthorizationMismatch,
       );
+    });
+
+    test('a grant for resource X cannot serve a command on resource Y', () {
+      final CommandEnvelope onY = envelope(resource: resourceY);
+
+      expect(
+        evaluateIdempotency(
+          grant: grantFor(principalA, resourceX),
+          principal: user(principalA),
+          incoming: onY,
+        ),
+        IdempotencyOutcome.rejectAuthorizationMismatch,
+      );
+    });
+
+    test('a borrowed grant cannot replay the grant-holder stored result', () {
+      // The attack this closes: B presents A's grant to read A's result.
+      expect(
+        evaluate(
+          actingPrincipal: principalB,
+          grant: grantFor(principalA, resourceId),
+          record: stored(envelope()),
+        ),
+        IdempotencyOutcome.rejectAuthorizationMismatch,
+      );
+    });
+
+    test('a denied evaluation yields no grant to pass at all', () {
+      // Suspended membership: the evaluator refuses, so `grant` is null and
+      // `evaluateIdempotency` simply cannot be called. "Replay while denied"
+      // is not an expressible state — which is why there is no
+      // `rejectNotAuthorized` outcome any more.
+      final AuthorizationDecision decision = decideFor(
+        principalA,
+        resourceId,
+        status: MembershipStatus.suspended,
+      );
+
+      expect(decision.allowed, isFalse);
+      expect(decision.grant, isNull);
+      expect(decision.reason, DenyReason.membershipNotActive);
+    });
+
+    test('a revoked actor cannot obtain a grant to replay an old success', () {
+      final AuthorizationDecision decision = decideFor(
+        principalA,
+        resourceId,
+        status: MembershipStatus.revoked,
+      );
+
+      expect(decision.grant, isNull);
+      expect(
+        () => grantFor(principalA, resourceId),
+        returnsNormally,
+        reason: 'an active principal can still obtain one',
+      );
+    });
+
+    test('a resource the actor does not own yields no grant', () {
+      final AuthorizationDecision decision = evaluateAuthorization(
+        AuthorizationRequest(
+          permission: Permission.customerViewOwnOrder,
+          scope: ownedOrder(resourceId, principalA),
+          principal: user(principalB),
+          membership: customerMembership(principalB),
+        ),
+      );
+
+      expect(decision.grant, isNull);
+      expect(decision.reason, DenyReason.resourceOwnerMismatch);
+    });
+
+    test('the grant records the permission it was issued for', () {
+      // Retained for the backend router and for audit. It is deliberately not
+      // checked here: no command-type -> permission mapping exists yet.
+      expect(
+        grantFor(principalA, resourceId).permission,
+        Permission.customerViewOwnOrder,
+      );
+      expect(grantFor(principalA, resourceId).resourceId, resourceId);
+      expect(grantFor(principalA, resourceId).principalId, principalA);
     });
   });
 

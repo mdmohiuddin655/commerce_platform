@@ -1,0 +1,53 @@
+// FND-003A-FIX-002 regression fixture.
+//
+// Not named `.dart` so the repository gate never analyzes it: every line here
+// is *supposed* to be a compile error. `forgery_probe_test.dart` copies it to
+// a temporary `.dart` file, runs `dart analyze` on it, and asserts that each
+// forgery attempt is rejected by the type system.
+import 'package:cp_contracts/cp_contracts.dart';
+
+// 1. No public constructor on the success artifact.
+AuthorizationGrant attemptDirectConstruction() => AuthorizationGrant(
+  principalId: 'usr_alpha01Aa-Bb22Cc3',
+  permission: Permission.customerViewOwnOrder,
+  resourceId: 'ord_Xa91ZZ0plQ7rTt4B',
+);
+
+// 2. The private constructor is not reachable from another library.
+AuthorizationGrant attemptPrivateConstruction() => AuthorizationGrant._(
+  principalId: 'usr_alpha01Aa-Bb22Cc3',
+  permission: Permission.customerViewOwnOrder,
+  resourceId: 'ord_Xa91ZZ0plQ7rTt4B',
+);
+
+// 3. `final class` blocks implementing a look-alike.
+class ForgedGrant implements AuthorizationGrant {
+  @override
+  String get principalId => 'usr_bravo01Aa-Bb22Cc3';
+  @override
+  Permission get permission => Permission.adminRecordCashReconciliation;
+  @override
+  String get resourceId => 'ord_Yb82WW1qmR8sUu5C';
+  @override
+  bool covers({required String principalId, required String resourceId}) =>
+      true;
+}
+
+// 4. `final class` blocks subclassing.
+class SubclassedGrant extends AuthorizationGrant {}
+
+// 5. The old fabricable success constructor is gone.
+AuthorizationDecision attemptFabricatedAllow() =>
+    AuthorizationDecision.allow();
+
+// 6. A decision cannot be forged by implementation either.
+class ForgedDecision implements AuthorizationDecision {
+  @override
+  AuthorizationGrant? get grant => null;
+  @override
+  DenyReason? get reason => null;
+  @override
+  bool get allowed => true;
+  @override
+  String get publicMessage => 'Permitted.';
+}

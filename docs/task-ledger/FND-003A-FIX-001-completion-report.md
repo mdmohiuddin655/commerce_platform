@@ -7,7 +7,9 @@
   `fnd/FND-003A-command-auth-contracts`, working tree clean
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** **0.2, corrected in place** (not bumped)
-- **Status:** **DONE**
+- **Status:** **DONE** — partially superseded by **FND-003A-FIX-002**
+  (2026-09-10). Its §3 "authorization precedes replay" guarantee was weaker
+  than this report stated. See [§9 Recheck](#9-recheck-fnd-003a-fix-002).
 
 The published commit `de19dc9` was **not** amended. This is a new commit on the
 same branch.
@@ -205,3 +207,38 @@ No lifecycle state machine, inventory behaviour, custody transition,
 payment/COD, cash journal, fee, commission, settlement, proof/dispute workflow,
 backend handler or Firebase rule was introduced. **FND-003B remains NOT
 STARTED.** Nothing was merged to `main`, pushed or deployed.
+
+## 9. Recheck (FND-003A-FIX-002, 2026-09-10)
+
+Findings 1–4 of this report stand: offer-recipient isolation, approval
+binding, principal-scoped idempotency namespace and version-policy semantics
+were all confirmed correct on recheck and are unchanged.
+
+**One claim in §3 was wrong.** This report stated that taking the
+`AuthorizationDecision` "rather than a boolean makes 'authorization precedes
+replay' impossible to skip: there is no way to call this without having
+evaluated authorization first."
+
+That was false. `AuthorizationDecision.allow()` was a **public const
+constructor**, and the class carried no `final` modifier, so any caller could
+fabricate or impersonate a successful decision without ever running
+`evaluateAuthorization` — and this repository's own idempotency tests did
+exactly that (`const AuthorizationDecision allowed = AuthorizationDecision.allow();`).
+
+Secondly, an allowed decision carried **no binding** to what had been
+authorized, so a success produced for principal A on resource X could be
+presented while serving principal B or resource Y.
+
+Corrected by FND-003A-FIX-002: a `final`, library-privately-constructed
+`AuthorizationGrant` is produced only by a successful evaluation and records
+the principal, permission and resource; `evaluateIdempotency` requires one and
+re-checks its bindings. `rejectNotAuthorized` was removed because a denial now
+yields no grant at all, making "replay while denied" inexpressible rather than
+merely rejected. Full detail:
+[FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md).
+
+**Lesson recorded, since this is the second review to find it:** a guarantee
+asserted in a doc comment is not a guarantee. FIX-001 wrote the claim into
+prose and moved on; FIX-002 backs it with a compile-failure regression test
+(`test/forgery_probe_test.dart`) that asks the analyzer whether the forgery
+routes are actually closed.

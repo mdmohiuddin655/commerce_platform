@@ -21,7 +21,8 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-002A | ADMIN | Host-available capability spike: upstream recheck, capability contracts, dated matrix, runtime test plan | FND-001 | **DONE** | [FND-002A report](FND-002A-completion-report.md) · [evidence register](../platform-matrix/FND-002A-capability-evidence.md) |
 | FND-002B | ADMIN | Device/runner execution of the runtime test plan | FND-002A, **D1–D3**, O2/O3/O5 | **BLOCKED** | needs a decision *and* hardware — see [runtime test plan](../platform-matrix/FND-002-runtime-test-plan.md) |
 | FND-003 | ADMIN | Shared schemas, exhaustive transitions, permissions, policies, money/custody invariants | FND-001 | **PARTIAL** | parent task; command/authorization slice delivered by FND-003A. Lifecycle, inventory, money and proof slices outstanding |
-| FND-003A | ADMIN | Command and event envelopes, identity/membership/scope, permission matrix, authorization invariants | FND-001 | **DONE** (as corrected) | [FND-003A report](FND-003A-completion-report.md) **+ [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md)** · contract **0.2**. `de19dc9` alone is **not** the accepted contract — four defects were fixed afterwards |
+| FND-003A | ADMIN | Command and event envelopes, identity/membership/scope, permission matrix, authorization invariants | FND-001 | **DONE** (as corrected twice) | Accepted state = **`de19dc9` + `228409d` + the FND-003A-FIX-002 commit**. Reports: [FND-003A](FND-003A-completion-report.md) + [FIX-001](FND-003A-FIX-001-completion-report.md) + [FIX-002](FND-003A-FIX-002-completion-report.md) · contract **0.2**. **No earlier commit alone is the accepted contract.** |
+| FND-003A-FIX-002 | ADMIN | Make successful authorization unforgeable and request-bound before idempotency replay | FND-003A-FIX-001 | **DONE** | [FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md) |
 | FND-003A-FIX-001 | ADMIN | Fix offer-vs-assignment scope, approval binding, idempotency principal isolation, version-compatibility semantics | FND-003A | **DONE** | [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md) |
 | FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **TODO** | not blocked by hardware or O6 |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
@@ -69,13 +70,22 @@ identity/membership/scope vocabulary, 35 stable permission ids, one canonical
 least-privilege matrix, and a pure-Dart authorization evaluator with deny-path
 tests. Contract version **0.1 → 0.2** (additive), corrected **in place**.
 
-Review of `de19dc9` found four defects, all fixed: assignment accept/decline
+Review of `de19dc9` found four defects, all fixed by `228409d`: assignment accept/decline
 was authorized by region alone (any same-region worker could take another's
 offer); `ApprovalEvidence` was not bound to requester/permission/resource;
 idempotency replay was not principal-isolated; and version-number
-compatibility was being presented as proof of payload readability. **Cite the
-pair of commits, not `de19dc9` alone.** No lifecycle, inventory or money rule
-was guessed at any point.
+compatibility was being presented as proof of payload readability.
+
+A further review of `228409d` found a fifth defect, fixed by
+**FND-003A-FIX-002**: `AuthorizationDecision.allow()` was public and the class
+was not `final`, so the documented "authorization cannot be skipped" guarantee
+did not exist — callers, including the contract's own tests, could fabricate
+success, and an allow carried no binding to what had been authorized.
+Successful authorization is now an unforgeable, request-bound
+`AuthorizationGrant`.
+
+**Cite all three commits; no earlier one alone is the accepted contract.** No
+lifecycle, inventory or money rule was guessed at any point.
 
 **Remaining slices:**
 

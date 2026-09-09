@@ -104,10 +104,13 @@ enum IdempotencyOutcome {
   /// bug surfaces as an explicit rejection rather than a data leak.
   rejectNamespaceMismatch,
 
-  /// The caller is not authorized for this command *now*. Checked before any
-  /// replay, so a stored success cannot outlive the authority that produced
-  /// it — a revoked membership or a lost assignment stops replays too.
-  rejectNotAuthorized,
+  /// The supplied [AuthorizationGrant] does not cover this request — it was
+  /// issued for a different principal or a different resource.
+  ///
+  /// Unreachable when the backend passes the grant produced for the command it
+  /// is serving. Kept as defence in depth so a wiring mistake surfaces as a
+  /// rejection instead of authorizing the wrong thing.
+  rejectAuthorizationMismatch,
 }
 
 /// The idempotency namespace a command is deduplicated within.
@@ -178,37 +181,54 @@ class StoredCommandRecord {
 
 /// Pure decision function for the idempotency contract.
 ///
-/// ## Order is part of the contract
+/// ## Authorization cannot be skipped, and this time the type system says so
 ///
-/// [authorization] is **required**, and a denied decision short-circuits to
-/// [IdempotencyOutcome.rejectNotAuthorized]. Taking the decision object rather
-/// than a boolean makes "authorization precedes replay" impossible to skip:
-/// there is no way to call this without having evaluated authorization first,
-/// and no caller-settable flag to lie with.
+/// [grant] is an [AuthorizationGrant]: `final`, privately constructed, and
+/// obtainable **only** from a successful [evaluateAuthorization]. A denied
+/// evaluation produces no grant, so "call idempotency while denied" is not a
+/// state that can be expressed — there is nothing to pass.
 ///
-/// This matters because a stored result must not outlive the authority that
-/// produced it. A rider whose membership was revoked, or who lost an
-/// assignment, must not be able to replay a command id from when they still
-/// had it.
+/// This replaces the earlier design, which took an `AuthorizationDecision`
+/// whose `allow()` constructor was public. That documented the guarantee
+/// without providing it: any caller could manufacture success. See
+/// FND-003A-FIX-002.
 ///
-/// ## Lookup
+/// Because a denial cannot reach this function, there is no
+/// "not authorized" outcome. That is not an omission — it is the point.
 ///
-/// The caller loads [stored] using the key `(namespace, commandId)` and passes
+/// ## The grant must cover *this* request
+///
+/// Holding *a* grant is not enough; it must be the grant for the command being
+/// served. A grant issued for principal A on resource X must not be presented
+/// while handling principal B's command on resource Y, so both bindings are
+/// re-checked against [principal] and [incoming].
+///
+/// The grant's [AuthorizationGrant.permission] is **not** checked here. No
+/// command-type → permission mapping exists in the contract yet, so such a
+/// check would be theatre. The trusted backend router maps command type to
+/// required permission *before* authorization is evaluated; the binding is
+/// retained on the grant for that dispatch and for audit.
+///
+/// ## Replay stays principal-scoped
+///
+/// The caller loads [stored] with the key `(namespace, commandId)` and passes
 /// null when there is no record. A record from another namespace is rejected
-/// rather than replayed — unreachable with a correct lookup, but a lookup bug
-/// then surfaces as a rejection instead of a cross-principal data leak.
+/// rather than replayed.
 ///
-/// No storage access, no clock: the backend loads the record and applies this
-/// rule inside the same transaction as the write.
+/// No storage access and no clock: the backend loads the record and applies
+/// this rule inside the same transaction as the write.
 IdempotencyOutcome evaluateIdempotency({
-  required AuthorizationDecision authorization,
+  required AuthorizationGrant grant,
   required Principal principal,
   required CommandEnvelope incoming,
   StoredCommandRecord? stored,
 }) {
-  // 1. Current authority, before anything is replayed.
-  if (!authorization.allowed) {
-    return IdempotencyOutcome.rejectNotAuthorized;
+  // 1. The grant must cover the principal and resource actually being served.
+  if (!grant.covers(
+    principalId: principal.id,
+    resourceId: incoming.resourceId,
+  )) {
+    return IdempotencyOutcome.rejectAuthorizationMismatch;
   }
 
   final IdempotencyNamespace namespace = IdempotencyNamespace.forPrincipal(

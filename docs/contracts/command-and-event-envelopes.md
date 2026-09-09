@@ -82,22 +82,41 @@ field is invented, because this architecture has not defined a tenant
 dimension; if one appears later it extends `IdempotencyNamespace`, which is why
 that is a type rather than a bare string.
 
-### Authorization precedes replay
+### Replay requires an unforgeable, matching grant
 
-`evaluateIdempotency` takes the `AuthorizationDecision` itself — not a boolean
-a caller could set — and short-circuits to `rejectNotAuthorized` when it is a
-denial. There is no way to call it without having evaluated authorization
-first.
+`evaluateIdempotency` requires an `AuthorizationGrant`. That type is `final`
+with a library-private constructor, so the **only** way to obtain one is a
+successful `evaluateAuthorization`. A denied evaluation yields no grant, so
+"replay while denied" cannot be expressed — there is nothing to pass. That is
+why there is no `rejectNotAuthorized` outcome: its absence is the guarantee,
+not an omission.
 
 This matters because **a stored result must not outlive the authority that
 produced it**. A rider whose membership was revoked, or who lost an assignment,
-must not be able to replay a command id from when they still had it.
+cannot obtain a grant now, so they cannot replay a command id from when they
+still had one.
+
+Holding *a* grant is not enough — it must be the grant for the command being
+served. `evaluateIdempotency` re-checks that the grant's principal and resource
+match the incoming request, so a grant issued for principal A on resource X
+cannot be presented while handling principal B's command on resource Y
+(`rejectAuthorizationMismatch`).
+
+The grant's **permission is not checked here**, and the contract does not
+pretend otherwise: no command-type → permission mapping exists yet, so such a
+check would be theatre. The trusted backend router maps the command type to the
+required permission *before* authorization is evaluated; the binding is
+retained on the grant for that dispatch and for audit.
+
+> Until FND-003A-FIX-002 this section claimed there was "no way to call this
+> without having evaluated authorization first". That was false:
+> `AuthorizationDecision.allow()` was public.
 
 ### Outcomes
 
 | Situation | Outcome | Why |
 |---|---|---|
-| Caller not authorized **now** | `rejectNotAuthorized` | Checked first. Replay must not bypass membership revocation or resource authorization. |
+| Grant does not cover this principal or resource | `rejectAuthorizationMismatch` | Checked first. A grant for another request must never authorize this one. (A *denied* caller has no grant at all, so cannot reach this function.) |
 | New `(principal, commandId)` | `executeNew` | Execute — but only after revision and state validation also pass. |
 | Same key, **same** fingerprint | `replayStoredResult` | Return the stored original result. Do **not** re-execute: re-executing is how a COD receipt gets recorded twice. |
 | Same key, **different** fingerprint | `rejectKeyReuse` | The client reused a key for a new intent. Executing would silently overwrite the meaning of an earlier command. |

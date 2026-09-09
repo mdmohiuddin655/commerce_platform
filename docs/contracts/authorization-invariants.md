@@ -20,6 +20,22 @@ can rescue an earlier failure**:
    `ScopeRequirement` declaration order for a deterministic deny reason.
 5. **Procedure** — reason required? dual-control approval required?
 
+## Obtaining a decision
+
+`evaluateAuthorization` is the only entry point. `AuthorizationDecision` and
+`AuthorizationGrant` are both `final` with library-private constructors, so no
+external code can construct or impersonate either.
+
+`AuthorizationDecision.grant` is non-null **exactly when** the request was
+allowed; `allowed` is derived from it rather than stored separately, so there
+is no second flag that could disagree with the artifact.
+
+> Until FND-003A-FIX-002 this section overclaimed. `AuthorizationDecision` had
+> a public `allow()` constructor, so any caller — including the contract's own
+> tests — could fabricate success. The guarantee is now enforced by the type
+> system and proven by a compile-failure regression test
+> (`test/forgery_probe_test.dart`), not asserted in prose.
+
 ## Deny reasons
 
 `unauthenticated` · `systemPrincipalNotEligible` · `membershipMissing` ·
@@ -62,10 +78,15 @@ one identical public message.
    `approverIsAuthorized` flag, because a boolean an attacker can set is not a
    check.
 7. **A reason must be non-blank** where the matrix requires one.
-8. **Authorization precedes replay.** `evaluateIdempotency` takes the
-   `AuthorizationDecision` itself and short-circuits when it is a denial, so a
-   stored result cannot outlive the authority that produced it. Idempotency is
-   also partitioned by trusted principal — see
+8. **Successful authorization is unforgeable and request-bound.**
+   `evaluateAuthorization` is the only source of an `AuthorizationGrant`: the
+   class is `final` (so it cannot be implemented or extended outside its
+   library) and its only constructor is library-private. A denied evaluation
+   produces **no grant**, so "proceed while denied" is not an expressible
+   state. Each grant records the principal, permission and resource it was
+   issued for, and consumers re-check those bindings — a grant for principal A
+   on resource X cannot serve principal B or resource Y. Idempotency is also
+   partitioned by trusted principal — see
    `docs/contracts/command-and-event-envelopes.md`.
 9. **Server authorization is unconditional.** It does not depend on App Check,
    on platform, or on the client having hidden a button.
