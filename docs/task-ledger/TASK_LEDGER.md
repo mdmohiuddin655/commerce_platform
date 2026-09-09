@@ -25,7 +25,10 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003A-FIX-003 | ADMIN | Require fresh authorization before replay; separate type/trust/request-lifetime boundaries; command-router and stale-grant backend tests (R33–R40) | FND-003A-FIX-002 | **DONE** | [FND-003A-FIX-003 report](FND-003A-FIX-003-completion-report.md) |
 | FND-003A-FIX-002 | ADMIN | Make successful authorization unforgeable and request-bound before idempotency replay | FND-003A-FIX-001 | **DONE** | [FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md) |
 | FND-003A-FIX-001 | ADMIN | Fix offer-vs-assignment scope, approval binding, idempotency principal isolation, version-compatibility semantics | FND-003A | **DONE** | [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md) |
-| FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **TODO** | not blocked by hardware or O6 |
+| FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle delivered by FND-003B1. Assignment, custody, delivery and return lifecycles outstanding |
+| FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** | [FND-003B1 report](FND-003B1-completion-report.md) · contract **0.3** |
+| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **TODO — NOT STARTED** | not blocked by hardware or O6 |
+| FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **TODO — NOT STARTED** | — |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
@@ -98,11 +101,19 @@ backend router, and adds backend checklist items **R33–R40** (all NOT RUN).
 **Cite all three commits; no earlier one alone is the accepted contract.** No
 lifecycle, inventory or money rule was guessed at any point.
 
+**FND-003B1 — DONE (2026-09-10).** Pre-dispatch order and reservation
+lifecycle: six executable order states, four reservation states, seven named
+commands, a deterministic transition evaluator, typed inventory effects and a
+financial classification that makes "undecided" impossible to read as zero.
+Contract **0.2 → 0.3** (additive). The acceptance-versus-expiry race is closed
+structurally, and cancellation from `preparing`/`ready` is recorded as
+**DECISION REQUIRED** rather than guessed — it needs O6 and FND-003C.
+
 **Remaining slices:**
 
 | Slice | Owns | Status |
 |---|---|---|
-| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **TODO** — not blocked |
+| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1 done; B2/B3 not started |
 | FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
 | FND-003D proof/dispute | Customer OTP/proof format and fallback workflow | **TODO** — needed before delivery confirmation is coded |
 
@@ -140,7 +151,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.2** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) adds command/event envelopes, identity, membership, scope, 35 permissions and the authorization model — additive, so minor only. No lifecycle, inventory or money rules yet. See [version history](../contracts/version-history.md). |
+| Wire contract (`cp_contracts`) | **0.3** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. Both additive, so minor only. No assignment, custody, delivery, return or money rules yet. See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships

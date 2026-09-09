@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.2** (FND-003A).
+**Current contract version: 0.3** (FND-003B1).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,13 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3, compatibility and migration status |
+
+## Delivered — FND-003B1
+
+| Document | Covers |
+|---|---|
+| [order-reservation-lifecycle.md](order-reservation-lifecycle.md) | Pre-dispatch order states, reservation states, the full transition matrix, cancellation policy boundary, expiry, the acceptance-versus-expiry race, and the required backend transaction boundary |
 
 Implemented in `packages/contracts`, pure Dart, no Flutter or Firebase
 dependency.
@@ -26,8 +32,9 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle** | Order, assignment, custody, delivery-attempt and return transitions: every allowed edge with actor, precondition, inventory effect, financial effect and emitted event. The `SHARED_BLUEPRINT.md` table lists *states*; it is not an executable state machine and is not sufficient. | — |
-| **Inventory** | Reservation, expiry and restoration effects per transition; the rule that stock cannot become available again until shop receipt **and** inspection. | Lifecycle slice |
+| **Lifecycle — assignment** (FND-003B2) | Picker and rider assignment offer/accept/decline/expire edges | — |
+| **Lifecycle — custody, delivery, returns** (FND-003B3) | Custody handoffs, delivery attempts, return processing and delivery confirmation | FND-003B2 |
+| **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
 | **Proof and dispute** | Customer OTP/proof format and the fallback dispute workflow — required **before** delivery confirmation is coded. | Lifecycle slice |
 
@@ -46,3 +53,16 @@ From FND-003A, tested in `packages/contracts/test/`:
 - Role alone authorizes nothing — active membership **and** scope are required.
 - No permission may grant arbitrary status overwrite, balance edit, journal
   edit, or unaudited impersonation.
+
+From FND-003B1, tested in `packages/contracts/test/`:
+
+- Lifecycle commands are **named operations**; no command takes a target state,
+  so there is no status setter.
+- An order cannot reach `placed` without stock actually being reserved.
+- The same reserved units are restored to available stock **at most once**.
+- Acceptance does not decrement available stock a second time.
+- An accepted order and restored inventory from the same reservation cannot
+  coexist — structurally, not by a runtime check.
+- A transition's financial effect is `deferredToFinancialSlice`, never zero,
+  wherever money policy is undecided.
+- Any edge not enumerated fails closed.

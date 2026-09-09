@@ -30,16 +30,20 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// - **0.2** (FND-003A) — additive: command envelope, idempotency,
   ///   event envelope, principal/role/membership/scope, permissions and the
   ///   authorization decision model.
+  /// - **0.3** (FND-003B1) — additive: pre-dispatch order and reservation
+  ///   lifecycle — states, named commands, transition evaluator, typed
+  ///   inventory effects and financial classification.
   ///
-  /// 0.1 → 0.2 is a **minor** bump at the version-policy level: the major is
-  /// unchanged, nothing defined at 0.1 changed meaning, and every addition is
-  /// new surface.
+  /// Each bump so far is a **minor** one at the version-policy level: the
+  /// major is unchanged, no earlier definition changed meaning, and every
+  /// addition is new surface.
   ///
-  /// No payload-compatibility claim accompanies it. 0.1 contained no command
-  /// envelope, event envelope or permission decoder, so a 0.1 build has
-  /// nothing with which to read a 0.2 payload — and no 0.1 client was ever
-  /// released, so the question is theoretical.
-  static const ContractVersion current = ContractVersion(0, 2);
+  /// **No payload-compatibility claim accompanies any of them.** There is
+  /// still no serialization in this package — no envelope or lifecycle type
+  /// has a `toJson`/`fromJson` — so no build can decode another's payload at
+  /// all, and no such claim could be tested honestly. No client has ever been
+  /// released against any version.
+  static const ContractVersion current = ContractVersion(0, 3);
 
   final int major;
   final int minor;

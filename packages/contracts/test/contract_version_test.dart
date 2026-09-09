@@ -36,9 +36,26 @@ void main() {
     });
 
     test('exposes the version this build was compiled against', () {
-      // FND-003A bumped 0.1 -> 0.2 when the command, event and authorization
-      // vocabulary was added. Additive, so the major stays 0.
-      expect(ContractVersion.current.toString(), '0.2');
+      // 0.1 -> 0.2 added the command/event/authorization vocabulary
+      // (FND-003A); 0.2 -> 0.3 added the pre-dispatch order and reservation
+      // lifecycle (FND-003B1). Both additive, so the major stays 0.
+      expect(ContractVersion.current.toString(), '0.3');
+    });
+
+    test('0.2 and 0.3 share a major, so the policy permits an attempt', () {
+      // Again a statement about two integers only. 0.2 defined no lifecycle
+      // types, so it could not decode a 0.3 lifecycle payload even if one
+      // existed — and none does, because there is still no serialization.
+      expect(
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(0, 2)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(0, 2)
+            .isVersionCompatibleWith(ContractVersion.current),
+        isTrue,
+      );
     });
 
     test('0.1 and 0.2 share a major, so the policy permits an attempt', () {
@@ -83,7 +100,7 @@ void main() {
       expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
       expect(
         v.toString(),
-        '0.2',
+        '0.3',
         reason: 'version policy only; decode behaviour is a decoder property',
       );
     });

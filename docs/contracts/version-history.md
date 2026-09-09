@@ -74,10 +74,33 @@ region; `ApprovalEvidence` is bound to requester, permission and resource;
 idempotency is partitioned by trusted principal and gated on current
 authorization; `canRead` became `isVersionCompatibleWith`.
 
+### 0.3 — FND-003B1 (2026-09-10) — additive
+
+Added the pre-dispatch order and reservation lifecycle:
+
+- `OrderState`, `ReservationState`
+- `LifecycleCommand`, `LifecycleEventType`
+- `InventoryEffect` / `InventoryEffectKind`, `FinancialClassification`
+- `OrderLifecycleFacts`, `LifecycleRequest`, `LifecycleTransition`,
+  `LifecycleOutcome`, `LifecycleDenial`
+- `evaluateOrderTransition`, `executableCancellationSources`,
+  `policyDeferredCancellationSources`
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, nothing defined at 0.2 changed meaning, and every addition is new
+surface. `OrderState.inDelivery` and `OrderState.delivered` are declared but
+unreachable, so a later slice can implement them without an enum break.
+
+**What is *not* claimed.** 0.2 contained no lifecycle types at all, so a 0.2
+build could not decode a 0.3 lifecycle payload even if one existed. None does:
+`cp_contracts` still has no serialization.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
 |---|---|---|
+| 0.3 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
+| 0.2 reader, 0.3 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.2 had no lifecycle types at all. |
 | 0.2 reader, 0.1 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.1 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.1 had no envelope or permission decoder at all. |
 | Either reader, 1.x payload | **Refused** — surfaced as an upgrade prompt, never silently partially parsed | n/a |
@@ -107,10 +130,12 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 is purely additive, so no stored value changes shape or meaning.
+- 0.2 and 0.3 are purely additive, so no stored value changes shape or
+  meaning.
 
-**Rollback:** reverting the FND-003A commit returns the contract to 0.1 with no
-data implications, because no data was written under 0.2.
+**Rollback:** reverting the FND-003B1 commit returns the contract to 0.2, and
+reverting the FND-003A chain returns it to 0.1 — both with no data
+implications, because no data was ever written under either.
 
 The first version needing a real migration plan will be the one shipped to a
 real client against a real database. That plan belongs to the task that ships
