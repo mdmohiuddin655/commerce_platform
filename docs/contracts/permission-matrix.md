@@ -18,8 +18,9 @@ across five apps drift apart, a permission vocabulary does not.
   role family, asserted by a test.
 - **Membership** — statuses that may exercise it. Currently `active` for every
   permission; see the wind-down note below.
-- **Scope** — required relationship to the resource
-  (`docs/contracts/identity-membership-and-scope.md`).
+- **Scope** — required relationships to the resource, joined by `+` when a
+  rule needs more than one. **All listed requirements must hold.** See
+  `docs/contracts/identity-membership-and-scope.md`.
 - **Reason** — a non-blank, stored justification must accompany the command.
 - **Approval** — dual control: a **different** principal must have approved.
 
@@ -37,13 +38,13 @@ across five apps drift apart, a permission vocabulary does not.
 | `agent.assignment.offer_picker` | agent | active | `ownShop` | no | no | Offers work. An offer is not an assignment and never implies custody. |
 | `agent.assignment.offer_rider` | agent | active | `ownShop` | no | no | Offers work only, within the agent's own shops. |
 | `picker.assignment.view_assigned` | picker | active | `assignedResource` | no | no | Only what the active assignment needs. Not a customer directory and not a browsable order list. |
-| `picker.assignment.accept` | picker | active | `ownRegion` | no | no | Accepting an offer requires the offer to be live and in region; acceptance is decided server-side. |
-| `picker.assignment.decline` | picker | active | `ownRegion` | no | no | — |
+| `picker.assignment.accept` | picker | active | `ownRegion` + `offeredResource` | no | no | The offer must have been addressed to this picker: a same-region picker cannot accept another picker's offer. Does NOT require an already accepted assignment. Whether the offer is still live is lifecycle state (FND-003B), not authorization. |
+| `picker.assignment.decline` | picker | active | `ownRegion` + `offeredResource` | no | no | Same target isolation as accepting: only the picker the offer was addressed to may decline it. |
 | `picker.custody.record_pickup` | picker | active | `assignedResource` | no | no | — |
 | `picker.custody.record_handoff` | picker | active | `assignedResource` | no | no | Records a custody handoff. Custody changes only on a proven handoff, never on a notification or an elapsed timer. |
 | `rider.assignment.view_assigned` | rider | active | `assignedResource` | no | no | Only what the active assignment needs, including the delivery address for that assignment alone. |
-| `rider.assignment.accept` | rider | active | `ownRegion` | no | no | — |
-| `rider.assignment.decline` | rider | active | `ownRegion` | no | no | — |
+| `rider.assignment.accept` | rider | active | `ownRegion` + `offeredResource` | no | no | The offer must have been addressed to this rider. Does NOT require an already accepted assignment. |
+| `rider.assignment.decline` | rider | active | `ownRegion` + `offeredResource` | no | no | Same target isolation as accepting. |
 | `rider.custody.record_receipt` | rider | active | `assignedResource` | no | no | — |
 | `rider.delivery.record_attempt` | rider | active | `assignedResource` | no | no | — |
 | `rider.delivery.submit_proof` | rider | active | `assignedResource` | no | no | — |
@@ -60,7 +61,6 @@ across five apps drift apart, a permission vocabulary does not.
 | `admin.return.administer` | admin | active | `ownRegion` | **yes** | no | Stock cannot become available again until shop receipt and inspection; this permission does not shortcut that. |
 | `admin.cash.record_reconciliation` | admin | active | `ownRegion` | **yes** | **yes** | Records a reconciliation as new balanced postings under dual control. It is NOT a balance edit and NOT a journal edit: corrections are reversals, history is never rewritten. |
 | `admin.release.view_health` | admin | active | `none` | no | no | Aggregate operational metrics only. No personal data. |
-
 ## Least privilege, enforced by tests
 
 - No permission is granted to every role.
@@ -74,6 +74,30 @@ across five apps drift apart, a permission vocabulary does not.
   `admin.policy.publish_version` (platform-wide by nature) and
   `admin.release.view_health` (aggregate metrics, no personal data).
 - No picker or rider permission contains `balance`, `settlement` or `journal`.
+
+## Offer scope versus assignment scope
+
+Two distinct relationships, and conflating them breaks authorization in
+opposite directions.
+
+| Requirement | Means | Used for |
+|---|---|---|
+| `offeredResource` | the work was **addressed to** this actor | accepting and declining an offer |
+| `assignedResource` | this actor holds an **accepted** assignment | every post-acceptance action |
+
+- Accepting an offer must **not** require an accepted assignment — that would
+  be circular. `picker.assignment.accept`, `picker.assignment.decline`,
+  `rider.assignment.accept` and `rider.assignment.decline` therefore require
+  `offeredResource + ownRegion`, never `assignedResource`.
+- An offer must **not** open post-acceptance work. A picker who was merely
+  offered a job cannot record a pickup.
+- Region alone is **not** sufficient for accept/decline. Before FND-003A-FIX-001
+  it was, which let any active worker in the same region accept someone else's
+  offer.
+
+Authorization establishes *"this offer belongs to this actor and is inside
+allowed scope"*. Whether the offer is **still live** — not expired, declined or
+superseded — is assignment lifecycle state owned by **FND-003B**.
 
 ## Capabilities that must never exist
 
@@ -108,9 +132,13 @@ under dual control — it is not a balance edit and not a journal edit.
 | Pending worker acts | `membershipNotActive` |
 | Worker acts outside their region | `regionMismatch` |
 | Rider acts without an accepted assignment | `assignmentMismatch` |
-| Rider who was only *offered* work acts | `assignmentMismatch` |
+| Rider who was only *offered* work performs a post-acceptance action | `assignmentMismatch` |
+| A same-region worker accepts or declines **another worker's** offer | `offerMismatch` |
+| A worker holding an assignment but no offer tries to accept | `offerMismatch` |
+| Approval names a different requester, permission or resource | `approvalMismatch` |
 | Privileged action without a reason | `reasonRequired` |
-| Dual-control action without approval, or self-approved | `approvalRequired` |
+| Dual-control action with no approval at all | `approvalRequired` |
+| Dual-control action self-approved | `approvalMismatch` |
 | System worker borrows a human role permission | `systemPrincipalNotEligible` |
 | Client asserts a role or actor id in the command payload | ignored entirely — the evaluator reads no payload |
 | Membership record naming a different principal | `membershipMissing` |

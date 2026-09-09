@@ -77,12 +77,15 @@ so adding one is a deliberate, visible act.
 ## Scopes
 
 `Membership` carries `regionId` and `shopIds`. `ResourceScope` carries the
-server's facts about the target: `ownerPrincipalId`, `shopId`, `regionId` and
-`assignedPrincipalIds`.
+server's facts about the target: `ownerPrincipalId`, `shopId`, `regionId`,
+`assignedPrincipalIds` and `offeredPrincipalIds`.
 
-`ResourceScope` is read from trusted storage, **never from the command
-payload**. If the caller could state the resource's owner, the caller could
-state that they own it.
+**Every field of `ResourceScope` is read from trusted storage, never from the
+command payload** — owner, shop, region, assignments and offers alike. If the
+caller could state the resource's owner, the caller could state that they own
+it; if the caller could state who was offered the work, the caller could offer
+it to themselves. Likewise `Principal` comes from verified authentication and
+`Membership` from trusted records, and neither has a `fromJson`.
 
 | `ScopeRequirement` | The actor must… |
 |---|---|
@@ -90,15 +93,40 @@ state that they own it.
 | `ownResource` | …own the resource (customer ↔ their own order). |
 | `ownShop` | …have the resource's shop in their membership. |
 | `ownRegion` | …match the resource's region. |
+| `offeredResource` | …have had the work **offered to them**. |
 | `assignedResource` | …hold an **accepted** assignment on the resource. |
 
-Two rules that fall out of this, both tested:
+A `PermissionRule` carries a **set** of these and **all must hold**. That is
+what lets assignment acceptance require both *"the offer was addressed to you"*
+and *"you are in the right region"* without dropping either. Requirements are
+evaluated in `ScopeRequirement` declaration order, so the reported deny reason
+does not depend on how a rule's set literal was written.
+
+### Offered is not assigned
+
+`offeredPrincipalIds` and `assignedPrincipalIds` are separate sets, and
+conflating them breaks authorization in opposite directions:
+
+- **Accepting an offer must not require an accepted assignment** — that would
+  be circular. Accept and decline use `offeredResource`.
+- **An offer must not open post-acceptance work.** A picker who was merely
+  offered a job cannot record a pickup. Those use `assignedResource`.
+
+Assignment notification, assignment acceptance and physical custody remain
+three different facts; an offer that timed out never implies pickup.
+
+`offeredPrincipalIds` says only **who the offer was addressed to**. Whether it
+is still live — not expired, declined or superseded — is assignment lifecycle
+state owned by **FND-003B**. Authorization establishes *"this offer belongs to
+this actor and is inside allowed scope"*; lifecycle then establishes *"this
+offer is still in a state that may transition"*.
+
+Two further rules, both tested:
 
 - **An empty `shopIds` means no shop authority — never all shops.**
-- **`assignedPrincipalIds` holds accepted assignments only.** Being *offered*
-  work is not being assigned it. Assignment notification, assignment
-  acceptance and physical custody are three different facts; an offer that
-  timed out never implies pickup.
+- **Region alone never authorizes accept or decline.** Until
+  FND-003A-FIX-001 it did, which let any active worker in the same region take
+  another worker's offer.
 
 A null region on either side does not satisfy `ownRegion`. Absence is not a
 match.

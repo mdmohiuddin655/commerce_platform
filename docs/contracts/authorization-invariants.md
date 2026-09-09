@@ -15,15 +15,22 @@ can rescue an earlier failure**:
 2. **Standing** — does a membership exist *for this principal*, in an
    acceptable status?
 3. **Role** — is the role eligible for this permission?
-4. **Scope** — owner / shop / region / assignment relationship.
+4. **Scope** — owner / shop / region / offer / assignment relationships. A
+   rule may require several; **all must hold**, evaluated in
+   `ScopeRequirement` declaration order for a deterministic deny reason.
 5. **Procedure** — reason required? dual-control approval required?
 
 ## Deny reasons
 
 `unauthenticated` · `systemPrincipalNotEligible` · `membershipMissing` ·
 `membershipNotActive` · `roleNotEligible` · `regionMismatch` · `shopMismatch` ·
-`resourceOwnerMismatch` · `assignmentMismatch` · `reasonRequired` ·
-`approvalRequired`
+`resourceOwnerMismatch` · `offerMismatch` · `assignmentMismatch` ·
+`reasonRequired` · `approvalRequired` · `approvalMismatch`
+
+`offerMismatch` ("the offer was not addressed to you") is distinct from
+`assignmentMismatch` ("you have not accepted it"). `approvalRequired` (none
+supplied) is distinct from `approvalMismatch` (supplied, but not bound to this
+request).
 
 These are **internal**. They are for server logs, tests and audit.
 
@@ -45,10 +52,35 @@ one identical public message.
 4. **Unknown permissions fail closed.** A newer client naming a permission this
    build does not know is denied, never treated as permitted.
 5. **Suspended and revoked cannot start new work.**
-6. **Dual control means a different principal.** Self-approval is denied.
+6. **Approval is bound to the request.** Evidence must name this requester,
+   this permission and this resource, carry an auditable reference, and come
+   from a different approver. An unrelated approval record — for another
+   action, or someone else's — satisfies nothing. Self-approval is denied.
+   Approval evidence is **server-resolved**: a client may at most submit a
+   reference, which the backend looks up and verifies before constructing the
+   evidence. There is no `fromJson` and no caller-settable
+   `approverIsAuthorized` flag, because a boolean an attacker can set is not a
+   check.
 7. **A reason must be non-blank** where the matrix requires one.
-8. **Server authorization is unconditional.** It does not depend on App Check,
+8. **Authorization precedes replay.** `evaluateIdempotency` takes the
+   `AuthorizationDecision` itself and short-circuits when it is a denial, so a
+   stored result cannot outlive the authority that produced it. Idempotency is
+   also partitioned by trusted principal — see
+   `docs/contracts/command-and-event-envelopes.md`.
+9. **Server authorization is unconditional.** It does not depend on App Check,
    on platform, or on the client having hidden a button.
+
+## What approval does *not* yet establish
+
+The evaluator proves an approval is **bound to this request**. It does not
+verify that the approver held the right permission — that is a full
+authorization evaluation of a second principal, and it belongs to the approval
+workflow that issues the record. The backend must perform it when resolving the
+reference, before constructing `ApprovalEvidence`.
+
+**Approval expiry is not specified.** No arbitrary lifetime is invented here.
+If approvals expire, the owning approval workflow defines and enforces the
+policy; `approvedAtServerUtc` is what it will evaluate against.
 
 ## App Check is not authorization
 

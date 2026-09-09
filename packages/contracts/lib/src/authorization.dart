@@ -1,3 +1,4 @@
+import 'package:cp_contracts/src/ids.dart';
 import 'package:cp_contracts/src/membership.dart';
 import 'package:cp_contracts/src/permission.dart';
 import 'package:cp_contracts/src/permission_matrix.dart';
@@ -37,32 +38,92 @@ enum DenyReason {
   /// The principal does not own the resource.
   resourceOwnerMismatch,
 
+  /// The work was not offered to this principal. Distinct from
+  /// [assignmentMismatch]: this is "the offer was not addressed to you",
+  /// not "you have not accepted it".
+  offerMismatch,
+
   /// The principal holds no accepted assignment on the resource.
   assignmentMismatch,
 
   /// The permission requires a stored reason and none was supplied.
   reasonRequired,
 
-  /// The permission requires dual-control approval that was absent or invalid.
+  /// The permission requires dual-control approval and none was supplied.
   approvalRequired,
+
+  /// Approval evidence was supplied but is not bound to this request — it
+  /// names a different requester, permission or resource, or the approver is
+  /// the requester.
+  approvalMismatch,
 }
 
-/// Evidence that a second principal approved a privileged action.
+/// A **server-resolved** record that a second principal approved this exact
+/// action.
+///
+/// ## Trust boundary
+///
+/// This is not a thing a client sends. The flow is:
+///
+/// 1. A command contract may later allow a client to submit an approval
+///    *reference* — an opaque id and nothing else.
+/// 2. The backend **resolves that reference from trusted storage**.
+/// 3. The backend verifies the stored approval record and the approver's own
+///    authority and scope.
+/// 4. Only then does it construct this object and pass it to the pure
+///    evaluator.
+///
+/// Hence the constructor name [ApprovalEvidence.resolved]: every call site has
+/// to state that a trusted lookup produced it. There is deliberately **no
+/// `fromJson`**, and no caller-controlled `approverIsAuthorized` flag — a
+/// boolean an attacker can set is not a check.
+///
+/// ## What this type guarantees, and what it does not
+///
+/// The evaluator verifies the approval is **bound to this request**: same
+/// requester, same permission, same resource, and an approver who is not the
+/// requester. That is enough to stop an unrelated approval record — for a
+/// different action, or someone else's — from satisfying the current command.
+///
+/// It does **not** verify that the approver held the right permission. That is
+/// a full authorization evaluation of a second principal, and it belongs to
+/// the approval workflow that issues the record (a later backend slice). The
+/// backend must perform it at step 3 above.
+///
+/// **Expiry is not specified here.** No arbitrary lifetime is invented. If
+/// approvals expire, the owning approval workflow defines and enforces the
+/// policy, and [approvedAtServerUtc] is what it will evaluate against.
 @immutable
 class ApprovalEvidence {
-  const ApprovalEvidence({
-    required this.approverPrincipalId,
-    required this.approvedAtServerUtc,
+  /// Construct from a trusted, already-resolved approval record.
+  const ApprovalEvidence.resolved({
     required this.approvalRef,
+    required this.requesterPrincipalId,
+    required this.approverPrincipalId,
+    required this.permission,
+    required this.resourceId,
+    required this.approvedAtServerUtc,
   });
-
-  final String approverPrincipalId;
-
-  /// Server time. A client clock never establishes when approval happened.
-  final DateTime approvedAtServerUtc;
 
   /// Opaque reference to the stored approval record, for audit.
   final String approvalRef;
+
+  /// Principal the approval was granted **to**. Must be the actor.
+  final String requesterPrincipalId;
+
+  /// Principal who granted it. Must not be the actor.
+  final String approverPrincipalId;
+
+  /// The exact action approved. An approval for one permission does not
+  /// authorize another.
+  final Permission permission;
+
+  /// The exact resource approved. An approval for one order does not
+  /// authorize acting on a different one.
+  final String resourceId;
+
+  /// Server time the approval was recorded.
+  final DateTime approvedAtServerUtc;
 }
 
 /// Everything the evaluator is allowed to look at.
@@ -172,15 +233,22 @@ AuthorizationDecision evaluateAuthorization(AuthorizationRequest request) {
     return const AuthorizationDecision.deny(DenyReason.roleNotEligible);
   }
 
-  // 4. Scope.
-  final AuthorizationDecision? scopeDenial = _checkScope(
-    rule.scope,
-    principal,
-    membership,
-    request.scope,
-  );
-  if (scopeDenial != null) {
-    return scopeDenial;
+  // 4. Scope. Every requirement in the rule must hold. Iterating the enum's
+  //    declaration order rather than the rule's set makes the reported deny
+  //    reason independent of how the set literal was written.
+  for (final ScopeRequirement requirement in ScopeRequirement.values) {
+    if (!rule.scopes.contains(requirement)) {
+      continue;
+    }
+    final AuthorizationDecision? denial = _checkScope(
+      requirement,
+      principal,
+      membership,
+      request.scope,
+    );
+    if (denial != null) {
+      return denial;
+    }
   }
 
   // 5. Procedural requirements for privileged actions.
@@ -192,12 +260,23 @@ AuthorizationDecision evaluateAuthorization(AuthorizationRequest request) {
   }
   if (rule.approvalRequired) {
     final ApprovalEvidence? approval = request.approval;
-    if (approval == null || approval.approvalRef.isEmpty) {
+    if (approval == null) {
       return const AuthorizationDecision.deny(DenyReason.approvalRequired);
+    }
+    if (!isValidOpaqueId(approval.approvalRef)) {
+      // An unusable reference cannot be audited back to a stored record.
+      return const AuthorizationDecision.deny(DenyReason.approvalMismatch);
+    }
+    // The approval must be bound to *this* request. Without these four checks
+    // any valid approval record would satisfy any privileged action.
+    if (approval.requesterPrincipalId != principal.id ||
+        approval.permission != request.permission ||
+        approval.resourceId != request.scope.resourceId) {
+      return const AuthorizationDecision.deny(DenyReason.approvalMismatch);
     }
     // Dual control: self-approval is no control at all.
     if (approval.approverPrincipalId == principal.id) {
-      return const AuthorizationDecision.deny(DenyReason.approvalRequired);
+      return const AuthorizationDecision.deny(DenyReason.approvalMismatch);
     }
   }
 
@@ -240,7 +319,17 @@ AuthorizationDecision? _checkScope(
       }
       return null;
 
+    case ScopeRequirement.offeredResource:
+      // The offer must have been addressed to this principal. Being in the
+      // right region is not enough: otherwise any active worker nearby could
+      // accept someone else's offer.
+      return scope.isOfferedTo(principal.id)
+          ? null
+          : const AuthorizationDecision.deny(DenyReason.offerMismatch);
+
     case ScopeRequirement.assignedResource:
+      // An accepted assignment. An offer alone never satisfies this, which is
+      // what keeps post-acceptance actions closed to a merely-offered worker.
       return scope.isAssignedTo(principal.id)
           ? null
           : const AuthorizationDecision.deny(DenyReason.assignmentMismatch);

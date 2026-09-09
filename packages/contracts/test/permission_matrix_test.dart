@@ -131,7 +131,7 @@ void main() {
           permissionMatrix[Permission.adminSupportViewOrder]!;
 
       expect(support.reasonRequired, isTrue);
-      expect(support.scope, ScopeRequirement.ownRegion);
+      expect(support.scopes, <ScopeRequirement>{ScopeRequirement.ownRegion});
       // It is one read permission; it does not appear in any mutating rule.
       expect(support.permission.id, contains('view'));
     });
@@ -146,13 +146,86 @@ void main() {
         if (rule.permission.family != 'admin') {
           continue;
         }
-        if (rule.scope == ScopeRequirement.none) {
+        if (rule.scopes.contains(ScopeRequirement.none)) {
           expect(
             deliberatelyUnscoped.contains(rule.permission),
             isTrue,
             reason: '${rule.permission.id} is unscoped without justification',
           );
         }
+      }
+    });
+  });
+
+  group('assignment offer scoping', () {
+    const Set<Permission> acceptOrDecline = <Permission>{
+      Permission.pickerAcceptAssignment,
+      Permission.pickerDeclineAssignment,
+      Permission.riderAcceptAssignment,
+      Permission.riderDeclineAssignment,
+    };
+
+    test('accept/decline require the offer AND the region', () {
+      for (final Permission p in acceptOrDecline) {
+        expect(
+          permissionMatrix[p]!.scopes,
+          <ScopeRequirement>{
+            ScopeRequirement.offeredResource,
+            ScopeRequirement.ownRegion,
+          },
+          reason: '${p.id} must be target-isolated and region-scoped',
+        );
+      }
+    });
+
+    test('accept/decline never require an accepted assignment', () {
+      // Requiring one in order to accept an offer would be circular.
+      for (final Permission p in acceptOrDecline) {
+        expect(
+          permissionMatrix[p]!.scopes,
+          isNot(contains(ScopeRequirement.assignedResource)),
+          reason: '${p.id} must not need an assignment to create one',
+        );
+      }
+    });
+
+    test('offeredResource is used only for accept and decline', () {
+      for (final MapEntry<Permission, PermissionRule> e
+          in permissionMatrix.entries) {
+        if (e.value.scopes.contains(ScopeRequirement.offeredResource)) {
+          expect(
+            acceptOrDecline.contains(e.key),
+            isTrue,
+            reason: '${e.key.id} must not be reachable from an offer alone',
+          );
+        }
+      }
+    });
+
+    test('post-acceptance work requires an accepted assignment', () {
+      for (final Permission p in <Permission>[
+        Permission.pickerViewAssignedWork,
+        Permission.pickerRecordShopPickup,
+        Permission.pickerRecordHandoffToRider,
+        Permission.riderViewAssignedWork,
+        Permission.riderRecordCustodyReceipt,
+        Permission.riderRecordDeliveryAttempt,
+        Permission.riderSubmitDeliveryProof,
+        Permission.riderReportCodCollection,
+        Permission.riderSubmitRemittance,
+      ]) {
+        expect(
+          permissionMatrix[p]!.scopes,
+          contains(ScopeRequirement.assignedResource),
+          reason: '${p.id} must not be reachable from an offer',
+        );
+      }
+    });
+
+    test('every rule declares at least one scope requirement', () {
+      for (final PermissionRule rule in permissionMatrix.values) {
+        expect(rule.scopes, isNotEmpty,
+            reason: '${rule.permission.id} has no scope requirement');
       }
     });
   });

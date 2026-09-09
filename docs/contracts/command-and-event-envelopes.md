@@ -62,11 +62,46 @@ FND-003 slice owns.
 
 Semantics every backend implementation must honour:
 
+### The lookup key is `(principalId, commandId)`
+
+**Not the command id alone.** A command id is client-generated, so two
+principals can produce the same one by accident or on purpose; a global key
+would let the second caller receive the first caller's stored result.
+
+`IdempotencyNamespace.forPrincipal(principalId)` is built from the principal
+the backend derived from **verified authentication** — never from the wire
+envelope, which still carries no actor. A client therefore cannot choose the
+namespace it is deduplicated in, and payload spoofing cannot move a lookup.
+
+*Why principal, and not shop, region or tenant?* Resource isolation is already
+enforced by authorization: shop, region, ownership, offer and assignment scope
+are checked on every command, replays included. Partitioning by principal is
+therefore sufficient **and** the narrowest correct choice — one principal's
+retries are the only thing that may ever collapse together. No `tenantId` wire
+field is invented, because this architecture has not defined a tenant
+dimension; if one appears later it extends `IdempotencyNamespace`, which is why
+that is a type rather than a bare string.
+
+### Authorization precedes replay
+
+`evaluateIdempotency` takes the `AuthorizationDecision` itself — not a boolean
+a caller could set — and short-circuits to `rejectNotAuthorized` when it is a
+denial. There is no way to call it without having evaluated authorization
+first.
+
+This matters because **a stored result must not outlive the authority that
+produced it**. A rider whose membership was revoked, or who lost an assignment,
+must not be able to replay a command id from when they still had it.
+
+### Outcomes
+
 | Situation | Outcome | Why |
 |---|---|---|
-| New `commandId` | `executeNew` | Execute — but only after authorization, revision and state validation still pass. |
-| Same `commandId`, **same** fingerprint | `replayStoredResult` | Return the stored original result. Do **not** re-execute: re-executing is how a COD receipt gets recorded twice. |
-| Same `commandId`, **different** fingerprint | `rejectKeyReuse` | The client reused a key for a new intent. Executing would silently overwrite the meaning of an earlier command. |
+| Caller not authorized **now** | `rejectNotAuthorized` | Checked first. Replay must not bypass membership revocation or resource authorization. |
+| New `(principal, commandId)` | `executeNew` | Execute — but only after revision and state validation also pass. |
+| Same key, **same** fingerprint | `replayStoredResult` | Return the stored original result. Do **not** re-execute: re-executing is how a COD receipt gets recorded twice. |
+| Same key, **different** fingerprint | `rejectKeyReuse` | The client reused a key for a new intent. Executing would silently overwrite the meaning of an earlier command. |
+| Record belongs to **another principal** | `rejectNamespaceMismatch` | Never replay it. Unreachable with a correct lookup; kept as defence in depth so a lookup bug surfaces as a rejection rather than a cross-principal data leak. |
 
 `CommandFingerprint` is derived from `commandType`, `resourceId`,
 `expectedRevision` and a canonicalised `payload` — and from **nothing else**.
@@ -76,8 +111,10 @@ they are sent; otherwise replay detection breaks exactly when the network is
 worst. Map key order is normalised; **list order is not**, because `[a,b]` is a
 different request from `[b,a]`.
 
-`StoredCommandRecord.recordedAtServerUtc` is server time. A device with a wrong
-clock must never be able to shadow a real command.
+`StoredCommandRecord` carries the trusted `namespace` alongside the command id,
+fingerprint and result revision. Its `recordedAtServerUtc` is server time: a
+device with a wrong clock must never be able to shadow a real command, and the
+clock plays no part in replay identity.
 
 `evaluateIdempotency` is a pure function. **Not in this task:** the transaction
 boundary and outbox that apply it. Orders, reservations, commands and outbox

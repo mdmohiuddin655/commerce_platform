@@ -3,16 +3,23 @@ import 'package:test/test.dart';
 
 void main() {
   group('ContractVersion', () {
-    test('reads a peer on the same major version', () {
+    test('version policy permits a decode attempt on the same major', () {
+      // Permission to *try*, not proof that anything decodes.
       expect(
-        const ContractVersion(1, 0).canRead(const ContractVersion(1, 9)),
+        const ContractVersion(1, 0)
+            .isVersionCompatibleWith(const ContractVersion(1, 9)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(1, 0).isSameMajor(const ContractVersion(1, 9)),
         isTrue,
       );
     });
 
-    test('refuses a peer on a different major version', () {
+    test('version policy refuses a different major', () {
       expect(
-        const ContractVersion(1, 0).canRead(const ContractVersion(2, 0)),
+        const ContractVersion(1, 0)
+            .isVersionCompatibleWith(const ContractVersion(2, 0)),
         isFalse,
       );
     });
@@ -34,28 +41,51 @@ void main() {
       expect(ContractVersion.current.toString(), '0.2');
     });
 
-    test('0.2 reads payloads written at 0.1', () {
-      // Nothing defined at 0.1 changed meaning; everything in 0.2 is new.
+    test('0.1 and 0.2 share a major, so the policy permits an attempt', () {
+      // This is a statement about two integers. It is deliberately NOT a
+      // claim that a 0.1 build can decode a 0.2 payload: 0.1 defined no
+      // command envelope, event envelope or permission decoder, so it has
+      // nothing to decode one with. No such test exists because no such
+      // capability exists.
       expect(
-        ContractVersion.current.canRead(const ContractVersion(0, 1)),
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(0, 1)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(0, 1)
+            .isVersionCompatibleWith(ContractVersion.current),
         isTrue,
       );
     });
 
-    test('a 0.1 reader still accepts 0.2 payloads by the same major rule', () {
-      // Forward compatibility is by contract: a 0.1 build ignores fields it
-      // does not know rather than refusing the payload.
+    test('a future major break is refused in both directions', () {
       expect(
-        const ContractVersion(0, 1).canRead(ContractVersion.current),
-        isTrue,
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(1, 0)),
+        isFalse,
+      );
+      expect(
+        const ContractVersion(1, 0)
+            .isVersionCompatibleWith(ContractVersion.current),
+        isFalse,
       );
     });
 
-    test('a future major break would be refused in both directions', () {
-      expect(ContractVersion.current.canRead(const ContractVersion(1, 0)),
-          isFalse);
-      expect(const ContractVersion(1, 0).canRead(ContractVersion.current),
-          isFalse);
+    test('no decoder exists yet, so no payload claim can be made', () {
+      // Guard against the claim creeping back. The contract has no
+      // serialization: there is no toJson/fromJson on any envelope, so a
+      // payload-compatibility test is not merely absent, it is impossible to
+      // write honestly today. When serialization lands, its own tests must
+      // use a real encoded payload and a real decoder.
+      const ContractVersion v = ContractVersion.current;
+
+      expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
+      expect(
+        v.toString(),
+        '0.2',
+        reason: 'version policy only; decode behaviour is a decoder property',
+      );
     });
   });
 }

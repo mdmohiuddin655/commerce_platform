@@ -10,7 +10,7 @@ class PermissionRule {
   const PermissionRule({
     required this.permission,
     required this.eligibleRoles,
-    required this.scope,
+    required this.scopes,
     this.acceptableStatuses = const <MembershipStatus>{
       MembershipStatus.active,
     },
@@ -25,8 +25,13 @@ class PermissionRule {
   /// denied even with a perfect scope match.
   final Set<CommerceRole> eligibleRoles;
 
-  /// Relationship the actor must have to the resource.
-  final ScopeRequirement scope;
+  /// Relationships the actor must have to the resource. **All must hold.**
+  ///
+  /// A set rather than a single value so a rule can require, for example, both
+  /// `offeredResource` and `ownRegion`. Evaluated in [ScopeRequirement]
+  /// declaration order, so the reported deny reason does not depend on how the
+  /// set literal was written.
+  final Set<ScopeRequirement> scopes;
 
   /// Membership statuses that may exercise it. Defaults to active only, so a
   /// suspended member cannot start new work. A later lifecycle slice may add a
@@ -52,20 +57,20 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.customerSubmitCheckout: PermissionRule(
     permission: Permission.customerSubmitCheckout,
     eligibleRoles: <CommerceRole>{CommerceRole.customer},
-    scope: ScopeRequirement.ownResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownResource},
     restriction: 'Submits an intent only. Prices, stock and fees are resolved '
         'server-side; a client-quoted amount is never trusted.',
   ),
   Permission.customerViewOwnOrder: PermissionRule(
     permission: Permission.customerViewOwnOrder,
     eligibleRoles: <CommerceRole>{CommerceRole.customer},
-    scope: ScopeRequirement.ownResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownResource},
     restriction: 'Own orders only. No listing of other customers exists.',
   ),
   Permission.customerRequestCancellation: PermissionRule(
     permission: Permission.customerRequestCancellation,
     eligibleRoles: <CommerceRole>{CommerceRole.customer},
-    scope: ScopeRequirement.ownResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownResource},
     reasonRequired: true,
     restriction: 'Requests only. The server decides from the current stage '
         'whether cancellation is permitted; the client never cancels.',
@@ -73,14 +78,14 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.customerConfirmDeliveryProof: PermissionRule(
     permission: Permission.customerConfirmDeliveryProof,
     eligibleRoles: <CommerceRole>{CommerceRole.customer},
-    scope: ScopeRequirement.ownResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownResource},
     restriction: 'Participation in proof only. Confirming does not settle '
         'cash and does not close a dispute.',
   ),
   Permission.customerRaiseDispute: PermissionRule(
     permission: Permission.customerRaiseDispute,
     eligibleRoles: <CommerceRole>{CommerceRole.customer},
-    scope: ScopeRequirement.ownResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownResource},
     reasonRequired: true,
   ),
 
@@ -88,38 +93,38 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.agentViewShopOrder: PermissionRule(
     permission: Permission.agentViewShopOrder,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
     restriction: 'Only shops in the membership. Never a platform-wide feed.',
   ),
   Permission.agentAcceptOrder: PermissionRule(
     permission: Permission.agentAcceptOrder,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
   ),
   Permission.agentRejectOrder: PermissionRule(
     permission: Permission.agentRejectOrder,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
     reasonRequired: true,
   ),
   Permission.agentRecordShopFulfillment: PermissionRule(
     permission: Permission.agentRecordShopFulfillment,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
     restriction: 'Records shop-side progress. Never writes trusted stock, '
         'order status or cash fields directly.',
   ),
   Permission.agentOfferPickerAssignment: PermissionRule(
     permission: Permission.agentOfferPickerAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
     restriction: 'Offers work. An offer is not an assignment and never '
         'implies custody.',
   ),
   Permission.agentOfferRiderAssignment: PermissionRule(
     permission: Permission.agentOfferRiderAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
-    scope: ScopeRequirement.ownShop,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
     restriction: 'Offers work only, within the agent\'s own shops.',
   ),
 
@@ -127,31 +132,41 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.pickerViewAssignedWork: PermissionRule(
     permission: Permission.pickerViewAssignedWork,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
     restriction: 'Only what the active assignment needs. Not a customer '
         'directory and not a browsable order list.',
   ),
   Permission.pickerAcceptAssignment: PermissionRule(
     permission: Permission.pickerAcceptAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},
-    scope: ScopeRequirement.ownRegion,
-    restriction: 'Accepting an offer requires the offer to be live and in '
-        'region; acceptance is decided server-side.',
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.offeredResource,
+      ScopeRequirement.ownRegion,
+    },
+    restriction: 'The offer must have been addressed to this picker: a '
+        'same-region picker cannot accept another picker\'s offer. Does NOT '
+        'require an already accepted assignment. Whether the offer is still '
+        'live is lifecycle state (FND-003B), not authorization.',
   ),
   Permission.pickerDeclineAssignment: PermissionRule(
     permission: Permission.pickerDeclineAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.offeredResource,
+      ScopeRequirement.ownRegion,
+    },
+    restriction: 'Same target isolation as accepting: only the picker the '
+        'offer was addressed to may decline it.',
   ),
   Permission.pickerRecordShopPickup: PermissionRule(
     permission: Permission.pickerRecordShopPickup,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
   ),
   Permission.pickerRecordHandoffToRider: PermissionRule(
     permission: Permission.pickerRecordHandoffToRider,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
     restriction: 'Records a custody handoff. Custody changes only on a proven '
         'handoff, never on a notification or an elapsed timer.',
   ),
@@ -160,39 +175,48 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.riderViewAssignedWork: PermissionRule(
     permission: Permission.riderViewAssignedWork,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
     restriction: 'Only what the active assignment needs, including the '
         'delivery address for that assignment alone.',
   ),
   Permission.riderAcceptAssignment: PermissionRule(
     permission: Permission.riderAcceptAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.offeredResource,
+      ScopeRequirement.ownRegion,
+    },
+    restriction: 'The offer must have been addressed to this rider. Does NOT '
+        'require an already accepted assignment.',
   ),
   Permission.riderDeclineAssignment: PermissionRule(
     permission: Permission.riderDeclineAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.offeredResource,
+      ScopeRequirement.ownRegion,
+    },
+    restriction: 'Same target isolation as accepting.',
   ),
   Permission.riderRecordCustodyReceipt: PermissionRule(
     permission: Permission.riderRecordCustodyReceipt,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
   ),
   Permission.riderRecordDeliveryAttempt: PermissionRule(
     permission: Permission.riderRecordDeliveryAttempt,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
   ),
   Permission.riderSubmitDeliveryProof: PermissionRule(
     permission: Permission.riderSubmitDeliveryProof,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
   ),
   Permission.riderReportCodCollection: PermissionRule(
     permission: Permission.riderReportCodCollection,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
     restriction: 'Reports what was actually received. Reporting is not '
         'settlement, and it never writes a balance: the server derives '
         'postings. Delivered is not equivalent to rider cash settled.',
@@ -200,7 +224,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.riderSubmitRemittance: PermissionRule(
     permission: Permission.riderSubmitRemittance,
     eligibleRoles: <CommerceRole>{CommerceRole.rider},
-    scope: ScopeRequirement.assignedResource,
+    scopes: <ScopeRequirement>{ScopeRequirement.assignedResource},
     restriction: 'Submits a remittance for a receiving party to confirm. The '
         'rider never edits settlement history or their own balance.',
   ),
@@ -209,7 +233,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminApproveWorker: PermissionRule(
     permission: Permission.adminApproveWorker,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     approvalRequired: true,
     restriction: 'Dual control: the approver must be a different principal '
@@ -218,7 +242,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminSuspendWorker: PermissionRule(
     permission: Permission.adminSuspendWorker,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     restriction: 'Audited. Stops new work; controlled resolution of work '
         'already in custody is owned by the lifecycle slice.',
@@ -226,26 +250,26 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminReinstateWorker: PermissionRule(
     permission: Permission.adminReinstateWorker,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     approvalRequired: true,
   ),
   Permission.adminModerateShop: PermissionRule(
     permission: Permission.adminModerateShop,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
   ),
   Permission.adminAdministerServiceZone: PermissionRule(
     permission: Permission.adminAdministerServiceZone,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
   ),
   Permission.adminPublishPolicyVersion: PermissionRule(
     permission: Permission.adminPublishPolicyVersion,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.none,
+    scopes: <ScopeRequirement>{ScopeRequirement.none},
     reasonRequired: true,
     approvalRequired: true,
     restriction: 'Publishes a new immutable policy version. Never edits a '
@@ -255,7 +279,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminSupportViewOrder: PermissionRule(
     permission: Permission.adminSupportViewOrder,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     restriction: 'Read-only, region-scoped, reason-bearing and logged. '
         'Confers no mutation authority of any kind.',
@@ -263,13 +287,13 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminAdministerDispute: PermissionRule(
     permission: Permission.adminAdministerDispute,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
   ),
   Permission.adminAdministerReturn: PermissionRule(
     permission: Permission.adminAdministerReturn,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     restriction: 'Stock cannot become available again until shop receipt and '
         'inspection; this permission does not shortcut that.',
@@ -277,7 +301,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminRecordCashReconciliation: PermissionRule(
     permission: Permission.adminRecordCashReconciliation,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.ownRegion,
+    scopes: <ScopeRequirement>{ScopeRequirement.ownRegion},
     reasonRequired: true,
     approvalRequired: true,
     restriction: 'Records a reconciliation as new balanced postings under '
@@ -287,7 +311,7 @@ const Map<Permission, PermissionRule> permissionMatrix =
   Permission.adminViewReleaseHealth: PermissionRule(
     permission: Permission.adminViewReleaseHealth,
     eligibleRoles: <CommerceRole>{CommerceRole.admin},
-    scope: ScopeRequirement.none,
+    scopes: <ScopeRequirement>{ScopeRequirement.none},
     restriction: 'Aggregate operational metrics only. No personal data.',
   ),
 };

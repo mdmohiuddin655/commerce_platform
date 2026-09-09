@@ -21,8 +21,12 @@ void main() {
         rule.eligibleRoles.map((CommerceRole r) => r.id).join(', ');
     final String statuses =
         rule.acceptableStatuses.map((MembershipStatus s) => s.id).join(', ');
+    final String scopes = ScopeRequirement.values
+        .where(rule.scopes.contains)
+        .map((ScopeRequirement r) => '`${r.name}`')
+        .join(' + ');
     out.writeln(
-      '| `${permission.id}` | $roles | $statuses | `${rule.scope.name}` | '
+      '| `${permission.id}` | $roles | $statuses | $scopes | '
       '${yn(rule.reasonRequired)} | ${yn(rule.approvalRequired)} | '
       '${rule.restriction.isEmpty ? '—' : rule.restriction} |',
     );

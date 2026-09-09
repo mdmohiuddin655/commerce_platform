@@ -9,7 +9,11 @@
 - **Branch:** `fnd/FND-003A-command-auth-contracts`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.1 → **0.2**
-- **Status:** **DONE**
+- **Status:** **DONE** — superseded in part by **FND-003A-FIX-001**
+  (2026-09-10). This report describes commit `de19dc9`; four defects found on
+  review were corrected afterwards. See
+  [§9 Corrections](#9-corrections-fnd-003a-fix-001-2026-09-10) before relying
+  on any statement below.
 
 ## 1. Baseline
 
@@ -214,3 +218,49 @@ Contract and tests only. No application feature, no backend handler, no
 Firestore rule, no lifecycle transition, no fee, commission or cash rule. No
 dependency added. Notification, auth and local-store capability work from
 FND-002A is untouched and still passing. Nothing was pushed or deployed.
+
+## 9. Corrections (FND-003A-FIX-001, 2026-09-10)
+
+A review of `de19dc9` found four defects. Recorded here so this report is not
+left overstating what the commit achieved. **Commit `de19dc9` alone is not the
+accepted contract**; the accepted state is `de19dc9` plus the FND-003A-FIX-001
+commit. Full detail:
+[FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md).
+
+1. **Assignment accept/decline was authorized by region alone.** §3 claimed
+   scope enforcement was least-privilege, but `picker.assignment.accept`,
+   `picker.assignment.decline`, `rider.assignment.accept` and
+   `rider.assignment.decline` used `ownRegion` only — so **any active worker in
+   the same region could accept another worker's offer.** The contract could
+   not express "the offer was addressed to you". Fixed by adding
+   `ResourceScope.offeredPrincipalIds` and `ScopeRequirement.offeredResource`,
+   and making `PermissionRule.scopes` a set so a rule can require the offer
+   *and* the region. (What §3 got right, and the fix preserves: accepting an
+   offer must **not** require an already accepted assignment.)
+
+2. **`ApprovalEvidence` was too weakly bound.** §3 described dual control, but
+   the evaluator checked only a non-empty reference and approver ≠ requester —
+   so **any approval record satisfied any privileged action**. Evidence is now
+   bound to requester, permission and resource, requires an auditable
+   reference, and is constructed only through `ApprovalEvidence.resolved` to
+   mark the server-resolution trust boundary.
+
+3. **Idempotency was not principal-isolated.** §3's replay description keyed on
+   the command id alone. Since command ids are client-generated, **one
+   principal could receive another's stored result.** The lookup key is now
+   `(principalId, commandId)` via `IdempotencyNamespace`, records carry their
+   namespace, and `evaluateIdempotency` now takes the `AuthorizationDecision`
+   so authorization provably precedes replay.
+
+4. **Version compatibility was overstated.** §2 and the tests claimed a 0.1
+   reader accepts 0.2 payloads and that unknown fields are ignored. **Neither
+   was demonstrated** — 0.1 had no envelope or permission decoder, and
+   `cp_contracts` still has no serialization at all. `canRead` was renamed
+   `isVersionCompatibleWith` (version *policy* only), and the false payload
+   claims were removed rather than reworded.
+
+**What stands unchanged:** the command envelope carries no actor field; command
+ids are opaque and non-sequential; event ids are server-assigned and no
+transport-id field exists; role alone authorizes nothing; the prohibited-
+capability guard; and the 0.1 → 0.2 decision itself. 0.2 was corrected **in
+place**, not bumped — it was never merged to `main` and never released.

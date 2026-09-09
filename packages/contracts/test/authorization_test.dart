@@ -31,12 +31,14 @@ ResourceScope order({
   String? shop = 'shop_alpha',
   String? region = 'dhaka_north',
   Set<String> assigned = const <String>{},
+  Set<String> offered = const <String>{},
 }) => ResourceScope(
   resourceId: orderId,
   ownerPrincipalId: owner,
   shopId: shop,
   regionId: region,
   assignedPrincipalIds: assigned,
+  offeredPrincipalIds: offered,
 );
 
 AuthorizationDecision decide(
@@ -57,10 +59,19 @@ AuthorizationDecision decide(
   ),
 );
 
-ApprovalEvidence approvalBy(String id) => ApprovalEvidence(
-  approverPrincipalId: id,
+ApprovalEvidence approvalBy(
+  String approver, {
+  String requester = adminId,
+  Permission permission = Permission.adminRecordCashReconciliation,
+  String resource = orderId,
+  String ref = 'apr_11aa22bb33cc44dd',
+}) => ApprovalEvidence.resolved(
+  approvalRef: ref,
+  requesterPrincipalId: requester,
+  approverPrincipalId: approver,
+  permission: permission,
+  resourceId: resource,
   approvedAtServerUtc: DateTime.utc(2026, 9, 9),
-  approvalRef: 'apr_11aa22bb33cc44dd',
 );
 
 void main() {
@@ -86,6 +97,19 @@ void main() {
             CommerceRole.agent,
             shops: <String>{'shop_alpha'},
           ),
+        ).allowed,
+        isTrue,
+      );
+    });
+
+    test('a picker who was offered work may ask to accept it', () {
+      // No accepted assignment: requiring one to accept would be circular.
+      expect(
+        decide(
+          Permission.pickerAcceptAssignment,
+          principal: user(pickerId),
+          membership: member(pickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
         ).allowed,
         isTrue,
       );
@@ -180,12 +204,14 @@ void main() {
             CommerceRole.picker,
             status: MembershipStatus.pending,
           ),
+          scope: order(offered: <String>{pickerId}),
         ).reason,
         DenyReason.membershipNotActive,
       );
     });
 
     test('suspended worker cannot start new assignment work', () {
+      // Offered to them, in region, and still denied: standing comes first.
       expect(
         decide(
           Permission.pickerAcceptAssignment,
@@ -195,6 +221,7 @@ void main() {
             CommerceRole.picker,
             status: MembershipStatus.suspended,
           ),
+          scope: order(offered: <String>{pickerId}),
         ).reason,
         DenyReason.membershipNotActive,
       );
@@ -210,6 +237,7 @@ void main() {
             CommerceRole.rider,
             status: MembershipStatus.revoked,
           ),
+          scope: order(offered: <String>{riderId}),
         ).reason,
         DenyReason.membershipNotActive,
       );
@@ -293,13 +321,13 @@ void main() {
       );
     });
 
-    test('region mismatch is denied', () {
+    test('region mismatch is denied even for the offered worker', () {
       expect(
         decide(
           Permission.riderAcceptAssignment,
           principal: user(riderId),
           membership: member(riderId, CommerceRole.rider, region: 'chattogram'),
-          scope: order(region: 'dhaka_north'),
+          scope: order(region: 'dhaka_north', offered: <String>{riderId}),
         ).reason,
         DenyReason.regionMismatch,
       );
@@ -311,6 +339,7 @@ void main() {
           Permission.riderAcceptAssignment,
           principal: user(riderId),
           membership: member(riderId, CommerceRole.rider, region: null),
+          scope: order(offered: <String>{riderId}),
         ).reason,
         DenyReason.regionMismatch,
       );
@@ -329,14 +358,13 @@ void main() {
     });
 
     test('being offered work is not being assigned it', () {
-      // assignedPrincipalIds holds accepted assignments only, so an offered
-      // rider is simply absent — and denied.
+      // Offered, not accepted: post-acceptance custody action is denied.
       expect(
         decide(
           Permission.riderRecordCustodyReceipt,
           principal: user(riderId),
           membership: member(riderId, CommerceRole.rider),
-          scope: order(assigned: <String>{pickerId}),
+          scope: order(offered: <String>{riderId}),
         ).reason,
         DenyReason.assignmentMismatch,
       );
@@ -380,6 +408,8 @@ void main() {
     });
 
     test('self-approval is not dual control', () {
+      // Reported as approvalMismatch, not approvalRequired: evidence was
+      // supplied, it just is not valid dual control.
       expect(
         decide(
           Permission.adminRecordCashReconciliation,
@@ -388,7 +418,226 @@ void main() {
           reason: 'variance',
           approval: approvalBy(adminId),
         ).reason,
-        DenyReason.approvalRequired,
+        DenyReason.approvalMismatch,
+      );
+    });
+  });
+
+  group('assignment offer is addressed to one worker', () {
+    test('the offered picker may accept, with no accepted assignment', () {
+      expect(
+        decide(
+          Permission.pickerAcceptAssignment,
+          principal: user(pickerId),
+          membership: member(pickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
+        ).allowed,
+        isTrue,
+      );
+    });
+
+    test('a different picker in the SAME region cannot accept it', () {
+      // The bug this fix closes: region membership alone used to be enough.
+      const String otherPickerId = 'usr_pick99Zz-Yy88Xx7';
+
+      expect(
+        decide(
+          Permission.pickerAcceptAssignment,
+          principal: user(otherPickerId),
+          membership: member(otherPickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
+        ).reason,
+        DenyReason.offerMismatch,
+      );
+    });
+
+    test('a different rider in the same region cannot accept it', () {
+      const String otherRiderId = 'usr_ride99Zz-Yy88Xx7';
+
+      expect(
+        decide(
+          Permission.riderAcceptAssignment,
+          principal: user(otherRiderId),
+          membership: member(otherRiderId, CommerceRole.rider),
+          scope: order(offered: <String>{riderId}),
+        ).reason,
+        DenyReason.offerMismatch,
+      );
+    });
+
+    test('declining has the same target isolation as accepting', () {
+      const String otherPickerId = 'usr_pick99Zz-Yy88Xx7';
+
+      expect(
+        decide(
+          Permission.pickerDeclineAssignment,
+          principal: user(pickerId),
+          membership: member(pickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
+        ).allowed,
+        isTrue,
+      );
+      expect(
+        decide(
+          Permission.pickerDeclineAssignment,
+          principal: user(otherPickerId),
+          membership: member(otherPickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
+        ).reason,
+        DenyReason.offerMismatch,
+      );
+      expect(
+        decide(
+          Permission.riderDeclineAssignment,
+          principal: user(riderId),
+          membership: member(riderId, CommerceRole.rider),
+          scope: order(offered: <String>{riderId}),
+        ).allowed,
+        isTrue,
+      );
+    });
+
+    test('an accepted assignment does NOT by itself permit accepting', () {
+      // Acceptance is gated on the offer, not on assignment: a worker holding
+      // an assignment on this resource but with no offer is still denied.
+      expect(
+        decide(
+          Permission.pickerAcceptAssignment,
+          principal: user(pickerId),
+          membership: member(pickerId, CommerceRole.picker),
+          scope: order(assigned: <String>{pickerId}),
+        ).reason,
+        DenyReason.offerMismatch,
+      );
+    });
+
+    test('an offer does not open post-acceptance actions', () {
+      for (final Permission p in <Permission>[
+        Permission.pickerRecordShopPickup,
+        Permission.pickerRecordHandoffToRider,
+        Permission.pickerViewAssignedWork,
+      ]) {
+        expect(
+          decide(
+            p,
+            principal: user(pickerId),
+            membership: member(pickerId, CommerceRole.picker),
+            scope: order(offered: <String>{pickerId}),
+          ).reason,
+          DenyReason.assignmentMismatch,
+          reason: '${p.id} must require an accepted assignment',
+        );
+      }
+    });
+
+    test('accepted assignment still permits post-acceptance actions', () {
+      expect(
+        decide(
+          Permission.pickerRecordShopPickup,
+          principal: user(pickerId),
+          membership: member(pickerId, CommerceRole.picker),
+          scope: order(assigned: <String>{pickerId}),
+        ).allowed,
+        isTrue,
+      );
+    });
+
+    test('offer facts are server-side: a payload claim grants nothing', () {
+      // ResourceScope is built from trusted storage. Nothing a client sends
+      // can add itself to offeredPrincipalIds.
+      const String otherPickerId = 'usr_pick99Zz-Yy88Xx7';
+      final CommandEnvelope spoofed = CommandEnvelope.create(
+        commandId: 'cmd_7Kd93ba-Qz18Xu2P',
+        commandType: 'assignment.accept',
+        resourceId: orderId,
+        expectedRevision: 1,
+        payload: <String, Object?>{
+          'offeredTo': otherPickerId,
+          'assignedTo': otherPickerId,
+        },
+      ).fold((CommandEnvelope e) => e, (_) => throw StateError('n/a'));
+
+      expect(spoofed.payload['offeredTo'], otherPickerId);
+      expect(
+        decide(
+          Permission.pickerAcceptAssignment,
+          principal: user(otherPickerId),
+          membership: member(otherPickerId, CommerceRole.picker),
+          scope: order(offered: <String>{pickerId}),
+        ).reason,
+        DenyReason.offerMismatch,
+      );
+    });
+  });
+
+  group('approval is bound to this exact action', () {
+    AuthorizationDecision cash({ApprovalEvidence? approval}) => decide(
+      Permission.adminRecordCashReconciliation,
+      principal: user(adminId),
+      membership: member(adminId, CommerceRole.admin),
+      reason: 'end of day variance',
+      approval: approval,
+    );
+
+    test('a correctly bound second-principal approval passes', () {
+      expect(cash(approval: approvalBy(approverId)).allowed, isTrue);
+    });
+
+    test('missing approval is denied as required, not mismatched', () {
+      expect(cash().reason, DenyReason.approvalRequired);
+    });
+
+    test('self approval is denied', () {
+      expect(
+        cash(approval: approvalBy(adminId)).reason,
+        DenyReason.approvalMismatch,
+      );
+    });
+
+    test('an approval issued to a different requester is denied', () {
+      expect(
+        cash(
+          approval: approvalBy(approverId, requester: 'usr_other01Aa-Bb22C'),
+        ).reason,
+        DenyReason.approvalMismatch,
+      );
+    });
+
+    test('an approval for a different permission is denied', () {
+      expect(
+        cash(
+          approval: approvalBy(
+            approverId,
+            permission: Permission.adminApproveWorker,
+          ),
+        ).reason,
+        DenyReason.approvalMismatch,
+      );
+    });
+
+    test('an approval for a different resource is denied', () {
+      expect(
+        cash(
+          approval: approvalBy(approverId, resource: 'ord_OTHER0plQ7rTt4Bxx'),
+        ).reason,
+        DenyReason.approvalMismatch,
+      );
+    });
+
+    test('an unusable approval reference is denied', () {
+      for (final String ref in <String>['', 'short', '000000000000000000']) {
+        expect(
+          cash(approval: approvalBy(approverId, ref: ref)).reason,
+          DenyReason.approvalMismatch,
+          reason: 'ref "$ref" cannot be audited back to a stored record',
+        );
+      }
+    });
+
+    test('every denial still reports the same public message', () {
+      expect(
+        cash(approval: approvalBy(adminId)).publicMessage,
+        'You do not have permission to do this.',
       );
     });
   });
@@ -433,7 +682,7 @@ void main() {
           principal: user(customerId),
           membership: member(adminId, CommerceRole.admin),
           reason: 'x',
-          approval: approvalBy(approverId),
+          approval: approvalBy(approverId, requester: customerId),
         ).reason,
         DenyReason.membershipMissing,
       );
