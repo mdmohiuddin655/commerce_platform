@@ -36,7 +36,7 @@ re-offer advances both.
 | `declined` | yes | Terminal for this attempt |
 | `expired` | yes | Terminal — lapsed under its timeout policy |
 | `revoked` | yes | Terminal — withdrawn under controlled reassignment |
-| `completed` | **reachable since FND-003B3A, but not from any command** | Entered as a *consequence* of rider custody receipt, never selected by a client. No picker command may act from it either. Its shape and revision range are now defined for the picker role only — see [custody-lifecycle.md](custody-lifecycle.md) §8–9 and **B3-C1**. |
+| `completed` | **implemented for the picker since FND-003B3A, but not reachable from any command** | Entered as a *consequence* of rider custody receipt, never selected by a client. No picker command may act from it either. Its shape and revision range are now defined for the picker role only — see [custody-lifecycle.md](custody-lifecycle.md) §8–9 and **B3-C1**. |
 
 `AssignmentRole.rider` **became executable at 0.5** (FND-003B2B). No *picker*
 command or event names a rider, and a test still pins that: the picker
@@ -311,6 +311,13 @@ pre-0.6 answer exactly, including `completed → null`. `role: picker` gives
 completion = three mutations); `role: rider` stays null, because rider
 completion depends on delivery and no cost for it was invented (**B3-C2**).
 The five pre-custody ranges do not depend on `role` at all.
+
+`AssignmentState.notYetImplementedForRole(role)` *(FIX-001)* answers the
+metadata question precisely: **empty for the picker**, `{completed}` for the
+rider. The role-neutral `notYetImplemented` is retained and means "not
+implemented for *every* role" — true of `completed`, because rider completion
+is still future — but ask the role-aware form when the role matters, which is
+almost always.
 
 **Since 0.5 it lives in `assignment_integrity.dart`, not
 `picker_assignment.dart`, and is shared with the rider lifecycle** — picker and

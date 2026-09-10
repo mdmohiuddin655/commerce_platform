@@ -65,8 +65,25 @@ enum CustodyDenial {
   /// assignment that currently holds custody.
   sourcePickerAssignmentMismatch,
 
-  /// Two aggregates that must describe the same order disagree.
+  /// Two aggregates that must describe the same order disagree, or one of them
+  /// disagrees with the canonical resource context.
   resourceBindingMismatch,
+
+  /// Shop custody names a different shop than the order's canonical one.
+  /// Both strings may be individually valid and still not be the same shop.
+  shopBindingMismatch,
+
+  /// `expectedPickerSlotRevision` does not match the picker slot.
+  pickerSlotRevisionConflict,
+
+  /// `expectedRiderSlotRevision` does not match the rider slot, or was not
+  /// supplied for a command that needs it.
+  riderSlotRevisionConflict,
+
+  /// Custody already exists. Initialisation is **create-once**: it may never
+  /// reset an existing aggregate, nor move picker or rider custody back to the
+  /// shop.
+  custodyAlreadyInitialised,
 
   /// A stored aggregate is a combination this lifecycle can never produce.
   /// **Corruption, not a race.**
@@ -138,6 +155,8 @@ class CustodyRequest {
     required this.actingPrincipalId,
     required this.expectedCustodyRevision,
     required this.expectedOrderRevision,
+    required this.expectedPickerSlotRevision,
+    required this.expectedRiderSlotRevision,
     required this.assignmentId,
     required this.generation,
   });
@@ -154,6 +173,22 @@ class CustodyRequest {
   /// command, including the one that leaves the order untouched, so a caller
   /// acting on a stale view of the order is refused either way.
   final int expectedOrderRevision;
+
+  /// Picker slot revision the caller believes is current.
+  ///
+  /// Compare-and-set on the *assignment* aggregate, added by
+  /// FND-003B3A-FIX-001. Exact `assignmentId`, generation, accepted state and
+  /// assignee are all still checked — this is **additional** protection, not a
+  /// replacement. Without it a caller could hold a stale view of a slot that
+  /// happened to still name the same attempt.
+  final int expectedPickerSlotRevision;
+
+  /// Rider slot revision the caller believes is current.
+  ///
+  /// Required-named and nullable so every call site states its intent. Shop
+  /// pickup does not read the rider slot and passes null; rider receipt must
+  /// supply it, and a null there fails closed.
+  final int? expectedRiderSlotRevision;
 
   /// The acting worker's own assignment attempt.
   final String assignmentId;
@@ -268,6 +303,68 @@ CustodyDenial? validateCustodyAggregate(CustodyFacts facts) {
   return null;
 }
 
+/// Result of deciding whether custody may be initialised.
+@immutable
+class CustodyInitialisationOutcome {
+  const CustodyInitialisationOutcome._(this.created, this.denial);
+
+  const CustodyInitialisationOutcome.allow(CustodyFacts created)
+    : this._(created, null);
+
+  const CustodyInitialisationOutcome.deny(CustodyDenial denial)
+    : this._(null, denial);
+
+  /// The aggregate to create, or null when refused.
+  final CustodyFacts? created;
+  final CustodyDenial? denial;
+
+  bool get allowed => created != null;
+
+  @override
+  String toString() =>
+      allowed ? 'Allow(${created!.holder})' : 'Deny(${denial!.name})';
+}
+
+/// Decide whether custody may be initialised at the shop.
+///
+/// **Create-once, never reset.** `CustodyFacts.initialAtShop` is a *shape*, not
+/// authority to overwrite: calling it against an order that already has custody
+/// would silently move goods back to the shop on paper, erasing the fact that a
+/// picker or a rider is carrying them. This gate makes that impossible to do by
+/// accident, and makes it testable rather than merely documented.
+///
+/// - [existingCustody] null → create at the shop, revision **1**;
+/// - [existingCustody] non-null → **refused**, whatever it holds, with nothing
+///   created. That covers a duplicate initialisation while still at the shop, a
+///   re-initialisation after pickup, and one after rider receipt.
+///
+/// Server-side only. There is deliberately **no `CustodyCommand` and no
+/// permission** for initialisation: custody at the shop is not something a
+/// caller asserts, it is what is true once the shop has assembled the goods.
+/// The backend applies this with a **create-if-absent** storage precondition in
+/// the same transaction that establishes the ready boundary — **CA1**.
+CustodyInitialisationOutcome initialiseCustodyAtShop({
+  required CustodyResourceContext resource,
+  required CustodyFacts? existingCustody,
+}) {
+  if (!resource.isWellFormed) {
+    return const CustodyInitialisationOutcome.deny(
+      CustodyDenial.resourceBindingMismatch,
+    );
+  }
+  if (existingCustody != null) {
+    return const CustodyInitialisationOutcome.deny(
+      CustodyDenial.custodyAlreadyInitialised,
+    );
+  }
+  return CustodyInitialisationOutcome.allow(
+    CustodyFacts.initialAtShop(
+      resourceId: resource.resourceId,
+      shopId: resource.shopId,
+    ),
+  );
+}
+
 /// Whether an accepted assignment may be withdrawn, derived from **real
 /// custody facts**.
 ///
@@ -317,11 +414,17 @@ ReassignmentSafety reassignmentSafetyFor({
 /// Any edge not enumerated fails closed.
 CustodyOutcome evaluateCustodyTransition({
   required CustodyRequest request,
+  required CustodyResourceContext resource,
   required CustodyFacts? custody,
   required OrderLifecycleFacts order,
   required PickerAssignmentFacts pickerAssignment,
   required RiderAssignmentFacts? riderAssignment,
 }) {
+  // 0. The canonical resource identity must itself be usable.
+  if (!resource.isWellFormed) {
+    return const CustodyOutcome.deny(CustodyDenial.resourceBindingMismatch);
+  }
+
   // 1. Custody must exist. Absence is never read as "the shop still has it".
   if (custody == null) {
     return const CustodyOutcome.deny(CustodyDenial.custodyNotInitialised);
@@ -343,23 +446,54 @@ CustodyOutcome evaluateCustodyTransition({
     return const CustodyOutcome.deny(CustodyDenial.aggregateInconsistent);
   }
 
-  // 3. Every aggregate must describe the same order. If they disagree, the
-  //    read-set was not consistent, and deciding custody from a mixed view of
-  //    two orders is exactly how goods get attributed to the wrong one.
-  if (pickerAssignment.resourceId != custody.resourceId ||
+  // 3. Every aggregate must describe the same order, and that order must be
+  //    the canonical one the backend resolved the command against. Three
+  //    aggregates agreeing with each other is not the same as three aggregates
+  //    being about the right order; deciding custody from a mixed read-set is
+  //    exactly how goods get attributed to the wrong one.
+  if (custody.resourceId != resource.resourceId ||
+      pickerAssignment.resourceId != resource.resourceId ||
       (riderAssignment != null &&
-          riderAssignment.resourceId != custody.resourceId)) {
+          riderAssignment.resourceId != resource.resourceId)) {
     return const CustodyOutcome.deny(CustodyDenial.resourceBindingMismatch);
+  }
+  // Shop custody must name the order's own shop. Both ids can be individually
+  // non-blank and still be different shops. Compared exactly — neither side is
+  // trimmed or normalised into equality.
+  if (custody.holder.kind == CustodyHolderKind.shop &&
+      custody.holder.shopId != resource.shopId) {
+    return const CustodyOutcome.deny(CustodyDenial.shopBindingMismatch);
   }
 
   // 4. Concurrency, before command dispatch so every command is protected
-  //    identically. Both revisions are checked even when a command leaves the
-  //    order untouched.
+  //    identically, and before any transition is constructed. Every aggregate
+  //    the command reads is compare-and-set, including the ones a command
+  //    leaves untouched: acting on a stale view is refused either way.
   if (request.expectedCustodyRevision != custody.custodyRevision) {
     return const CustodyOutcome.deny(CustodyDenial.custodyRevisionConflict);
   }
   if (request.expectedOrderRevision != order.revision) {
     return const CustodyOutcome.deny(CustodyDenial.orderRevisionConflict);
+  }
+  if (request.expectedPickerSlotRevision != pickerAssignment.slotRevision) {
+    return const CustodyOutcome.deny(
+      CustodyDenial.pickerSlotRevisionConflict,
+    );
+  }
+  if (request.command == CustodyCommand.recordRiderReceipt &&
+      riderAssignment != null) {
+    // Receipt reads the rider slot, so it must pin it. A null expectation
+    // fails closed rather than skipping the check.
+    //
+    // A *missing* rider slot is deliberately not reported here: that is a
+    // semantic fact, not a concurrency conflict, and the command handler says
+    // so with `noAcceptedRiderAssignment`.
+    if (request.expectedRiderSlotRevision == null ||
+        request.expectedRiderSlotRevision != riderAssignment.slotRevision) {
+      return const CustodyOutcome.deny(
+        CustodyDenial.riderSlotRevisionConflict,
+      );
+    }
   }
 
   // 5. The reservation must still be committed. Custody cannot advance on an

@@ -189,6 +189,18 @@ invented** for either.
 build could not decode a 0.6 custody payload even if one existed. None does:
 `cp_contracts` still has no serialization.
 
+**Corrected in place by FND-003B3A-FIX-001**, while 0.6 is still an unmerged,
+unreleased candidate — `origin/main` is `bfec4be`, which predates it, no app has
+a build and no Firebase project exists, so nothing has consumed 0.6. The
+corrections add `CustodyResourceContext`, `initialiseCustodyAtShop` and
+`CustodyInitialisationOutcome`; four denial values; `expectedPickerSlotRevision`
+and `expectedRiderSlotRevision` on `CustodyRequest`; a required `resource`
+argument on `evaluateCustodyTransition`; `OrderState.outsideThisSliceEvaluator`;
+and `AssignmentState.notYetImplementedForRole`. `OrderState.notYetImplemented`
+narrows to `{delivered}` — a correction of metadata that had become false, not a
+removal. **No version bump**: these are edits to an unreleased definition, and a
+review finding is not a release event.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |

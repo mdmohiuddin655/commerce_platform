@@ -85,6 +85,244 @@ void main() {
     });
   });
 
+  group('canonical resource and shop binding (FIX-001)', () {
+    test('custody for a different resource is refused', () {
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          custody: atShop(resourceId: otherOrderId),
+        ).denial,
+        CustodyDenial.resourceBindingMismatch,
+      );
+    });
+
+    test('a picker slot for a different resource is refused', () {
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          picker: pickerSlot(resourceId: otherOrderId),
+        ).denial,
+        CustodyDenial.resourceBindingMismatch,
+      );
+    });
+
+    test('a rider slot for a different resource is refused', () {
+      expect(
+        runCustody(
+          CustodyCommand.recordRiderReceipt,
+          rider: riderSlot(resourceId: otherOrderId),
+        ).denial,
+        CustodyDenial.resourceBindingMismatch,
+      );
+    });
+
+    test('shop custody naming a different shop is refused', () {
+      // Both ids are individually non-blank and perfectly well formed. They
+      // are simply not the same shop, and that is the whole point.
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          custody: atShop(shop: 'shop_beta'),
+        ).denial,
+        CustodyDenial.shopBindingMismatch,
+      );
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          resource: resourceContext(shop: 'shop_beta'),
+        ).denial,
+        CustodyDenial.shopBindingMismatch,
+      );
+    });
+
+    test('the existing non-opaque shop id is still accepted', () {
+      // No ShopId grammar was invented: `shop_alpha` would fail the opaque-id
+      // rule, and imposing that rule here would invent a contract the
+      // repository does not have.
+      expect(isValidOpaqueId(shopId), isFalse);
+      expect(
+        runCustody(CustodyCommand.recordShopPickup).allowed,
+        isTrue,
+      );
+    });
+
+    test('a blank or whitespace-only shop id is refused', () {
+      for (final String bad in <String>['', '   ']) {
+        expect(
+          runCustody(
+            CustodyCommand.recordShopPickup,
+            resource: resourceContext(shop: bad),
+          ).denial,
+          CustodyDenial.resourceBindingMismatch,
+          reason: 'context shop "$bad"',
+        );
+        expect(
+          runCustody(
+            CustodyCommand.recordShopPickup,
+            custody: atShop(shop: bad),
+          ).transition,
+          isNull,
+          reason: 'custody shop "$bad"',
+        );
+      }
+    });
+
+    test('a malformed context resource id is refused', () {
+      for (final String bad in <String>['', 'ord_short', '1234567890123456']) {
+        expect(
+          runCustody(
+            CustodyCommand.recordShopPickup,
+            resource: resourceContext(resourceId: bad),
+          ).denial,
+          CustodyDenial.resourceBindingMismatch,
+          reason: 'resourceId "$bad"',
+        );
+      }
+    });
+
+    test('identities are compared exactly, never trimmed into equality', () {
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          custody: atShop(shop: ' shop_alpha '),
+        ).denial,
+        CustodyDenial.shopBindingMismatch,
+        reason: 'a padded shop id is a different shop id',
+      );
+    });
+  });
+
+  group('custody initialisation is create-once (FIX-001)', () {
+    test('absent custody initialises at the shop, revision 1', () {
+      final CustodyInitialisationOutcome o = initialiseCustodyAtShop(
+        resource: resourceContext(),
+        existingCustody: null,
+      );
+      expect(o.allowed, isTrue);
+      expect(o.created!.custodyRevision, 1);
+      expect(o.created!.holder.kind, CustodyHolderKind.shop);
+      expect(o.created!.holder.shopId, shopId);
+      expect(o.created!.resourceId, orderId);
+      expect(validateCustodyAggregate(o.created!), isNull);
+    });
+
+    test('initialising again while at the shop is refused', () {
+      final CustodyInitialisationOutcome o = initialiseCustodyAtShop(
+        resource: resourceContext(),
+        existingCustody: atShop(revision: 7),
+      );
+      expect(o.denial, CustodyDenial.custodyAlreadyInitialised);
+      expect(o.created, isNull, reason: 'revision 7 must not reset to 1');
+    });
+
+    test('initialisation cannot undo a pickup', () {
+      final CustodyInitialisationOutcome o = initialiseCustodyAtShop(
+        resource: resourceContext(),
+        existingCustody: withPicker(),
+      );
+      expect(o.denial, CustodyDenial.custodyAlreadyInitialised);
+      expect(o.created, isNull);
+    });
+
+    test('initialisation cannot undo a rider receipt', () {
+      final CustodyInitialisationOutcome o = initialiseCustodyAtShop(
+        resource: resourceContext(),
+        existingCustody: withRider(),
+      );
+      expect(o.denial, CustodyDenial.custodyAlreadyInitialised);
+      expect(o.created, isNull);
+    });
+
+    test('a malformed resource context cannot initialise', () {
+      expect(
+        initialiseCustodyAtShop(
+          resource: resourceContext(shop: '  '),
+          existingCustody: null,
+        ).denial,
+        CustodyDenial.resourceBindingMismatch,
+      );
+      expect(
+        initialiseCustodyAtShop(
+          resource: resourceContext(resourceId: 'ord_short'),
+          existingCustody: null,
+        ).denial,
+        CustodyDenial.resourceBindingMismatch,
+      );
+    });
+
+    test('there is still no client command or permission for it', () {
+      for (final CustodyCommand c in CustodyCommand.values) {
+        expect(c.commandType, isNot(contains('init')));
+        expect(c.commandType, isNot(contains('create')));
+      }
+      expect(CustodyCommand.values.length, 2);
+      for (final Permission p in Permission.values) {
+        expect(p.id, isNot(contains('custody.initial')));
+      }
+    });
+  });
+
+  group('assignment slot revision CAS (FIX-001)', () {
+    test('pickup with a stale picker slot revision is refused', () {
+      final CustodyOutcome o = runCustody(
+        CustodyCommand.recordShopPickup,
+        expectedPickerSlotRevision: 1,
+      );
+      expect(o.denial, CustodyDenial.pickerSlotRevisionConflict);
+      expect(o.transition, isNull);
+    });
+
+    test('receipt with a stale picker slot revision is refused', () {
+      final CustodyOutcome o = runCustody(
+        CustodyCommand.recordRiderReceipt,
+        expectedPickerSlotRevision: 1,
+      );
+      expect(o.denial, CustodyDenial.pickerSlotRevisionConflict);
+      expect(o.transition, isNull);
+    });
+
+    test('receipt with a stale rider slot revision is refused', () {
+      final CustodyOutcome o = runCustody(
+        CustodyCommand.recordRiderReceipt,
+        expectedRiderSlotRevision: 1,
+      );
+      expect(o.denial, CustodyDenial.riderSlotRevisionConflict);
+      expect(o.transition, isNull);
+    });
+
+    test('receipt omitting the rider slot expectation fails closed', () {
+      final CustodyOutcome o = runCustody(
+        CustodyCommand.recordRiderReceipt,
+        omitRiderSlotRevision: true,
+      );
+      expect(o.denial, CustodyDenial.riderSlotRevisionConflict);
+      expect(o.transition, isNull);
+    });
+
+    test('current slot revisions still allow the valid flow', () {
+      expect(runCustody(CustodyCommand.recordShopPickup).allowed, isTrue);
+      expect(runCustody(CustodyCommand.recordRiderReceipt).allowed, isTrue);
+    });
+
+    test('revision CAS does not replace the identity checks', () {
+      // Correct revisions, wrong attempt: still refused.
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          assignmentId: pickAsgB,
+        ).denial,
+        CustodyDenial.assignmentIdMismatch,
+      );
+      expect(
+        runCustody(
+          CustodyCommand.recordRiderReceipt,
+          acting: riderB,
+        ).denial,
+        CustodyDenial.notCurrentAcceptedRider,
+      );
+    });
+  });
+
   group('shop -> picker pickup', () {
     test('the current accepted picker collects the goods', () {
       final CustodyTransition t = allowedCustody(

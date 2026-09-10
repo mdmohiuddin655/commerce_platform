@@ -311,7 +311,7 @@ void main() {
     test('inDelivery and delivered still report unknownTransition', () {
       // Validating their pairing would mean inventing one. They stay
       // fail-closed as not implemented.
-      for (final OrderState future in OrderState.notYetImplemented) {
+      for (final OrderState future in OrderState.outsideThisSliceEvaluator) {
         for (final LifecycleCommand c in effectProducing) {
           final LifecycleOutcome o = run(
             c,

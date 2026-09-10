@@ -324,6 +324,77 @@ void main() {
     });
   });
 
+  group('slot-revision races leave nothing behind (FIX-001)', () {
+    test('a stale-slot loser emits no transition or effect at all', () {
+      for (final CustodyCommand c in CustodyCommand.values) {
+        final CustodyOutcome o = runCustody(
+          c,
+          expectedPickerSlotRevision: 99,
+        );
+        expect(o.transition, isNull, reason: c.commandType);
+        expect(o.denial, CustodyDenial.pickerSlotRevisionConflict,
+            reason: c.commandType);
+      }
+    });
+
+    test('pickup loses to a picker revoke that already committed', () {
+      // Revoke won: the slot advanced to revision 3 and the attempt is
+      // revoked. A pickup still holding revision 2 is refused on the revision
+      // before its identity checks even run.
+      final PickerAssignmentFacts revoked =
+          pickerSlot(state: AssignmentState.revoked);
+      expect(revoked.slotRevision, 3);
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          picker: revoked,
+          expectedPickerSlotRevision: 2,
+        ).denial,
+        CustodyDenial.pickerSlotRevisionConflict,
+      );
+      // ...and even with the current revision, the state check refuses it.
+      expect(
+        runCustody(
+          CustodyCommand.recordShopPickup,
+          picker: revoked,
+        ).denial,
+        CustodyDenial.noAcceptedPickerAssignment,
+      );
+    });
+
+    test('receipt loses to a rider revoke that already committed', () {
+      final RiderAssignmentFacts revoked =
+          riderSlot(state: AssignmentState.revoked);
+      expect(revoked.slotRevision, 3);
+      expect(
+        runCustody(
+          CustodyCommand.recordRiderReceipt,
+          rider: revoked,
+          expectedRiderSlotRevision: 2,
+        ).denial,
+        CustodyDenial.riderSlotRevisionConflict,
+      );
+      expect(
+        runCustody(
+          CustodyCommand.recordRiderReceipt,
+          rider: revoked,
+        ).denial,
+        CustodyDenial.noAcceptedRiderAssignment,
+      );
+    });
+
+    test('a mixed-order read-set cannot mutate custody', () {
+      // Custody and picker for order A, rider for order B.
+      expect(
+        runCustody(
+          CustodyCommand.recordRiderReceipt,
+          rider: riderSlot(resourceId: otherOrderId),
+        ).transition,
+        isNull,
+      );
+    });
+  });
+
   group('reassignment safety derived from real custody', () {
     test('missing custody is unsafe for both roles', () {
       for (final AssignmentRole r in AssignmentRole.values) {
@@ -517,9 +588,12 @@ void main() {
             actingPrincipalId: pickerA,
             expectedCustodyRevision: 1,
             expectedOrderRevision: 4,
+            expectedPickerSlotRevision: picker.slotRevision,
+            expectedRiderSlotRevision: null,
             assignmentId: pa.assignmentId,
             generation: pa.generation,
           ),
+          resource: resourceContext(),
           custody: atShop(),
           order: orderFacts(),
           pickerAssignment: picker,
@@ -571,9 +645,12 @@ void main() {
             actingPrincipalId: riderA,
             expectedCustodyRevision: held.custodyRevision,
             expectedOrderRevision: 4,
+            expectedPickerSlotRevision: picker.slotRevision,
+            expectedRiderSlotRevision: rider.slotRevision,
             assignmentId: rider.attempt!.assignmentId,
             generation: rider.attempt!.generation,
           ),
+          resource: resourceContext(),
           custody: held,
           order: orderFacts(),
           pickerAssignment: picker,
@@ -634,6 +711,88 @@ void main() {
       expect(AssignmentState.completed.isTerminal, isTrue);
       final PickerAssignmentFacts done = completeVia(acceptedPickerAt(1));
       expect(done.activeAcceptedCount, 0);
+    });
+  });
+
+  group('exported state metadata must not lie (FIX-001)', () {
+    test('in_delivery is not classified as globally unimplemented', () {
+      // It IS implemented — by the custody slice. Metadata that says otherwise
+      // is a claim a later reader will believe.
+      expect(
+        OrderState.notYetImplemented.contains(OrderState.inDelivery),
+        isFalse,
+      );
+      expect(OrderState.notYetImplemented, <OrderState>{OrderState.delivered});
+    });
+
+    test('in_delivery is still outside the pre-dispatch evaluator', () {
+      expect(
+        OrderState.outsideThisSliceEvaluator.contains(OrderState.inDelivery),
+        isTrue,
+      );
+      expect(
+        OrderState.executableInThisSlice.contains(OrderState.inDelivery),
+        isFalse,
+      );
+      // The two sets partition the enum, so no state is unclassified.
+      expect(
+        <OrderState>{
+          ...OrderState.executableInThisSlice,
+          ...OrderState.outsideThisSliceEvaluator,
+        },
+        OrderState.values.toSet(),
+      );
+    });
+
+    test('in_delivery shape is known even though it is not actionable', () {
+      expect(
+        OrderState.aggregateShapeKnown.contains(OrderState.inDelivery),
+        isTrue,
+      );
+      expect(
+        OrderState.aggregateShapeKnown.contains(OrderState.delivered),
+        isFalse,
+      );
+    });
+
+    test('picker completed is not reported unimplemented for the picker', () {
+      expect(
+        AssignmentState.notYetImplementedForRole(AssignmentRole.picker),
+        isEmpty,
+      );
+      expect(
+        AssignmentState.executableForRole(AssignmentRole.picker)
+            .contains(AssignmentState.completed),
+        isTrue,
+      );
+    });
+
+    test('rider completed is still reported as future', () {
+      expect(
+        AssignmentState.notYetImplementedForRole(AssignmentRole.rider),
+        <AssignmentState>{AssignmentState.completed},
+      );
+      expect(
+        AssignmentState.executableForRole(AssignmentRole.rider)
+            .contains(AssignmentState.completed),
+        isFalse,
+      );
+    });
+
+    test('neither evaluator gained a standalone completed transition', () {
+      // completed is a consequence of custody receipt, never a command.
+      for (final AssignmentCommand c in AssignmentCommand.values) {
+        expect(c.commandType, isNot(contains('complete')));
+      }
+      for (final CustodyCommand c in CustodyCommand.values) {
+        expect(c.commandType, isNot(contains('complete')));
+      }
+      expect(
+        AssignmentState.executableInThisSlice
+            .contains(AssignmentState.completed),
+        isFalse,
+        reason: 'no assignment command may act FROM completed',
+      );
     });
   });
 

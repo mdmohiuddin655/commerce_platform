@@ -512,7 +512,8 @@ separate from the RA/P backend series for that reason.
 
 **B3-C2 status: NOT RUN / FUTURE.** FND-003B3A made *picker* completion
 reachable and satisfied **B3-C1** with contract tests, but **rider `completed`
-remains unreachable**: `AssignmentState.executableForRole(rider)` excludes it,
+remains unreachable** — `AssignmentState.notYetImplementedForRole(rider)` still
+reports it as future *(FIX-001)*: `AssignmentState.executableForRole(rider)` excludes it,
 `reachableSlotRevisionRange(g, completed, role: rider)` still returns null, and
 no mutation cost for it was invented. Rider completion depends on delivery,
 which no slice defines.

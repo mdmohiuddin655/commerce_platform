@@ -184,3 +184,61 @@ class CustodyHolder {
       : 'CustodyHolder(${kind.id}:$principalId via $assignmentId '
             'gen=$assignmentGeneration)';
 }
+
+/// Canonical identity of the order custody is being tracked for.
+///
+/// **Added by FND-003B3A-FIX-001.** The evaluator could already compare the
+/// three assignment/custody aggregates against each other, but nothing bound
+/// them to a *canonical* order — `OrderLifecycleFacts` deliberately carries
+/// lifecycle state only, and shop custody was not bound to the order's shop at
+/// all. Three aggregates agreeing with each other is not the same as three
+/// aggregates being about the right order.
+///
+/// The backend derives this for the request:
+///
+/// ```text
+/// command.resourceId
+///   -> trusted current ResourceScope / order record
+///   -> CustodyResourceContext
+///   -> OrderLifecycleFacts for exactly that resource
+///   -> picker / rider / custody records for exactly that resource
+/// ```
+///
+/// > **Not authority, and not a substitute for FND-003A.** This is the shape
+/// > the backend fills from canonical storage. A caller never reaches this
+/// > evaluator, and passing one proves nothing about trust. Fresh authorization
+/// > on every request, including replays, remains FND-003A's and the backend's.
+///
+/// It also cannot prove *storage provenance* beyond the identities it carries:
+/// it establishes that the facts handed in claim to be about this resource, and
+/// the backend is responsible for having loaded them from one consistent
+/// read-set — criteria **CA19** and **CA20**.
+@immutable
+class CustodyResourceContext {
+  const CustodyResourceContext({
+    required this.resourceId,
+    required this.shopId,
+  });
+
+  /// The order. Validated with the repository's canonical opaque-id rule, the
+  /// same one `CommandEnvelope` and `EventEnvelope` apply to `resourceId`.
+  final String resourceId;
+
+  /// The shop the order belongs to.
+  ///
+  /// Required and non-blank, but **no format is imposed**: nothing in this
+  /// repository governs shop ids, and existing fixtures use values like
+  /// `shop_alpha` that the opaque-id rule would reject. Inventing a grammar
+  /// here would be inventing a contract. Whether shop ids should carry one is
+  /// **DEFERRED** to whichever task owns shop identity.
+  final String shopId;
+
+  /// Whether this context is itself usable. Blank shop ids are rejected;
+  /// **the exact value is retained and never trimmed into equality**.
+  bool get isWellFormed =>
+      isValidOpaqueId(resourceId) && shopId.trim().isNotEmpty;
+
+  @override
+  String toString() =>
+      'CustodyResourceContext($resourceId, shop=$shopId)';
+}

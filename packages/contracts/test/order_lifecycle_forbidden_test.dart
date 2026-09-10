@@ -104,23 +104,34 @@ void main() {
   });
 
   group('states this slice does not own', () {
-    test('future states are declared but not executable', () {
+    test('states outside this evaluator are declared but not executable', () {
+      // Uses `outsideThisSliceEvaluator`, not `notYetImplemented`: since
+      // FND-003B3A `in_delivery` IS implemented — by the custody slice — while
+      // still being a state no pre-dispatch command may act from. The two
+      // claims are different, and only the first belongs here.
       expect(
         OrderState.executableInThisSlice
-            .intersection(OrderState.notYetImplemented),
+            .intersection(OrderState.outsideThisSliceEvaluator),
         isEmpty,
       );
       expect(
         <OrderState>{
           ...OrderState.executableInThisSlice,
-          ...OrderState.notYetImplemented,
+          ...OrderState.outsideThisSliceEvaluator,
         },
         OrderState.values.toSet(),
+      );
+      // `notYetImplemented` now means exactly what it says.
+      expect(OrderState.notYetImplemented, <OrderState>{OrderState.delivered});
+      expect(
+        OrderState.notYetImplemented.contains(OrderState.inDelivery),
+        isFalse,
+        reason: 'in_delivery is implemented by the custody slice',
       );
     });
 
     test('no transition can act from a future state', () {
-      for (final OrderState future in OrderState.notYetImplemented) {
+      for (final OrderState future in OrderState.outsideThisSliceEvaluator) {
         for (final LifecycleCommand c in LifecycleCommand.values) {
           if (c == LifecycleCommand.placeOrder) {
             continue;
@@ -154,7 +165,7 @@ void main() {
       }
 
       expect(
-        reachable.intersection(OrderState.notYetImplemented),
+        reachable.intersection(OrderState.outsideThisSliceEvaluator),
         isEmpty,
         reason: 'reached: ${reachable.map((OrderState s) => s.id).toList()}',
       );

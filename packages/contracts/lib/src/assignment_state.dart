@@ -58,15 +58,37 @@ enum AssignmentState {
     AssignmentState.revoked,
   };
 
-  /// Declared for stability, owned by FND-003B3 (custody and handoff).
+  /// States **not implemented for every role**.
   ///
-  /// **Still accurate for the rider.** FND-003B3A made *picker* completion
-  /// reachable, so `completed` is no longer unimplemented for every role — see
-  /// [executableForRole]. It remains unimplemented for the rider, whose
-  /// completion depends on delivery.
+  /// `completed` qualifies because rider completion is still unimplemented —
+  /// but reading this as "no role implements it" would be wrong since
+  /// FND-003B3A, which made *picker* completion reachable as a custody
+  /// consequence. Ask [notYetImplementedForRole] when the role matters, which
+  /// is almost always.
   static const Set<AssignmentState> notYetImplemented = <AssignmentState>{
     AssignmentState.completed,
   };
+
+  /// States **[role] does not implement**.
+  ///
+  /// Added by FND-003B3A-FIX-001 so the exported metadata cannot mislead:
+  ///
+  /// - **picker** — empty. Picker `completed` is implemented, entered as a
+  ///   consequence of rider custody receipt.
+  /// - **rider** — `{completed}`. Rider completion depends on delivery, which
+  ///   no slice defines, and **no mutation cost for it was invented**. That is
+  ///   contract criterion **B3-C2**, and it stays FUTURE.
+  ///
+  /// This says nothing about what an evaluator may act *from*: no assignment
+  /// command acts from `completed` for either role, which is why
+  /// [executableInThisSlice] excludes it and both evaluators fail closed on it.
+  static Set<AssignmentState> notYetImplementedForRole(AssignmentRole role) =>
+      switch (role) {
+        AssignmentRole.picker => const <AssignmentState>{},
+        AssignmentRole.rider => const <AssignmentState>{
+          AssignmentState.completed,
+        },
+      };
 
   /// States whose aggregate shape is **defined** for [role].
   ///

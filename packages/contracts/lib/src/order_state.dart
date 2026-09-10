@@ -60,13 +60,28 @@ enum OrderState {
     OrderState.cancelled,
   };
 
-  /// Declared for enum stability, owned by a later slice.
+  /// States **no slice implements at all**.
   ///
-  /// `inDelivery` became **reachable** in FND-003B3A — caused by rider custody
-  /// receipt, never by a pre-dispatch command — so its aggregate shape is now
-  /// known even though this slice's evaluator still cannot act from it. See
-  /// [aggregateShapeKnown].
+  /// Corrected by FND-003B3A-FIX-001. This previously also listed
+  /// `inDelivery`, which stopped being true the moment FND-003B3A made rider
+  /// custody receipt produce it: exported metadata that says a reachable state
+  /// is unimplemented is a lie a later reader will believe.
+  ///
+  /// "This evaluator cannot act from it" is a **different** claim, and now has
+  /// its own name — [outsideThisSliceEvaluator].
   static const Set<OrderState> notYetImplemented = <OrderState>{
+    OrderState.delivered,
+  };
+
+  /// States the **pre-dispatch evaluator cannot act from**, whether or not
+  /// another slice implements them.
+  ///
+  /// `inDelivery` is implemented — by the custody slice — and still belongs
+  /// here, because no pre-dispatch command may transition from it and none was
+  /// invented. `delivered` belongs here because nothing implements it.
+  ///
+  /// Together with [executableInThisSlice] this partitions `OrderState.values`.
+  static const Set<OrderState> outsideThisSliceEvaluator = <OrderState>{
     OrderState.inDelivery,
     OrderState.delivered,
   };

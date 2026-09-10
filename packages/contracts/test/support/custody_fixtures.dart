@@ -17,6 +17,12 @@ const String rideAsgB = 'asg_Rr22Cc33Dd44Ee55';
 const String region = 'dhaka_north';
 const String policyRef = 'policy/assignment_offer_timeout@v1';
 
+/// The canonical order/shop identity the backend resolved the command against.
+CustodyResourceContext resourceContext({
+  String resourceId = orderId,
+  String shop = shopId,
+}) => CustodyResourceContext(resourceId: resourceId, shopId: shop);
+
 /// Custody at the shop — the canonical state of a ready order.
 CustodyFacts atShop({
   int revision = 1,
@@ -184,6 +190,7 @@ CustodyOutcome runCustody(
   CustodyCommand command, {
   CustodyFacts? custody,
   bool omitCustody = false,
+  CustodyResourceContext? resource,
   OrderLifecycleFacts? order,
   PickerAssignmentFacts? picker,
   RiderAssignmentFacts? rider,
@@ -191,6 +198,9 @@ CustodyOutcome runCustody(
   String? acting,
   int? expectedCustodyRevision,
   int? expectedOrderRevision,
+  int? expectedPickerSlotRevision,
+  int? expectedRiderSlotRevision,
+  bool omitRiderSlotRevision = false,
   String? assignmentId,
   int? generation,
 }) {
@@ -201,6 +211,8 @@ CustodyOutcome runCustody(
                 ? atShop()
                 : withPicker());
   final OrderLifecycleFacts o = order ?? orderFacts();
+  final PickerAssignmentFacts p = picker ?? pickerSlot();
+  final RiderAssignmentFacts? r = omitRider ? null : rider ?? riderSlot();
   final bool isPickup = command == CustodyCommand.recordShopPickup;
   return evaluateCustodyTransition(
     request: CustodyRequest(
@@ -209,13 +221,19 @@ CustodyOutcome runCustody(
       expectedCustodyRevision:
           expectedCustodyRevision ?? c?.custodyRevision ?? 0,
       expectedOrderRevision: expectedOrderRevision ?? o.revision,
+      expectedPickerSlotRevision:
+          expectedPickerSlotRevision ?? p.slotRevision,
+      expectedRiderSlotRevision: omitRiderSlotRevision
+          ? null
+          : expectedRiderSlotRevision ?? r?.slotRevision,
       assignmentId: assignmentId ?? (isPickup ? pickAsgA : rideAsgA),
       generation: generation ?? 1,
     ),
+    resource: resource ?? resourceContext(),
     custody: c,
     order: o,
-    pickerAssignment: picker ?? pickerSlot(),
-    riderAssignment: omitRider ? null : rider ?? riderSlot(),
+    pickerAssignment: p,
+    riderAssignment: r,
   );
 }
 

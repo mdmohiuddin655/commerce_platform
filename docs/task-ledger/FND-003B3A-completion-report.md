@@ -8,7 +8,9 @@
 - **Branch:** `fnd/FND-003B3A-custody-handoff-contracts`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.5 → **0.6**
-- **Status:** **DONE**
+- **Status:** **DONE** — as corrected by **FND-003B3A-FIX-001** (2026-09-10).
+  See [§17 Recheck](#17-recheck-fnd-003b3a-fix-001). `c29df0f` alone is not the
+  accepted state, and this candidate is **not accepted for merge**.
 
 ## 1. Baseline
 
@@ -265,7 +267,7 @@ them, and neither does **CA9**.
 | negative control — picker completed cost 3 → 4 | **PASS (fired)** |
 | negative control — receipt without custody/source binding | **PASS (fired)** |
 | permission-matrix drift check | **PASS** — verbatim, **not regenerated** (no permission code changed) |
-| `dart test` all `cp_contracts` | **PASS** — **601** (was 522 at branch point) |
+| `dart test` all `cp_contracts` | **PASS** — **601** (was **520** at branch point — see §17) |
 | `flutter analyze` | **PASS** — `No issues found!` |
 | `./tools/check_layering.sh` | **PASS** — 8 rules |
 | `./tools/run_checks.sh` | **PASS** — `ALL CHECKS PASSED`, exit 0 |
@@ -337,3 +339,50 @@ Contract and tests only. No backend handler, no Firestore rule, no index, no
 application feature, no platform dependency. Nothing merged to `main`, pushed,
 force-pushed or deployed. **No PR created. The delivery/refusal/return slice is
 not started.**
+
+## 17. Recheck (FND-003B3A-FIX-001, 2026-09-10)
+
+The custody model in this report is accepted and unchanged: explicit custody,
+`shop→picker` pickup leaving the order `ready`, `picker→rider` receipt as the
+dispatch boundary, picker completion as a receipt-only consequence, rider stays
+accepted, reservation stays committed, inventory and financial NONE, B3-C1
+satisfied and B3-C2 future. No state, transition, effect, permission or ADR
+changed.
+
+Final review found **five real gaps and one evidence error**.
+
+**1. No canonical resource/shop binding.** The evaluator compared the three
+custody/assignment aggregates against *each other*, but `OrderLifecycleFacts`
+carries no resource identity and shop custody was never bound to the order's
+shop. Three aggregates agreeing with each other is not the same as three
+aggregates being about the right order, and custody could name shop B while the
+order belonged to shop A.
+
+**2. No assignment-slot revision CAS.** Custody and order revisions were pinned;
+the picker and rider `slotRevision` were not. A caller holding a stale view of a
+slot that still happened to name the same attempt was not detected.
+
+**3. Initialisation was create-once only by documentation.**
+`CustodyFacts.initialAtShop` is a shape, and nothing stopped it being applied to
+an order that already had custody — which on paper would move goods back to the
+shop and erase the fact that a picker or rider was carrying them.
+
+**4. Receipt provenance was under-specified.** The document said receipt is
+"receiver-side" without stating plainly that it is an **authorized rider
+assertion**, not independent proof.
+
+**5. Exported state metadata contradicted itself.**
+`OrderState.notYetImplemented` still listed `inDelivery` after this slice made
+it reachable, and `AssignmentState.notYetImplemented` said `completed` was
+unimplemented after picker completion became reachable.
+
+**6. Evidence error — the branch-point count.** §12 said *"601 (was 522 at
+branch point)"*. **The accepted baseline at `bfec4be` was 520**, recorded in the
+FND-003B2B-FIX-001 report. 522 was a real number, but from a **mid-task** run
+taken *after* two tests had already been added in this task (the 0.5↔0.6 policy
+test, and the split of the `completed` picker test into a canonical and a
+malformed case) — 520 + 2 = 522. It was never the branch point. The table above
+is corrected to **520**; no rerun was invented to explain it.
+
+Full detail:
+[FND-003B3A-FIX-001 report](FND-003B3A-FIX-001-completion-report.md).

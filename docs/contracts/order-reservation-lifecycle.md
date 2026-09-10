@@ -368,7 +368,15 @@ Two sets now exist, and the difference is the point:
 | Set | Means |
 |---|---|
 | `OrderState.executableInThisSlice` | states this evaluator may **act from**. Unchanged. |
-| `OrderState.aggregateShapeKnown` | states whose order/reservation pairing is **defined** — the six above **plus `in_delivery`**. |
+| `OrderState.outsideThisSliceEvaluator` | states it may **not** act from — `in_delivery` and `delivered`. Together with the set above this partitions the enum. |
+| `OrderState.aggregateShapeKnown` | states whose order/reservation pairing is **defined** — the six executable ones **plus `in_delivery`**. |
+| `OrderState.notYetImplemented` | states **no slice implements** — now `{delivered}` only. |
+
+> **Corrected by FND-003B3A-FIX-001.** `notYetImplemented` previously also
+> listed `in_delivery`, which stopped being true the moment custody receipt
+> could produce it. Exported metadata that says a reachable state is
+> unimplemented is a claim a later reader will believe, so the "this evaluator
+> cannot act from it" concept got its own name instead.
 
 `canonicalAggregatePairs` gained `in_delivery: {committed}`, and
 `validateAggregate` now checks against `aggregateShapeKnown`. Previously it

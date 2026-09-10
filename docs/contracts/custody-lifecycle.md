@@ -60,6 +60,26 @@ something a caller asserts, it is what is true once the shop has assembled the
 goods. The backend creates it **atomically with** the transition that
 establishes the ready-for-collection boundary: criterion **CA1**.
 
+### Create-once, never reset *(FIX-001)*
+
+`CustodyFacts.initialAtShop` is a **shape**, not authority to overwrite. Applied
+to an order that already has custody it would move goods back to the shop on
+paper and erase the fact that a picker or a rider is carrying them.
+
+`initialiseCustodyAtShop({resource, existingCustody})` is the gate, and it is
+mechanically testable rather than merely documented:
+
+| `existingCustody` | Result |
+|---|---|
+| null | **allow** — holder `shop`, revision **1** |
+| already at `shop` (any revision) | **deny** `custodyAlreadyInitialised` — a revision-7 aggregate cannot reset to 1 |
+| with `picker` | **deny** — a pickup cannot be undone |
+| with `rider` | **deny** — a receipt cannot be undone |
+
+It is server-side only: still **no `CustodyCommand`, no permission, no
+commandType**. The backend applies it with a **create-if-absent** storage
+precondition and must never overwrite — **CA1**.
+
 ## 4. Revisions are independent
 
 `custodyRevision` is its own concurrency control, deliberately separate from
@@ -67,7 +87,31 @@ the order revision, the picker `slotRevision` and the rider `slotRevision`.
 Four aggregates change at different rates; sharing one counter would make every
 unrelated write look like a conflict and a genuine conflict undetectable.
 
-## 5. Identity
+**Every aggregate a command reads is compare-and-set** *(FIX-001)*:
+
+| Command | Pinned revisions |
+|---|---|
+| `custody.record_shop_pickup` | custody, order, **picker slot** |
+| `custody.record_rider_receipt` | custody, order, **picker slot**, **rider slot** |
+
+Denials are `custodyRevisionConflict`, `orderRevisionConflict`,
+`pickerSlotRevisionConflict` and `riderSlotRevisionConflict`, all checked
+**before any transition is constructed**. This is **additional** protection, not
+a replacement: exact `assignmentId`, generation, accepted state, assignee and
+`SourcePickerBinding` are all still checked. Without it, a caller holding a
+stale view of a slot that still happened to name the same attempt went
+undetected.
+
+A *missing* rider slot is reported as `noAcceptedRiderAssignment`, not as a
+revision conflict — that is a semantic fact, not a concurrency one.
+
+**Race outcomes.** Whichever transaction commits first advances canonical state;
+the loser re-reads, fails its revision or state check, and **emits no partial
+custody, order, assignment, projection or event**. A retry must reload and
+re-evaluate every participating aggregate — a previously computed transition
+must never be replayed against new facts (**CA21**).
+
+## 5. Identity and canonical resource binding
 
 A worker custodian is bound to **immutable assignment identity** —
 `principalId` + `assignmentId` + `assignmentGeneration` — not merely to a
@@ -84,6 +128,38 @@ Principal ids, assignment ids and the `resourceId` are validated with the
 repository's **canonical opaque-id rule** — the same one `Principal`,
 `CommandEnvelope` and `EventEnvelope` apply. **Nothing is trimmed, normalised,
 repaired or substituted.**
+
+### The trusted resource context *(FIX-001)*
+
+Comparing the three aggregates against **each other** is not enough: it proves
+they agree, not that they are about the right order. `CustodyResourceContext`
+carries the canonical `resourceId` and `shopId` the backend resolved the command
+against, and the evaluator requires:
+
+- `resource.resourceId` is a valid opaque id, and `shopId` is non-blank;
+- custody, picker slot and (when present) rider slot all name that
+  `resourceId` — else `resourceBindingMismatch`;
+- **shop custody names that exact `shopId`** — else `shopBindingMismatch`. Two
+  shop ids can both be perfectly well formed and simply be different shops.
+
+**Compared exactly.** Neither side is trimmed or normalised into equality; a
+padded shop id is a different shop id, and a test pins that. The backend
+boundary is:
+
+```text
+command.resourceId
+  -> trusted current ResourceScope / order record
+  -> CustodyResourceContext
+  -> OrderLifecycleFacts for exactly that resource
+  -> picker / rider / custody records for exactly that resource
+```
+
+`OrderLifecycleFacts` was deliberately **not** given a resource field: that
+would spread a change through FND-003B1 for no gain. The context establishes
+that the lifecycle snapshot handed in is the one for this resource, and the
+backend is responsible for having loaded it from one consistent read-set. The
+pure evaluator **cannot prove storage provenance** beyond the identities it is
+given — that is criteria **CA19** and **CA20**.
 
 > **`shopId` is deliberately NOT opaque-validated.** Nothing in this repository
 > governs shop ids that way: `ResourceScope.shopId` is unvalidated and existing
@@ -108,7 +184,8 @@ Preconditions — all of them, checked before any effect:
 - picker assignment is `accepted`, its assignee is the acting principal, and
   its `assignmentId` **and** generation match the request;
 - every aggregate names the same `resourceId`;
-- `expectedCustodyRevision` **and** `expectedOrderRevision` are current.
+- `expectedCustodyRevision`, `expectedOrderRevision` **and**
+  `expectedPickerSlotRevision` are current.
 
 Effects:
 
@@ -137,6 +214,25 @@ collected order as an out-for-delivery one.
 holding the goods, so making receipt the authoritative edge means custody never
 sits in a claimed-but-unconfirmed limbo between two workers.
 
+### What this record actually is *(FIX-001)*
+
+`custody.record_rider_receipt` records an **authorized rider assertion** that
+the accepted rider has received and now holds the goods. The contract accepts
+that assertion as the business state-changing custody record **after** every
+aggregate, identity, binding and revision check above has passed.
+
+It is **not**, and must not be described as:
+
+- independent cryptographic proof;
+- a sender (picker) acknowledgement;
+- customer delivery proof;
+- dispute-proof evidence;
+- an OTP, QR, signature, photo, biometric or GPS check.
+
+**None of those was invented here.** A future handoff-proof protocol may add
+stronger evidence on top; until it exists, this is an authorized assertion and
+the documentation says so plainly rather than implying more.
+
 Preconditions:
 
 - custody exists, validates, and is `picker`;
@@ -148,7 +244,9 @@ Preconditions:
   and its id and generation match;
 - the rider attempt's `SourcePickerBinding` still identifies the picker
   attempt holding custody — else `sourcePickerAssignmentMismatch`;
-- resource identities agree; both expected revisions are current.
+- resource and shop identities agree; **all four** expected revisions are
+  current — custody, order, picker slot and rider slot. A null
+  `expectedRiderSlotRevision` on a receipt fails closed.
 
 Effects — **one command, one causation, one transaction**:
 
@@ -332,7 +430,7 @@ Rollback for this contract is the ordinary Git revert of this commit before any
 merge or deployment. **An installed binary cannot automatically downgrade a
 contract**, and no such claim is made.
 
-## 17. Backend acceptance criteria — CA1–CA18
+## 17. Backend acceptance criteria — CA1–CA23
 
 **All NOT RUN.** No trusted backend persistence exists. None is a blocker to
 this contract task, and **none may be marked PASS from Dart fixtures**.
@@ -357,6 +455,11 @@ this contract task, and **none may be marked PASS from Dart fixtures**.
 | CA16 | Invalid persisted custody/order/assignment combinations never drive mutation and are surfaced for reconciliation. |
 | CA17 | Domain events are server-assigned, private-data-minimal, committed via outbox, and notification delivery never acts as authorization. |
 | CA18 | All command retries/replays still obey R33–R40 fresh authorization and principal-scoped idempotency before any stored result is returned. |
+| **CA19** | Every custody command resolves one canonical `CustodyResourceContext` from trusted order/scope storage, and custody, order, picker and rider facts are all loaded for **that** resource in one consistent read-set. |
+| **CA20** | A mixed-order read-set is rejected and cannot mutate custody; shop custody whose `shopId` differs from the order's canonical shop fails closed. |
+| **CA21** | A transaction retry **reloads and re-evaluates** every participating aggregate; a previously computed transition is never replayed against new facts. |
+| **CA22** | Custody initialisation uses a **create-if-absent** precondition and can never overwrite, reset or roll back an existing custody aggregate. |
+| **CA23** | Picker and rider slot revisions are revalidated inside the transaction; pickup/receipt racing a picker or rider revoke serialises so exactly one commits and the loser writes nothing. |
 
 ## 18. Out of scope
 

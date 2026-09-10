@@ -35,7 +35,8 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B2B | ADMIN | Picker-originated rider assignment: offer/accept/decline/expiry/controlled-revoke, source-picker binding, shared revision model | FND-003B2A | **DONE** (as corrected) | Accepted state = **`9d1e262` + the FND-003B2B-FIX-001 commit**. Reports: [FND-003B2B](FND-003B2B-completion-report.md) + [FIX-001](FND-003B2B-FIX-001-completion-report.md) · [ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) · contract **0.5**. Adds **RA1–RA18** and **B3-C2**, all **NOT RUN**. **`9d1e262` alone is not the accepted contract** |
 | FND-003B2B-FIX-001 | ADMIN | Require the canonical opaque-id rule for assignment principal identities, in eligibility **and** stored aggregates, for both roles | FND-003B2B | **DONE** | [FND-003B2B-FIX-001 report](FND-003B2B-FIX-001-completion-report.md) |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **PARTIAL** | parent; custody acquisition and the picker→rider handoff delivered by FND-003B3A. Delivery attempts, refusal, returns, customer custody and post-dispatch inventory restoration outstanding |
-| FND-003B3A | ADMIN | Physical custody: shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion | FND-003B2B | **DONE** | [FND-003B3A report](FND-003B3A-completion-report.md) · [custody lifecycle](../contracts/custody-lifecycle.md) · contract **0.6**. Adds backend criteria **CA1–CA18** (NOT RUN); **satisfies B3-C1** by contract test; **B3-C2 stays FUTURE** |
+| FND-003B3A | ADMIN | Physical custody: shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion | FND-003B2B | **DONE** (as corrected) | Candidate state = **`c29df0f` + the FND-003B3A-FIX-001 commit**. Reports: [FND-003B3A](FND-003B3A-completion-report.md) + [FIX-001](FND-003B3A-FIX-001-completion-report.md) · [custody lifecycle](../contracts/custody-lifecycle.md) · contract **0.6**. Adds **CA1–CA23** (NOT RUN); **satisfies B3-C1** by contract test; **B3-C2 stays FUTURE**. **`c29df0f` alone is not the candidate contract, and this slice is NOT yet accepted for merge** |
+| FND-003B3A-FIX-001 | ADMIN | Bind custody to canonical resource/shop identity, add picker/rider slot-revision CAS, make custody initialisation create-once, correct exported state metadata and the test-count evidence | FND-003B3A | **DONE** | [FND-003B3A-FIX-001 report](FND-003B3A-FIX-001-completion-report.md) |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
@@ -219,7 +220,20 @@ agent→rider pickup remains deferred and RA18 is unreinterpreted. Shop ids were
 **not** opaque-validated — nothing in the repository governs them that way, and
 existing fixtures use `shop_alpha`, which the rule would reject.
 
-New backend criteria **CA1–CA18**, all **NOT RUN**.
+New backend criteria **CA1–CA23**, all **NOT RUN** (CA19–CA23 added by
+FND-003B3A-FIX-001).
+
+**FND-003B3A-FIX-001 — DONE (2026-09-10).** Final review of `c29df0f` found five
+real gaps and one evidence error, all closed here without redesigning the
+accepted custody model. The evaluator compared the three aggregates against each
+other but nothing bound them to a **canonical** order, and shop custody was never
+bound to the order's shop; the picker and rider **slot revisions** were not
+compare-and-set; initialisation was create-once only by documentation; receipt
+provenance was under-specified; and exported metadata still called `in_delivery`
+and picker `completed` unimplemented after both became reachable. The B3A
+report's *"was 522 at branch point"* is corrected to the accepted **520** — 522
+was a real mid-task number taken after two tests had already been added, never
+the branch point, and no rerun was invented to explain it.
 
 **Remaining slices:**
 
