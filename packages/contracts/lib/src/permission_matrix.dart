@@ -121,6 +121,17 @@ const Map<Permission, PermissionRule> permissionMatrix =
     restriction: 'Offers work. An offer is not an assignment and never '
         'implies custody.',
   ),
+  Permission.agentRevokePickerAssignment: PermissionRule(
+    permission: Permission.agentRevokePickerAssignment,
+    eligibleRoles: <CommerceRole>{CommerceRole.agent},
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
+    reasonRequired: true,
+    restriction: 'Controlled reassignment only: withdraws one accepted picker '
+        'assignment so the work can be re-offered as a NEW attempt. It cannot '
+        'replace an assignee, cannot overwrite assignment state, and cannot '
+        'override custody safety — revocation is refused unless the backend '
+        'proves the worker never took custody.',
+  ),
   Permission.agentOfferRiderAssignment: PermissionRule(
     permission: Permission.agentOfferRiderAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},

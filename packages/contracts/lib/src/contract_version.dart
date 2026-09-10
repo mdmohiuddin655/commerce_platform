@@ -33,6 +33,10 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// - **0.3** (FND-003B1) — additive: pre-dispatch order and reservation
   ///   lifecycle — states, named commands, transition evaluator, typed
   ///   inventory effects and financial classification.
+  /// - **0.4** (FND-003B2A) — additive: picker assignment lifecycle — shared
+  ///   assignment states and roles, assignment commands and events, the
+  ///   `agent.assignment.revoke_picker` permission, scope-projection and
+  ///   custody classifications, and the picker assignment evaluator.
   ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
@@ -43,7 +47,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 3);
+  static const ContractVersion current = ContractVersion(0, 4);
 
   final int major;
   final int minor;

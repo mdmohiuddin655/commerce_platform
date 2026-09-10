@@ -28,7 +28,9 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle delivered by FND-003B1. Assignment, custody, delivery and return lifecycles outstanding |
 | FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** (as corrected) | Accepted state = **`697d170` + the FND-003B1-FIX-001 commit**. Reports: [FND-003B1](FND-003B1-completion-report.md) + [FIX-001](FND-003B1-FIX-001-completion-report.md) · contract **0.3**. `697d170` alone is **not** the accepted contract |
 | FND-003B1-FIX-001 | ADMIN | Validate canonical order/reservation aggregate before any lifecycle effect; pair-specific release paths | FND-003B1 | **DONE** | [FND-003B1-FIX-001 report](FND-003B1-FIX-001-completion-report.md) |
-| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **TODO — NOT STARTED** | not blocked by hardware or O6 |
+| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **PARTIAL** | parent; picker lifecycle delivered by FND-003B2A. Rider lifecycle outstanding |
+| FND-003B2A | ADMIN | Picker assignment offer/accept/decline/expiry/revoke and controlled reassignment lifecycle | FND-003B1 | **DONE** | [FND-003B2A report](FND-003B2A-completion-report.md) · contract **0.4** |
+| FND-003B2B | ADMIN | Rider assignment lifecycle | FND-003B2A | **TODO — NOT STARTED** | — |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **TODO — NOT STARTED** | — |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
@@ -123,7 +125,7 @@ commits.**
 
 | Slice | Owns | Status |
 |---|---|---|
-| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1 done; B2/B3 not started |
+| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1 and B2A done; B2B/B3 not started |
 | FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
 | FND-003D proof/dispute | Customer OTP/proof format and fallback workflow | **TODO** — needed before delivery confirmation is coded |
 
@@ -161,7 +163,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.3** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. Both additive, so minor only. No assignment, custody, delivery, return or money rules yet. See [version history](../contracts/version-history.md). |
+| Wire contract (`cp_contracts`) | **0.4** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. All additive, so minor only. No rider, custody, delivery, return or money rules yet. See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships

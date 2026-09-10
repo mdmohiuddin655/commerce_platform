@@ -95,10 +95,35 @@ unreachable, so a later slice can implement them without an enum break.
 build could not decode a 0.3 lifecycle payload even if one existed. None does:
 `cp_contracts` still has no serialization.
 
+### 0.4 — FND-003B2A (2026-09-10) — additive
+
+Added the picker assignment lifecycle:
+
+- `AssignmentState`, `AssignmentRole`
+- `AssignmentCommand`, `AssignmentEventType`
+- `ScopeProjectionEffect`, `CustodyClassification`, `ReassignmentSafety`
+- `PickerAssignmentAttempt`, `PickerEligibility`, `PickerAssignmentFacts`,
+  `PickerAssignmentRequest`, `PickerAssignmentTransition`,
+  `PickerAssignmentOutcome`, `AssignmentDenial`
+- `evaluatePickerAssignment`, `validatePickerAssignmentAggregate`,
+  `assignmentEligibleOrderStates`
+- one new permission: `agent.assignment.revoke_picker`
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, nothing defined at 0.3 changed meaning, and every addition is new
+surface. `AssignmentState.completed` and `AssignmentRole.rider` are declared
+but unreachable, so later slices can implement them without an enum break.
+
+**What is *not* claimed.** 0.3 contained no assignment types at all, so a 0.3
+build could not decode a 0.4 assignment payload even if one existed. None does:
+`cp_contracts` still has no serialization.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
 |---|---|---|
+| 0.4 reader, 0.3 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
+| 0.3 reader, 0.4 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.3 had no assignment types at all. |
 | 0.3 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.2 reader, 0.3 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.2 had no lifecycle types at all. |
 | 0.2 reader, 0.1 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
@@ -130,12 +155,12 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 and 0.3 are purely additive, so no stored value changes shape or
+- 0.2, 0.3 and 0.4 are purely additive, so no stored value changes shape or
   meaning.
 
-**Rollback:** reverting the FND-003B1 commit returns the contract to 0.2, and
-reverting the FND-003A chain returns it to 0.1 — both with no data
-implications, because no data was ever written under either.
+**Rollback:** reverting the FND-003B2A commit returns the contract to 0.3,
+reverting the FND-003B1 chain to 0.2, and the FND-003A chain to 0.1 — all with
+no data implications, because no data was ever written under any of them.
 
 The first version needing a real migration plan will be the one shipped to a
 real client against a real database. That plan belongs to the task that ships

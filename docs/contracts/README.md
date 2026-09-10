@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.3** (FND-003B1).
+**Current contract version: 0.4** (FND-003B2A).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -22,6 +22,12 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 |---|---|
 | [order-reservation-lifecycle.md](order-reservation-lifecycle.md) | Pre-dispatch order states, reservation states, the full transition matrix, cancellation policy boundary, expiry, the acceptance-versus-expiry race, and the required backend transaction boundary |
 
+## Delivered — FND-003B2A
+
+| Document | Covers |
+|---|---|
+| [picker-assignment-lifecycle.md](picker-assignment-lifecycle.md) | Picker assignment slot/attempt model, offer/accept/decline/expiry/controlled-revoke matrix, offer-recipient vs accepted-assignee separation, exactly-one invariants, accept-vs-expiry race, timeout-policy boundary, aggregate integrity, and the P1–P16 backend checklist |
+
 Implemented in `packages/contracts`, pure Dart, no Flutter or Firebase
 dependency.
 
@@ -32,7 +38,7 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle — assignment** (FND-003B2) | Picker and rider assignment offer/accept/decline/expire edges | — |
+| **Lifecycle — rider assignment** (FND-003B2B) | Rider assignment offer/accept/decline/expire/revoke edges. Picker assignment is **done** (FND-003B2A). | FND-003B2A |
 | **Lifecycle — custody, delivery, returns** (FND-003B3) | Custody handoffs, delivery attempts, return processing and delivery confirmation | FND-003B2 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
@@ -66,3 +72,16 @@ From FND-003B1, tested in `packages/contracts/test/`:
 - A transition's financial effect is `deferredToFinancialSlice`, never zero,
   wherever money policy is undecided.
 - Any edge not enumerated fails closed.
+
+From FND-003B2A:
+
+- Being offered work is not holding it: offer recipient and accepted assignee
+  are separate, and neither identity is erased when an attempt ends.
+- At most one live picker offer and one active accepted picker per order.
+- Reassignment is revoke-then-new-offer with a new opaque id and the next
+  generation — never an assignee overwrite.
+- Controlled revocation is refused unless custody is **proven** absent;
+  unknown is not safe.
+- No timeout duration exists; offers carry an immutable policy reference the
+  backend resolves against server time.
+- Assignment transitions have inventory NONE, financial NONE and custody NONE.

@@ -36,10 +36,26 @@ void main() {
     });
 
     test('exposes the version this build was compiled against', () {
-      // 0.1 -> 0.2 added the command/event/authorization vocabulary
-      // (FND-003A); 0.2 -> 0.3 added the pre-dispatch order and reservation
-      // lifecycle (FND-003B1). Both additive, so the major stays 0.
-      expect(ContractVersion.current.toString(), '0.3');
+      // 0.1 -> 0.2 command/event/authorization vocabulary (FND-003A);
+      // 0.2 -> 0.3 pre-dispatch order and reservation lifecycle (FND-003B1);
+      // 0.3 -> 0.4 picker assignment lifecycle (FND-003B2A). All additive, so
+      // the major stays 0.
+      expect(ContractVersion.current.toString(), '0.4');
+    });
+
+    test('0.3 and 0.4 share a major, so the policy permits an attempt', () {
+      // Two integers only. 0.3 defined no assignment types, so it could not
+      // decode a 0.4 assignment payload even if one existed — and none does.
+      expect(
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(0, 3)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(0, 3)
+            .isVersionCompatibleWith(ContractVersion.current),
+        isTrue,
+      );
     });
 
     test('0.2 and 0.3 share a major, so the policy permits an attempt', () {
@@ -100,7 +116,7 @@ void main() {
       expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
       expect(
         v.toString(),
-        '0.3',
+        '0.4',
         reason: 'version policy only; decode behaviour is a decoder property',
       );
     });

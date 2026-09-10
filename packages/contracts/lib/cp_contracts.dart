@@ -23,6 +23,9 @@
 ///   (blocked on owner decision O6).
 library;
 
+export 'package:cp_contracts/src/assignment_command.dart';
+export 'package:cp_contracts/src/assignment_effect.dart';
+export 'package:cp_contracts/src/assignment_state.dart';
 export 'package:cp_contracts/src/authorization.dart';
 export 'package:cp_contracts/src/command_envelope.dart';
 export 'package:cp_contracts/src/contract_version.dart';
@@ -36,6 +39,7 @@ export 'package:cp_contracts/src/order_lifecycle.dart';
 export 'package:cp_contracts/src/order_state.dart';
 export 'package:cp_contracts/src/permission.dart';
 export 'package:cp_contracts/src/permission_matrix.dart';
+export 'package:cp_contracts/src/picker_assignment.dart';
 export 'package:cp_contracts/src/principal.dart';
 export 'package:cp_contracts/src/reservation_state.dart';
 export 'package:cp_contracts/src/role.dart';

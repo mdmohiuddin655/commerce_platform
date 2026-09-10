@@ -20,6 +20,7 @@ enum Permission {
   agentRecordShopFulfillment('agent.fulfillment.record_progress'),
   agentOfferPickerAssignment('agent.assignment.offer_picker'),
   agentOfferRiderAssignment('agent.assignment.offer_rider'),
+  agentRevokePickerAssignment('agent.assignment.revoke_picker'),
 
   // ------------------------------------------------------------------ picker
   pickerViewAssignedWork('picker.assignment.view_assigned'),

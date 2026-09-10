@@ -37,6 +37,7 @@ across five apps drift apart, a permission vocabulary does not.
 | `agent.fulfillment.record_progress` | agent | active | `ownShop` | no | no | Records shop-side progress. Never writes trusted stock, order status or cash fields directly. |
 | `agent.assignment.offer_picker` | agent | active | `ownShop` | no | no | Offers work. An offer is not an assignment and never implies custody. |
 | `agent.assignment.offer_rider` | agent | active | `ownShop` | no | no | Offers work only, within the agent's own shops. |
+| `agent.assignment.revoke_picker` | agent | active | `ownShop` | **yes** | no | Controlled reassignment only: withdraws one accepted picker assignment so the work can be re-offered as a NEW attempt. It cannot replace an assignee, cannot overwrite assignment state, and cannot override custody safety — revocation is refused unless the backend proves the worker never took custody. |
 | `picker.assignment.view_assigned` | picker | active | `assignedResource` | no | no | Only what the active assignment needs. Not a customer directory and not a browsable order list. |
 | `picker.assignment.accept` | picker | active | `ownRegion` + `offeredResource` | no | no | The offer must have been addressed to this picker: a same-region picker cannot accept another picker's offer. Does NOT require an already accepted assignment. Whether the offer is still live is lifecycle state (FND-003B), not authorization. |
 | `picker.assignment.decline` | picker | active | `ownRegion` + `offeredResource` | no | no | Same target isolation as accepting: only the picker the offer was addressed to may decline it. |
@@ -61,20 +62,6 @@ across five apps drift apart, a permission vocabulary does not.
 | `admin.return.administer` | admin | active | `ownRegion` | **yes** | no | Stock cannot become available again until shop receipt and inspection; this permission does not shortcut that. |
 | `admin.cash.record_reconciliation` | admin | active | `ownRegion` | **yes** | **yes** | Records a reconciliation as new balanced postings under dual control. It is NOT a balance edit and NOT a journal edit: corrections are reversals, history is never rewritten. |
 | `admin.release.view_health` | admin | active | `none` | no | no | Aggregate operational metrics only. No personal data. |
-## Least privilege, enforced by tests
-
-- No permission is granted to every role.
-- Every permission's family matches its eligible role
-  (`customer.*` → customer only, and so on).
-- Every mutating admin permission requires a reason.
-- The four highest-consequence admin actions require dual control:
-  `admin.worker.approve`, `admin.worker.reinstate`,
-  `admin.policy.publish_version`, `admin.cash.record_reconciliation`.
-- Only two admin permissions are unscoped, both deliberately:
-  `admin.policy.publish_version` (platform-wide by nature) and
-  `admin.release.view_health` (aggregate metrics, no personal data).
-- No picker or rider permission contains `balance`, `settlement` or `journal`.
-
 ## Offer scope versus assignment scope
 
 Two distinct relationships, and conflating them breaks authorization in
