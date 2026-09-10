@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cp_contracts/cp_contracts.dart';
 import 'package:test/test.dart';
 
@@ -254,40 +256,173 @@ void main() {
   });
 
   group('actor integrity inside the evaluator', () {
-    test('a trusted worker may neither raise nor review', () {
+    test('a trusted worker cannot even obtain a grant, let alone act', () {
       // The exact inverse of the assessment contract, where only a trusted
       // worker may act. A background job in the raiser field would be an
-      // unattributable audit trail.
+      // unattributable audit trail — and canonical authorization refuses one
+      // outright, so there is no grant for it to present.
+      expect(
+        evaluateAuthorization(
+          AuthorizationRequest(
+            permission: Permission.customerRaiseDispute,
+            scope: const ResourceScope(
+              resourceId: orderId,
+              ownerPrincipalId: raiserId,
+              regionId: region,
+            ),
+            principal: Principal.systemWorker(outboxWorkerId),
+            reason: 'goods never arrived',
+          ),
+        ).reason,
+        DenyReason.systemPrincipalNotEligible,
+      );
+
+      // Presenting somebody else's valid grant does not help: it is bound to
+      // its own principal.
       expect(
         runRaise(actor: worker()).denial,
-        DeliveryProofDisputeDenial.actorNotHumanPrincipal,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
       expect(
-        runReview(actor: worker()).denial,
-        DeliveryProofDisputeDenial.actorNotHumanPrincipal,
+        runReview(actor: worker(), grant: adminAdministerGrant()).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
       // Including the very worker that is the authorized proof verifier.
       expect(
         runRaise(actor: Principal.systemWorker(verifierId)).denial,
-        DeliveryProofDisputeDenial.actorNotHumanPrincipal,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
+    });
+
+    test('the actor-shape check still stands behind the grant', () {
+      // `actorNotHumanPrincipal` is not dead: a grant can only name a human,
+      // so reaching it requires a principal that matches the grant and is
+      // still not a user — which the type system makes unconstructible today.
+      // The check remains as the fail-closed floor if `Principal` ever gains
+      // another kind, and the vocabulary keeps the value.
+      expect(
+        DeliveryProofDisputeDenial.values,
+        contains(DeliveryProofDisputeDenial.actorNotHumanPrincipal),
+      );
+      expect(PrincipalKind.values, <PrincipalKind>[
+        PrincipalKind.user,
+        PrincipalKind.systemWorker,
+      ]);
     });
 
     test('the raiser recorded is the verified principal, never a payload', () {
       // There is no raiser field on the request at all: it is derived from the
-      // principal the backend verified.
+      // principal the backend verified, and it must match the grant.
       expect(
         allowedDispute(runRaise(actor: customer())).record.raisedByPrincipalId,
         raiserId,
       );
+      // A different customer may raise only on an order they actually own —
+      // and then the recorded raiser is that principal.
       expect(
         allowedDispute(
-          runRaise(actor: customer(otherCustomerId)),
+          runRaise(
+            actor: customer(otherCustomerId),
+            grant: customerRaiseGrant(principalId: otherCustomerId),
+          ),
         ).record.raisedByPrincipalId,
         otherCustomerId,
-        reason: 'whether that principal OWNS the order is authorization\'s '
-            'question, answered before this evaluator runs',
       );
+    });
+
+    test('a NON-OWNER customer can no longer raise — FND-003D2B-FIX-002', () {
+      // The defect this closes. The candidate took a bare `Principal` and only
+      // *documented* that authorization had run, so a customer who owns
+      // nothing reached a raise transition by calling the evaluator directly.
+      // Canonical authorization denies them...
+      expect(
+        decide(
+          permission: Permission.customerRaiseDispute,
+          principalId: otherCustomerId,
+          role: CommerceRole.customer,
+        ).reason,
+        DenyReason.resourceOwnerMismatch,
+        reason: 'the owner of orderId is raiserId, not otherCustomerId',
+      );
+      // ...so they hold no grant for this order, and the evaluator refuses.
+      expect(
+        runRaise(actor: customer(otherCustomerId)).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+      expect(
+        runRaise(actor: customer(otherCustomerId)).transition,
+        isNull,
+      );
+    });
+
+    test('a customer-only principal cannot review', () {
+      // `customer.dispute.raise` is not `admin.dispute.administer`. A customer
+      // cannot obtain the admin grant...
+      expect(
+        decide(
+          permission: Permission.adminAdministerDispute,
+          principalId: raiserId,
+          role: CommerceRole.customer,
+        ).reason,
+        DenyReason.roleNotEligible,
+      );
+      // ...and presenting their own raise grant is refused: wrong permission.
+      expect(
+        runReview(actor: customer(), grant: customerRaiseGrant()).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+    });
+
+    test('the grant must be for this permission, principal and resource', () {
+      // Wrong permission: a perfectly valid grant for a different capability.
+      expect(
+        runRaise(
+          grant: disputeGrant(
+            permission: Permission.customerViewOwnOrder,
+            principalId: raiserId,
+            role: CommerceRole.customer,
+          ),
+        ).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+      // Wrong principal: a valid raise grant issued to somebody else.
+      expect(
+        runRaise(
+          actor: customer(),
+          grant: customerRaiseGrant(principalId: otherCustomerId),
+        ).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+      // Wrong resource: a valid raise grant for another order. The grant is
+      // the canonical resource, so the dispute aggregate no longer matches it.
+      expect(
+        runRaise(
+          grant: customerRaiseGrant(resourceId: otherOrderId),
+        ).denial,
+        DeliveryProofDisputeDenial.resourceBindingMismatch,
+      );
+      // The same three bindings, on review.
+      expect(
+        runReview(
+          grant: disputeGrant(
+            permission: Permission.adminSupportViewOrder,
+            principalId: adminId,
+            role: CommerceRole.admin,
+          ),
+        ).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+      expect(
+        runReview(grant: adminAdministerGrant(principalId: otherAdminId)).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+    });
+
+    test('the canonical grants allow their own operations', () {
+      expect(allowedDispute(runRaise()).resultingState,
+          DeliveryProofDisputeState.open);
+      expect(allowedDispute(runReview()).resultingState,
+          DeliveryProofDisputeState.underReview);
     });
 
     test('no separation-of-duties rule is invented — FND-003D2B-FIX-001', () {
@@ -305,7 +440,12 @@ void main() {
 
       // A dispute raised by principal X...
       final DeliveryProofDisputeFacts raisedByAdmin = applyDispute(
-        allowedDispute(runRaise(actor: customer(adminId))),
+        allowedDispute(
+          runRaise(
+            actor: customer(adminId),
+            grant: customerRaiseGrant(principalId: adminId),
+          ),
+        ),
       );
       expect(raisedByAdmin.canonicalState, DeliveryProofDisputeState.open);
       expect(raisedByAdmin.current!.raisedByPrincipalId, adminId);
@@ -313,7 +453,8 @@ void main() {
       // ...and the SAME principal X, holding a valid active admin membership
       // in the resource's region with a reason, passes canonical
       // authorization. That is the accepted matrix's answer, and it is the one
-      // that counts.
+      // that counts. **Raising conferred none of this** — X reaches review only
+      // by independently holding an admin grant of their own.
       expect(
         decide(
           permission: Permission.adminAdministerDispute,
@@ -326,7 +467,11 @@ void main() {
       // The state machine must not add a second, private policy that refuses
       // what canonical authorization allowed.
       final DeliveryProofDisputeTransition t = allowedDispute(
-        runReview(dispute: raisedByAdmin, actor: admin()),
+        runReview(
+          dispute: raisedByAdmin,
+          actor: admin(),
+          grant: adminAdministerGrant(principalId: adminId),
+        ),
       );
       expect(t.resultingState, DeliveryProofDisputeState.underReview);
       expect(t.record.reviewStartedByPrincipalId, adminId);
@@ -389,12 +534,16 @@ void main() {
   });
 
   group('the evaluator is not the authorization boundary', () {
-    test('it duplicates no scope, role or reason check', () {
-      // A perfectly formed dispute from a principal who owns nothing still
-      // evaluates here: authorization already ran, and re-running it in the
-      // state machine would create a second place for it to drift. The proof is
-      // that this call succeeds while `decide` above denies the same principal.
-      expect(runRaise(actor: customer(otherCustomerId)).allowed, isTrue);
+    test('it requires the decision without re-deciding it', () {
+      // *(Rewritten by FND-003D2B-FIX-002.)* This test previously asserted the
+      // opposite — that a principal who owns nothing "still evaluates here",
+      // because authorization was assumed to have run elsewhere. That was the
+      // bypass. The correct statement is narrower and provable: the evaluator
+      // **requires** canonical authorization's success artifact, and re-decides
+      // none of its rules.
+      //
+      // Same principal, same order: canonical authorization denies, and so the
+      // evaluator has no grant to accept.
       expect(
         decide(
           permission: Permission.customerRaiseDispute,
@@ -403,6 +552,27 @@ void main() {
         ).allowed,
         isFalse,
       );
+      expect(runRaise(actor: customer(otherCustomerId)).allowed, isFalse);
+
+      // And it does not reimplement the rules: no dispute source file mentions
+      // a role, a scope requirement, a membership status or the matrix.
+      for (final String path in disputeSourceFiles) {
+        final String code = codeOnly(File(path).readAsStringSync());
+        for (final String forbidden in <String>[
+          'permissionmatrix',
+          'commercerole',
+          'scoperequirement',
+          'membershipstatus',
+          'reasonrequired',
+          'evaluateauthorization',
+        ]) {
+          expect(
+            code,
+            isNot(contains(forbidden)),
+            reason: '$path must not re-decide FND-003A policy',
+          );
+        }
+      }
     });
 
     test('no request type carries a principal, grant, role or reason', () {

@@ -73,7 +73,6 @@ void main() {
           DeliveryProofDisputeBasis.notAssessed(resourceId: hostile).toString(),
           disputeRecord(disputeId: hostile).toString(),
           disputeRecord(raisedByPrincipalId: hostile).toString(),
-          DeliveryProofDisputeContext(resourceId: hostile).toString(),
           DeliveryProofDisputeTransition(
             command: DeliveryProofDisputeCommand.raise,
             record: disputeRecord(disputeId: hostile),

@@ -86,7 +86,15 @@ Corrected in place by **FND-003D2B-FIX-001**: the basis standing now requires th
 **verdict** to still agree, not just the assessment id and revision; an invented
 `reviewerIsRaiser` separation-of-duties denial was removed; and recording that
 review started no longer depends on current assessment or order facts it never
-reads. **The corrected two-commit candidate is not yet accepted for merge.**
+reads.
+
+Corrected again by **FND-003D2B-FIX-002**: a higher assessment revision that
+**reuses the basis's assessment id** is impossible history and now answers
+`indeterminate` rather than `superseded`; and both executable operations now
+require FND-003A's unforgeable **`AuthorizationGrant`**, so a direct evaluator
+call can no longer bypass the canonical authorization decision. **The corrected
+three-commit candidate is not accepted for merge** — it awaits another separate
+read-only final review.
 
 **Successful delivery is still NOT executable, and no dispute resolves.**
 FND-003D2B records *that* the proof situation is contested and *that* review
@@ -216,7 +224,14 @@ From FND-003D2B:
   depends on the dispute alone, so a later reassessment or a torn assessment
   read cannot freeze a validly raised dispute out of review.
 - **Identity is not meaning.** A basis is still `current` only when the
-  assessment id, the revision **and the verdict** all still agree.
+  assessment id, the revision **and the verdict** all still agree — and an
+  assessment id is **never reusable at another revision**, so a later revision
+  carrying the basis's id is impossible history, not a supersession.
+- **An executable dispute operation requires canonical authorization success.**
+  Both take FND-003A's unforgeable `AuthorizationGrant`, bound to the acting
+  principal, the operation's permission and the resource. The permission matrix
+  stays the single policy source and is never copied; raising confers no admin
+  authority.
 - A dispute record holds **no free text** — the required reason lives with the
   audited command, in FND-003A.
 

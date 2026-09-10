@@ -41,7 +41,11 @@
 ///   each taking only the facts its own operation reads** — raising pins the
 ///   assessment and order it depends on; recording that review started depends
 ///   on the dispute alone, so a later reassessment cannot freeze a validly
-///   raised dispute out of review.
+///   raised dispute out of review. **Both require [AuthorizationGrant]** — the
+///   unforgeable success artifact only [evaluateAuthorization] can produce —
+///   bound to the acting principal, the operation's permission and the
+///   resource, so a direct call cannot bypass the canonical decision. No
+///   permission rule is re-decided or copied.
 /// - [evaluateResolveDeliveryProofDispute] — **enumerated and never
 ///   executable**, always `resolutionPolicyDeferred`, taking no arguments at
 ///   all because a deferred edge consumes nothing. The dispute workflow decides

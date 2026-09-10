@@ -22,22 +22,37 @@
 ///
 /// | Operation | Reads |
 /// |---|---|
-/// | [evaluateRaiseDeliveryProofDispute] | resource, dispute, **assessment**, **order** |
-/// | [evaluateRecordDeliveryProofDisputeReview] | resource, dispute |
+/// | [evaluateRaiseDeliveryProofDispute] | **grant**, dispute, **assessment**, **order** |
+/// | [evaluateRecordDeliveryProofDisputeReview] | **grant**, dispute |
 /// | [evaluateResolveDeliveryProofDispute] | **nothing at all** |
 ///
-/// ## What these functions are not
+/// ## Authorization is required, and is still FND-003A's
 ///
-/// They are **not** the authorization boundary. `evaluateAuthorization` has
-/// already run against the canonical matrix, with `customer.dispute.raise`'s
-/// `ownResource` scope, `admin.dispute.administer`'s `ownRegion` scope and both
-/// permissions' `reasonRequired`, and **fresh authorization on every request
-/// including replays remains FND-003A's and the backend's**. Repeating any of
-/// it here would create a second place for it to drift.
+/// *(Corrected by FND-003D2B-FIX-002.)* Both executable evaluators take an
+/// [AuthorizationGrant] — the artifact FND-003A made **unforgeable** precisely
+/// so downstream steps could rely on it, obtainable only from a successful
+/// [evaluateAuthorization].
 ///
-/// What they add is **context integrity**: that the facts describe one
-/// canonical order, that they are current, and that the operation is coherent
-/// with them.
+/// The previous signatures took a bare `Principal` and *documented* that
+/// authorization had already run. **A pure function cannot assert that about
+/// its caller**: nothing distinguished a properly authorized call from one that
+/// skipped the check, so a non-owner customer could reach a raise transition
+/// and a customer-only principal could reach a review transition.
+///
+/// These functions still do **not** evaluate policy. Role, membership status,
+/// scope and reason live in `permissionMatrix` and are decided in exactly one
+/// place; what is checked here is only that the grant in hand is bound to this
+/// principal, this permission and this resource — see
+/// `checkDisputeAuthorization`. **Freshness remains the backend's** (R33–R40,
+/// NOT RUN).
+///
+/// The grant also carries the **canonical resource**, so there is no separate
+/// context parameter: two sources of resource truth could disagree, and the one
+/// tied to the authorization decision is the one that must win.
+///
+/// What these functions add beyond that is **fact integrity**: that the
+/// aggregates describe that same order, that they are current, and that the
+/// operation is coherent with them.
 ///
 /// They are also **not** a resolution. No outcome, finding, fault, liability,
 /// fee, refund, compensation, return route or delivery consequence is produced
@@ -46,10 +61,12 @@
 /// Any condition not enumerated fails closed.
 library;
 
+import 'package:cp_contracts/src/authorization.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_facts.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_record.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_validation.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_verdict.dart';
+import 'package:cp_contracts/src/delivery_proof_dispute_authorization.dart';
 import 'package:cp_contracts/src/delivery_proof_dispute_basis.dart';
 import 'package:cp_contracts/src/delivery_proof_dispute_command.dart';
 import 'package:cp_contracts/src/delivery_proof_dispute_denial.dart';
@@ -86,17 +103,24 @@ import 'package:cp_contracts/src/reservation_state.dart';
 DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   required DeliveryProofDisputeRaiseRequest request,
   required Principal actor,
-  required DeliveryProofDisputeContext context,
+  required AuthorizationGrant grant,
   required DeliveryProofDisputeFacts dispute,
   required DeliveryProofAssessmentFacts assessment,
   required OrderLifecycleFacts order,
 }) {
-  // 1. The canonical resource identity must itself be usable.
-  if (!context.isWellFormed) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.resourceBindingMismatch,
-    );
+  // 1. Canonical authorization success, bound to this principal, this
+  //    permission and this resource. Nothing below runs without it.
+  final DeliveryProofDisputeDenial? unauthorized = checkDisputeAuthorization(
+    grant: grant,
+    actor: actor,
+    command: DeliveryProofDisputeCommand.raise,
+  );
+  if (unauthorized != null) {
+    return DeliveryProofDisputeOutcome.deny(unauthorized);
   }
+  // The grant's resource is the canonical one, already validated as an opaque
+  // id by the check above.
+  final String resourceId = grant.resourceId;
 
   // 2. Aggregate integrity for every aggregate this operation reads, before
   //    anything can produce a record. Each validator is the canonical one for
@@ -125,8 +149,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   //    canonical one the backend resolved the request against. Two aggregates
   //    agreeing with each other is not the same as both being about the right
   //    order.
-  if (dispute.resourceId != context.resourceId ||
-      assessment.resourceId != context.resourceId) {
+  if (dispute.resourceId != resourceId || assessment.resourceId != resourceId) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.resourceBindingMismatch,
     );
@@ -204,9 +227,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   final DeliveryProofDisputeBasis basis;
   switch (verdict) {
     case null:
-      basis = DeliveryProofDisputeBasis.notAssessed(
-        resourceId: context.resourceId,
-      );
+      basis = DeliveryProofDisputeBasis.notAssessed(resourceId: resourceId);
     case DeliveryProofAssessmentVerdict.satisfied:
       // Not a fallback ground. Contesting a satisfied assessment is a
       // different, undefined workflow — see `assessmentSatisfied`.
@@ -217,7 +238,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
       // A canonical verdict implies a canonical current record.
       final DeliveryProofAssessmentRecord current = assessment.current!;
       basis = DeliveryProofDisputeBasis.notSatisfied(
-        resourceId: context.resourceId,
+        resourceId: resourceId,
         assessmentId: current.assessmentId,
         assessmentRevision: current.assessmentRevision,
       );
@@ -228,7 +249,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
       command: DeliveryProofDisputeCommand.raise,
       record: DeliveryProofDisputeRecord.raised(
         disputeId: request.disputeId,
-        resourceId: context.resourceId,
+        resourceId: resourceId,
         basis: basis,
         // Derived from the verified principal, never from request content.
         raisedByPrincipalId: actor.id,
@@ -258,30 +279,50 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
 ///
 /// ## What it does check
 ///
-/// The canonical resource, the canonical stored dispute, the exact dispute id,
+/// The authorization grant, the canonical stored dispute, the exact dispute id,
 /// the dispute revision (compare-and-set), that the dispute is still `open`,
 /// that the actor is a verified human principal, that the timestamp is server
-/// UTC, and that review does not precede the raise.
+/// UTC, and that review does not precede the raise. The canonical resource
+/// comes from the grant.
+///
+/// ## Authorization
+///
+/// *(Added by FND-003D2B-FIX-002.)* An [AuthorizationGrant] for
+/// `admin.dispute.administer`, bound to this principal and this resource, is
+/// **required**. A customer-only principal cannot obtain one, so
+/// `customer.dispute.raise` no longer reaches this transition; nor does an
+/// inactive or out-of-region admin, nor an admin who supplied no reason —
+/// `evaluateAuthorization` refuses each of them, and without its success
+/// artifact there is nothing to pass here.
 ///
 /// **There is deliberately no separation-of-duties rule.** An administrator who
-/// passes fresh canonical authorization for `admin.dispute.administer` is not
-/// refused merely because the same principal earlier raised this dispute: the
-/// accepted matrix requires an active admin membership, `ownRegion` scope and a
-/// stored reason, and sets `approvalRequired: false`. A private second
-/// authorization policy here would be an invented one. If separation of duties
-/// is ever wanted, it needs its own permission and ADR.
+/// holds a valid current grant is not refused merely because the same principal
+/// earlier raised this dispute: the accepted matrix requires an active admin
+/// membership, `ownRegion` scope and a stored reason, and sets
+/// `approvalRequired: false`. A private second authorization policy here would
+/// be an invented one. If separation of duties is ever wanted, it needs its own
+/// permission and ADR.
+///
+/// **Raising confers no admin authority.** The historical raiser reaches this
+/// transition only by independently holding an admin grant of their own.
 DeliveryProofDisputeOutcome evaluateRecordDeliveryProofDisputeReview({
   required DeliveryProofDisputeReviewRequest request,
   required Principal actor,
-  required DeliveryProofDisputeContext context,
+  required AuthorizationGrant grant,
   required DeliveryProofDisputeFacts dispute,
 }) {
-  // 1. The canonical resource identity must itself be usable.
-  if (!context.isWellFormed) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.resourceBindingMismatch,
-    );
+  // 1. Canonical authorization success for `admin.dispute.administer`, bound to
+  //    this principal and this resource. A customer-only principal cannot
+  //    obtain this grant, and therefore cannot reach the transition.
+  final DeliveryProofDisputeDenial? unauthorized = checkDisputeAuthorization(
+    grant: grant,
+    actor: actor,
+    command: DeliveryProofDisputeCommand.recordReviewStarted,
+  );
+  if (unauthorized != null) {
+    return DeliveryProofDisputeOutcome.deny(unauthorized);
   }
+  final String resourceId = grant.resourceId;
 
   // 2. The dispute aggregate must be canonical before anything reads it.
   final DeliveryProofDisputeDenial? disputeCorruption =
@@ -291,7 +332,7 @@ DeliveryProofDisputeOutcome evaluateRecordDeliveryProofDisputeReview({
   }
 
   // 3. ...and it must be about the canonical order.
-  if (dispute.resourceId != context.resourceId) {
+  if (dispute.resourceId != resourceId) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.resourceBindingMismatch,
     );

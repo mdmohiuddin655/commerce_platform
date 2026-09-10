@@ -217,6 +217,136 @@ void main() {
     });
   });
 
+  group('identity is not reusable — FND-003D2B-FIX-002', () {
+    /// A structurally canonical aggregate at revision 2 whose current record
+    /// **reuses** assessment id A and supersedes some other id.
+    DeliveryProofAssessmentFacts reusingBasisId({
+      DeliveryProofAssessmentVerdict verdict =
+          DeliveryProofAssessmentVerdict.satisfied,
+    }) => DeliveryProofAssessmentFacts(
+      resourceId: orderId,
+      assessmentRevision: 2,
+      current: record(
+        assessmentId: asmtA,
+        assessmentRevision: 2,
+        supersedesAssessmentId: asmtB,
+        verdict: verdict,
+      ),
+    );
+
+    test('a higher revision reusing the basis id is indeterminate', () {
+      // The defect this corrects: advancing the revision was treated as enough
+      // to report `superseded`. ADR-0009 gives every reassessment a NEW opaque
+      // id, so a later revision carrying the id this basis pinned is
+      // impossible history — the contested identity would exist twice.
+      const DeliveryProofDisputeBasis basis =
+          DeliveryProofDisputeBasis.notSatisfied(
+            resourceId: orderId,
+            assessmentId: asmtA,
+            assessmentRevision: 1,
+          );
+      for (final DeliveryProofAssessmentVerdict v
+          in DeliveryProofAssessmentVerdict.values) {
+        expect(
+          resolveDeliveryProofDisputeBasisStanding(
+            basis: basis,
+            assessment: reusingBasisId(verdict: v),
+          ),
+          DeliveryProofDisputeBasisStanding.indeterminate,
+          reason: 'id reuse at revision 2 carrying $v is impossible history',
+        );
+      }
+    });
+
+    test('that aggregate is structurally canonical, not torn', () {
+      // The point of the finding: no shape check could have caught this. It is
+      // a *relationship* contradiction between the basis and the history.
+      final DeliveryProofAssessmentFacts reuse = reusingBasisId();
+      expect(
+        validateDeliveryProofAssessmentAggregate(reuse),
+        isNull,
+        reason: 'the aggregate itself is perfectly well formed',
+      );
+      expect(reuse.current!.isWellFormed, isTrue);
+      expect(
+        reuse.canonicalVerdict,
+        DeliveryProofAssessmentVerdict.satisfied,
+        reason: 'it even exposes a trusted verdict',
+      );
+      expect(reuse.current!.supersedesAssessmentId, asmtB);
+    });
+
+    test('a genuine newer assessment still supersedes, for both verdicts', () {
+      final DeliveryProofDisputeBasis basis = raisedBasis(
+        assessment: assessed(),
+      );
+      for (final DeliveryProofAssessmentVerdict v
+          in DeliveryProofAssessmentVerdict.values) {
+        expect(
+          resolveDeliveryProofDisputeBasisStanding(
+            basis: basis,
+            assessment: assessed(
+              assessmentId: asmtB,
+              revision: 2,
+              verdict: v,
+              supersedes: asmtA,
+            ),
+          ),
+          DeliveryProofDisputeBasisStanding.superseded,
+        );
+      }
+    });
+
+    test('a larger revision gap with a new id behaves consistently', () {
+      // Several reassessments later. The contract compares the basis with the
+      // CURRENT record only — it invents no history array and needs no global
+      // uniqueness lookup, which is DPA11 and NOT RUN.
+      final DeliveryProofDisputeBasis basis = raisedBasis(
+        assessment: assessed(),
+      );
+      expect(
+        resolveDeliveryProofDisputeBasisStanding(
+          basis: basis,
+          assessment: assessed(assessmentId: asmtC, revision: 5),
+        ),
+        DeliveryProofDisputeBasisStanding.superseded,
+      );
+      // ...and the same gap reusing the basis id is still refused.
+      expect(
+        resolveDeliveryProofDisputeBasisStanding(
+          basis: basis,
+          assessment: assessed(assessmentId: asmtA, revision: 5),
+        ),
+        DeliveryProofDisputeBasisStanding.indeterminate,
+      );
+    });
+
+    test('the basis object is unchanged by any of it', () {
+      const DeliveryProofDisputeBasis basis =
+          DeliveryProofDisputeBasis.notSatisfied(
+            resourceId: orderId,
+            assessmentId: asmtA,
+            assessmentRevision: 1,
+          );
+      resolveDeliveryProofDisputeBasisStanding(
+        basis: basis,
+        assessment: reusingBasisId(),
+      );
+      expect(basis.kind, DeliveryProofDisputeBasisKind.notSatisfied);
+      expect(basis.assessmentId, asmtA);
+      expect(basis.assessmentRevision, 1);
+      expect(basis.resourceId, orderId);
+      expect(
+        basis,
+        const DeliveryProofDisputeBasis.notSatisfied(
+          resourceId: orderId,
+          assessmentId: asmtA,
+          assessmentRevision: 1,
+        ),
+      );
+    });
+  });
+
   group('indeterminate — corruption is never a confident answer', () {
     test('a torn assessment aggregate is never current or superseded', () {
       for (final DeliveryProofAssessmentVerdict v

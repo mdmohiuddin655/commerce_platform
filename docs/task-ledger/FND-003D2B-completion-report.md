@@ -600,3 +600,50 @@ are not modified. **No amend, rebase, squash or force-push was used**, then or
 now.
 
 Full detail: [FND-003D2B-FIX-001 report](FND-003D2B-FIX-001-completion-report.md).
+
+---
+
+# FND-003D2B-FINAL-REVIEW-002 CORRECTION
+
+**Appended by FND-003D2B-FIX-002 (2026-09-11). Nothing above is deleted or
+rewritten.**
+
+A second read-only review found **two further material defects** in the same
+candidate. FND-003D2B remains **PARTIAL / FIX REQUIRED / NOT ACCEPTED**, now
+pending review of the three-commit chain `b94e5424` + `ded1aa79` + the FIX-002
+commit.
+
+## 4. §4 "What is deliberately not in the read-set" — an authorization bypass
+
+This report, and FIX-001 after it, stated that the evaluators were "not the
+authorization boundary" because `evaluateAuthorization` had "already run". The
+reasoning was right about *policy* and wrong about *proof*: a pure function
+cannot assert anything about its caller, and the signatures took only a bare
+`Principal`. A **non-owner customer could reach a raise transition**, and a
+**customer-only principal could reach a review transition**, by calling the
+evaluator directly.
+
+Corrected: both executable operations now require FND-003A's unforgeable
+`AuthorizationGrant`, verified as bound to this principal, this permission and
+this resource. No policy is re-decided and `permissionMatrix` is unchanged.
+
+## 5. §4 "Supersession is a standing, never a rewrite" — the other direction
+
+FIX-001 closed a same-revision **verdict** contradiction. It did not close the
+**identity** one: any revision above the basis was reported `superseded`,
+including a revision-2 record reusing the exact assessment id the basis pinned.
+ADR-0009 requires a new id per reassessment, so that is impossible history — and
+the aggregate is structurally canonical, so no shape check caught it. It now
+answers `indeterminate`.
+
+## What still stands
+
+The slice's boundaries are unchanged and were never the problem: `Permission
+.values` = 38 with both dispute rules byte-for-byte accepted, resolution
+enumerated and always deferred, no outcome/fault/fee/refund/compensation/
+liability decided, no proof mechanism, every effect NONE, `delivered`/customer
+custody/rider `completed` unreachable, **DPD1–DPD12 NOT RUN**, contract **0.9**.
+
+**No amend, rebase, squash or force-push was used** at any point in this chain.
+
+Full detail: [FND-003D2B-FIX-002 report](FND-003D2B-FIX-002-completion-report.md).

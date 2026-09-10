@@ -149,19 +149,25 @@ void main() {
   });
 
   group('resource binding', () {
-    test('a malformed canonical resource fails closed', () {
-      expect(
-        runRaise(
-          context: const DeliveryProofDisputeContext(resourceId: 'short'),
-        ).denial,
-        DeliveryProofDisputeDenial.resourceBindingMismatch,
-      );
-      expect(
-        runRaise(
-          context: const DeliveryProofDisputeContext(resourceId: ''),
-        ).denial,
-        DeliveryProofDisputeDenial.resourceBindingMismatch,
-      );
+    test('a grant naming a malformed resource fails closed', () {
+      // *(Reshaped by FND-003D2B-FIX-002.)* The canonical resource now arrives
+      // on the authorization grant, so this is no longer a free-standing
+      // context value a caller can malform — it has to come back from
+      // `evaluateAuthorization`. A grant whose resource is not a canonical
+      // opaque id is refused before any fact is read.
+      for (final String bad in <String>['short', '']) {
+        final AuthorizationGrant badGrant = disputeGrant(
+          permission: Permission.customerRaiseDispute,
+          principalId: raiserId,
+          role: CommerceRole.customer,
+          resourceId: bad,
+        );
+        expect(badGrant.resourceId, bad);
+        expect(
+          runRaise(grant: badGrant).denial,
+          DeliveryProofDisputeDenial.authorizationGrantMismatch,
+        );
+      }
     });
 
     test('a dispute aggregate for another order is refused', () {
@@ -204,7 +210,7 @@ void main() {
             expectedOrderRevision: 5,
           ),
           actor: customer(),
-          context: disputeContext,
+          grant: customerRaiseGrant(),
           dispute: const DeliveryProofDisputeFacts.absent(
             resourceId: otherOrderId,
           ),
@@ -373,7 +379,7 @@ void main() {
               expectedDisputeRevision: 1,
             ),
             actor: admin(),
-            context: disputeContext,
+            grant: adminAdministerGrant(),
             dispute: open,
           );
       expect(allowedDispute(outcome).resultingState,
@@ -432,6 +438,24 @@ void main() {
       );
       expect(allowedDispute(runReview(dispute: open)).resultingState,
           DeliveryProofDisputeState.underReview);
+    });
+
+    test('a torn or missing assessment after the raise cannot freeze review',
+        () {
+      // Re-pinned under FIX-002's grant requirement: the operation still takes
+      // no assessment argument, so no state of it — reassessed, torn, or gone
+      // — can gate review of an already valid dispute.
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      for (final DeliveryProofAssessmentFacts _ in <DeliveryProofAssessmentFacts>[
+        tornAssessment(),
+        absentAssessment,
+        assessed(assessmentId: asmtB, revision: 2, supersedes: asmtA),
+      ]) {
+        expect(
+          allowedDispute(runReview(dispute: open)).resultingState,
+          DeliveryProofDisputeState.underReview,
+        );
+      }
     });
 
     test('the review transition still changes only the dispute', () {

@@ -427,9 +427,11 @@ class Sample {
       expect(DeliveryProofDisputeBasisStanding.values.length, 3);
       expect(DeliveryProofDisputeCommand.values.length, 3);
       // Pinned so `docs/contracts/delivery-proof-dispute.md` cannot drift from
-      // the vocabulary it documents. 20 -> **19** at FND-003D2B-FIX-001, which
-      // removed the invented `reviewerIsRaiser`.
-      expect(DeliveryProofDisputeDenial.values.length, 19);
+      // the vocabulary it documents. 20 -> 19 at FND-003D2B-FIX-001, which
+      // removed the invented `reviewerIsRaiser`; 19 -> **20** at
+      // FND-003D2B-FIX-002, which added the generic
+      // `authorizationGrantMismatch`.
+      expect(DeliveryProofDisputeDenial.values.length, 20);
       expect(
         DeliveryProofDisputeDenial.values.map(
           (DeliveryProofDisputeDenial d) => d.name,
@@ -450,7 +452,14 @@ class Sample {
         DeliveryProofDisputeBasisStanding.current,
       );
       expect(allowedDispute(runRaise()).resultingDisputeRevision, 1);
-      expect(disputeContext.isWellFormed, isTrue);
+      expect(
+        checkDisputeAuthorization(
+          grant: customerRaiseGrant(),
+          actor: customer(),
+          command: DeliveryProofDisputeCommand.raise,
+        ),
+        isNull,
+      );
     });
   });
 

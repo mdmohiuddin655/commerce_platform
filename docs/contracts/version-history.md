@@ -399,6 +399,28 @@ in-place correction to an unmerged, unaccepted candidate, not a release event.
 | An invented `reviewerIsRaiser` denial refused an administrator who had earlier raised the dispute, although `admin.dispute.administer` carries `approvalRequired: false` and no accepted contract asks for separation of duties | the rule was removed from the evaluator, the record validator, the denial vocabulary (**20 → 19**), the tests and the documentation. Separation of duties, if ever wanted, needs its own permission and ADR |
 | Recording that review started required a canonical current assessment, a canonical current order, the order revision, `in_delivery` and `committed` — none of which it reads — so a reassessment or torn assessment read could **freeze a validly raised dispute out of review** | one evaluator per operation, each taking only its own read-set: `evaluateRaiseDeliveryProofDispute` (resource, dispute, assessment, order), `evaluateRecordDeliveryProofDisputeReview` (resource, dispute) and `evaluateResolveDeliveryProofDispute` (**no arguments at all**) |
 
+**Corrected again by FND-003D2B-FIX-002 — still 0.9.**
+FND-003D2B-FINAL-REVIEW-002 found two further defects in the same unreleased
+candidate. Both are corrected in one follow-up commit, and **the contract stays
+at 0.9**.
+
+| Defect | Correction |
+|---|---|
+| `resolveDeliveryProofDisputeBasisStanding` reported `superseded` for any higher revision, including one whose current record **reused the basis's assessment id** — impossible history, since ADR-0009 requires a new id for every reassessment, and the aggregate is structurally canonical so no shape check could catch it | a higher revision must also carry a **different** assessment id; reuse answers `indeterminate`. The comparison uses the current record only — no history array, no global uniqueness lookup (**DPA11**, NOT RUN) |
+| The executable evaluators took a bare `Principal` and only *documented* that authorization had run, which a pure function cannot assert about its caller — so a **non-owner customer could raise** and a **customer-only principal could review** by calling the evaluator directly | both now require FND-003A's unforgeable `AuthorizationGrant`, verified as bound to this principal, this permission and this resource by `checkDisputeAuthorization`. One generic `authorizationGrantMismatch` denial (19 → **20**); **no policy is re-decided and the matrix is not copied** |
+
+`DeliveryProofDisputeContext` was **removed**: the grant already names the
+canonical resource, and two sources of resource truth could disagree. The
+authorization binding lives in its own file behind the stable barrel, so
+authorization validation, aggregate validation and transition construction can
+be audited independently.
+
+`Permission.values` and `permissionMatrix` remain **38**, unchanged;
+`customer.dispute.raise` and `admin.dispute.administer` keep their exact
+accepted rules and `approvalRequired: false`; no separation-of-duties rule
+returned. Each correction carries a negative control, and the read-set
+independence remains enforced by the **type system**.
+
 The single `evaluateDeliveryProofDispute` and the multi-constructor
 `DeliveryProofDisputeRequest` were **replaced**, not deprecated:
 `DeliveryProofDisputeRaiseRequest` pins the dispute, assessment and order

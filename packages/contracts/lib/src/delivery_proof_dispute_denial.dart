@@ -94,6 +94,24 @@ enum DeliveryProofDisputeDenial {
   /// raise or review disputes would be an unattributable audit trail.
   actorNotHumanPrincipal,
 
+  /// The operation was not accompanied by a canonical authorization success for
+  /// **this** principal, **this** permission and **this** resource.
+  ///
+  /// *(Added by FND-003D2B-FIX-002.)* Executable dispute operations require the
+  /// unforgeable `AuthorizationGrant` that only a successful
+  /// `evaluateAuthorization` can produce. Before this existed, the evaluators
+  /// took a bare `Principal` and merely *documented* that authorization had
+  /// already run — which a pure function cannot assert about its caller.
+  ///
+  /// **Deliberately one generic value.** It does not say whether the grant was
+  /// missing, for the wrong permission, for another principal or for another
+  /// resource, for the same reason `AuthorizationDecision.publicMessage` is
+  /// uniform: a caller must not be able to probe for the existence, owner or
+  /// scope of a resource by comparing refusals. The canonical `DenyReason` on
+  /// the authorization side already records the precise cause for logs and
+  /// audit, and **no permission rule is copied here**.
+  authorizationGrantMismatch,
+
   /// The order is not `in_delivery`.
   ///
   /// Proof of delivery cannot be missing, superseded or unsatisfied for an

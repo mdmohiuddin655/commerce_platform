@@ -41,9 +41,9 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003D1-FIX-001 | ADMIN | Bound the proof-policy reference at 64, stop its `toString` reproducing the raw value, make evidence `belongsTo` fail closed, and correct the stale package version header | FND-003D1 | **DONE** | [FND-003D1-FIX-001 report](FND-003D1-FIX-001-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) |
 | FND-003D1-FIX-002 | ADMIN | Alias the proof-policy ceiling to the canonical `maxIdLength` instead of repeating its literal, and make `DeliveryEvidenceRef.toString` fail safe for malformed instances | FND-003D1-FIX-001 | **DONE** | [FND-003D1-FIX-002 report](FND-003D1-FIX-002-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) amended |
 | FND-003D2A | ADMIN | Mechanism-neutral, trusted-server-produced delivery-proof **assessment** result | FND-003D1 | **DONE** (as corrected) | **ACCEPTED AND INTEGRATED.** Accepted state = **`6bb23710` + `03c71d0`**, and `main` is now **`03c71d0`** — the FND-003D2A-FIX-001 commit. *(Reconciled by FND-003D2B: the wording below described the pre-merge candidate and was stale. No historical report was rewritten, and the process exception stands unchanged.)* **`6bb23710` alone is NOT accepted**: FND-003D2A-FINAL-REVIEW-001 found technical, maintainability, security and process-evidence defects, all corrected by FND-003D2A-FIX-001. **Known process exception, recorded separately and NOT part of the accepted chain:** a local-only commit `a9f3db98` was amended into `6bb23710` before first publication, so FND-003D2A acceptance criterion 48 (no amend) = **FAIL**; no shared history or CI result was rewritten, and it is a one-time pre-publication exception only — see the process-correction section of the [FND-003D2A report](FND-003D2A-completion-report.md). Reports: [FND-003D2A](FND-003D2A-completion-report.md) + [FIX-001](FND-003D2A-FIX-001-completion-report.md) · [delivery-proof assessment](../contracts/delivery-proof-assessment.md) · [ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md) · contract **0.8**. Adds **DPA1–DPA18**, all **NOT RUN** (DPA17 verifier authorization, DPA18 reassessment audit basis, both added by FIX-001). **No command and no permission added** (`Permission.values` stays 38); every order/reservation/inventory/financial/custody/assignment effect is **NONE**. Successful delivery remains **not executable** |
-| FND-003D2B | ADMIN | Fallback dispute workflow for a missing, superseded or `notSatisfied` assessment | FND-003D2A | **PARTIAL — FIX REQUIRED / NOT ACCEPTED** | **`b94e5424` alone is NOT acceptable**: FND-003D2B-FINAL-REVIEW-001 found three material defects — a basis standing that certified a **verdict contradiction** as `current`, an **invented `reviewerIsRaiser`** separation-of-duties denial with no accepted contract behind it, and a **record-review-started path coupled to current assessment/order facts it never reads**, which could freeze a validly raised dispute out of review. All three are corrected by **FND-003D2B-FIX-001**. Candidate chain = **`b94e5424` + the FND-003D2B-FIX-001 commit** on `fnd/FND-003D2B-fallback-proof-dispute-contract`, branched from `main` @ `03c71d0`. **The corrected two-commit candidate requires a new, separate read-only final acceptance review before merge.** Reports: [FND-003D2B](FND-003D2B-completion-report.md) + [FIX-001](FND-003D2B-FIX-001-completion-report.md) · [delivery-proof dispute](../contracts/delivery-proof-dispute.md) · contract **0.9** (unchanged by the fix — an in-place correction to an unreleased candidate, not a release event). Adds **DPD1–DPD12**, all **NOT RUN**. **No permission added** (`Permission.values` stays 38); both executable operations use the accepted `customer.dispute.raise` and `admin.dispute.administer` rules unchanged. **No dispute outcome, fault, fee, refund, compensation, liability, return or delivery consequence is decided** — `resolve` is enumerated and always refused `resolutionPolicyDeferred`. Every order/reservation/inventory/financial/custody/assignment **and assessment** effect is **NONE**. Successful delivery remains **not executable** |
+| FND-003D2B | ADMIN | Fallback dispute workflow for a missing, superseded or `notSatisfied` assessment | FND-003D2A | **PARTIAL — FIX REQUIRED / NOT ACCEPTED** | **Neither `b94e5424` nor `ded1aa79` alone is acceptable, and the chain is still not accepted.** FND-003D2B-FINAL-REVIEW-001 found three material defects — a basis standing that certified a **verdict contradiction** as `current`, an **invented `reviewerIsRaiser`** separation-of-duties denial with no accepted contract behind it, and a **record-review-started path coupled to current assessment/order facts it never reads**, which could freeze a validly raised dispute out of review. All three are corrected by **FND-003D2B-FIX-001** (`ded1aa79`). **FND-003D2B-FINAL-REVIEW-002 then found two more**: a basis standing that reported **`superseded` for a higher revision reusing the basis's assessment id** — impossible history under ADR-0009, on a structurally canonical aggregate — and executable evaluators that took a bare `Principal` while only *documenting* that authorization had run, so a **non-owner customer could raise** and a **customer-only principal could review** by calling them directly. Both are corrected by **FND-003D2B-FIX-002**. Candidate chain = **`b94e5424` + `ded1aa79` + the FND-003D2B-FIX-002 commit** on `fnd/FND-003D2B-fallback-proof-dispute-contract`, branched from `main` @ `03c71d0`. **The corrected three-commit candidate requires a new, separate read-only final acceptance review before merge.** Reports: [FND-003D2B](FND-003D2B-completion-report.md) + [FIX-001](FND-003D2B-FIX-001-completion-report.md) + [FIX-002](FND-003D2B-FIX-002-completion-report.md) · [delivery-proof dispute](../contracts/delivery-proof-dispute.md) · contract **0.9** (unchanged by the fix — an in-place correction to an unreleased candidate, not a release event). Adds **DPD1–DPD12**, all **NOT RUN**. **No permission added** (`Permission.values` stays 38); both executable operations use the accepted `customer.dispute.raise` and `admin.dispute.administer` rules unchanged. **No dispute outcome, fault, fee, refund, compensation, liability, return or delivery consequence is decided** — `resolve` is enumerated and always refused `resolutionPolicyDeferred`. Every order/reservation/inventory/financial/custody/assignment **and assessment** effect is **NONE**. Successful delivery remains **not executable** |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
-| FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1, the trusted immutable proof **assessment result** by FND-003D2A, and the **fallback dispute workflow** by FND-003D2B (**as corrected by FND-003D2B-FIX-001, and not yet accepted**). **The proof-satisfaction policy itself is still undone**, so CONSTRAINTS invariant 13 is **not discharged** and delivery confirmation may not be coded. **How a dispute resolves** is separately undecided — blocked on **O6**, FND-003C and FND-003B3B |
+| FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1, the trusted immutable proof **assessment result** by FND-003D2A, and the **fallback dispute workflow** by FND-003D2B (**as corrected by FND-003D2B-FIX-001 and FND-003D2B-FIX-002, and not yet accepted**). **The proof-satisfaction policy itself is still undone**, so CONSTRAINTS invariant 13 is **not discharged** and delivery confirmation may not be coded. **How a dispute resolves** is separately undecided — blocked on **O6**, FND-003C and FND-003B3B |
 | FND-003D1 | ADMIN | Mechanism-neutral delivery-proof policy reference, resource-bound evidence reference and the privacy boundary | FND-003B3A | **DONE** (as corrected) | **ACCEPTED AND INTEGRATED.** Accepted state = **`913b1ac` + `f615ea6` + `f03fc99`**, fast-forwarded onto `main` by FND-003D1-MERGE-001 (2026-09-10) with no merge, squash, rebase or amend commit. `main` is now **`f03fc99`**. Reports: [FND-003D1](FND-003D1-completion-report.md) + [FIX-001](FND-003D1-FIX-001-completion-report.md) + [FIX-002](FND-003D1-FIX-002-completion-report.md) · [delivery-proof boundary](../contracts/delivery-proof-boundary.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) · contract **0.7**. **No earlier commit alone is the accepted contract.** **References only** — no proof mechanism, no satisfaction rule, no command, state, event or permission. Successful delivery remains **not executable** |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
 
@@ -489,6 +489,57 @@ resolution stays non-executable, every effect stays NONE, and `delivered`,
 customer custody and rider `completed` stay unreachable. **The corrected
 two-commit candidate is not accepted for merge** — it requires a new, separate
 read-only final acceptance review.
+
+**FND-003D2B-FIX-002 — DONE (2026-09-11).** FND-003D2B-FINAL-REVIEW-002 found
+two further defects in the same unreleased 0.9 candidate. Both are corrected in
+one follow-up commit; **the contract stays at 0.9**.
+
+**The second one is the serious one, and it was a real bypass.** The executable
+evaluators took a server-derived `Principal` and *documented* that
+`evaluateAuthorization` had already run — but a pure function cannot assert
+anything about its caller. Nothing in either signature distinguished an
+authorized call from one that skipped the check, so a customer who owned nothing
+could reach a raise transition, and a customer-only principal could reach a
+review transition. A FIX-001 test had even *asserted* that bypass as intended
+behaviour ("authorization already ran, and re-running it here would create a
+second place for it to drift") — the reasoning was right about policy and wrong
+about proof.
+
+FND-003A had already built the artifact that closes this, for exactly this
+purpose: `AuthorizationGrant` is `final`, has a library-private constructor and
+is obtainable **only** from a successful `evaluateAuthorization`. Both operations
+now require one, and `checkDisputeAuthorization` verifies it is bound to **this
+principal, this permission and this resource** — the same three bindings
+`ApprovalEvidence` needs. **No policy is re-decided**: role, membership status,
+scope and reason stay in `permissionMatrix`, which is neither copied nor
+changed, and an out-of-region admin or one with no reason simply never obtains a
+grant to present. One generic `authorizationGrantMismatch` denial (19 → **20**)
+keeps refusals unprobeable. **Raising confers no admin authority** — the
+historical raiser reaches review only by independently holding an admin grant,
+and no separation-of-duties rule returned. Freshness remains **R33–R40**, NOT
+RUN: a grant proves the decision was made, not that it is still current.
+
+`DeliveryProofDisputeContext` was **removed** rather than kept alongside it: the
+grant already names the canonical resource, and two sources of resource truth
+could disagree.
+
+The first defect was the standing calculation again, in the other direction.
+FIX-001 stopped a same-revision **verdict** contradiction; this stops a
+**higher-revision identity** one. Any revision above the basis was reported
+`superseded`, including a revision-2 record that reused the exact assessment id
+the basis pinned. ADR-0009 gives every reassessment a new opaque id, so that is
+impossible history — and the aggregate is **structurally canonical**, which is
+why no shape check caught it. It now answers `indeterminate`, using the current
+record only: no in-memory history array and no global uniqueness lookup, because
+uniqueness across superseded records is **DPA11**, NOT RUN.
+
+Both corrections carry negative controls (**NC4**, **NC5**), and the earlier
+NC1–NC3 protections were re-verified after the restructure. All evidence
+classifications are unchanged: **DPD1–DPD12 remain NOT RUN**,
+`Permission.values` stays **38**, resolution stays non-executable and
+zero-argument, every effect stays NONE, and `delivered`, customer custody and
+rider `completed` stay unreachable. **The corrected three-commit candidate is
+not accepted for merge.**
 
 **Remaining slices:**
 

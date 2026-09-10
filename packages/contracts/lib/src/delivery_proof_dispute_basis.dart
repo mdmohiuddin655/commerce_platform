@@ -255,10 +255,12 @@ enum DeliveryProofDisputeBasisStanding {
   /// No trustworthy comparison is possible.
   ///
   /// Reached when the basis is malformed, when the assessment aggregate is
-  /// **torn or corrupt**, when the two describe different orders, or when the
+  /// **torn or corrupt**, when the two describe different orders, when the
   /// current aggregate sits at a revision *earlier* than the basis — which the
   /// append-only model cannot produce and therefore means a partial or stale
-  /// load.
+  /// load — or when the current record's **identity contradicts** the basis:
+  /// the same id at a different revision, or the same revision carrying a
+  /// different verdict.
   ///
   /// **Corruption is never reported as [current] or [superseded]**, for the
   /// same reason `canonicalVerdict` never downgrades a torn aggregate to
@@ -285,6 +287,14 @@ enum DeliveryProofDisputeBasisStanding {
 /// > converted to `superseded` (nothing superseded it), not converted to
 /// > `notSatisfied` (nobody reached that verdict), and the basis is not
 /// > rewritten.
+///
+/// > **The same rule binds a *higher* revision.** *(FND-003D2B-FIX-002.)* A
+/// > later revision that **reuses the basis's assessment id** is equally
+/// > impossible — ADR-0009 requires a new id for every reassessment — and was
+/// > being reported as a legitimate `superseded`. It is now `indeterminate`
+/// > too. Identity is checked in **both** directions: the same id may not
+/// > reappear at a different revision, and the same revision may not carry a
+/// > different meaning.
 DeliveryProofDisputeBasisStanding resolveDeliveryProofDisputeBasisStanding({
   required DeliveryProofDisputeBasis basis,
   required DeliveryProofAssessmentFacts assessment,
@@ -307,6 +317,26 @@ DeliveryProofDisputeBasisStanding resolveDeliveryProofDisputeBasisStanding({
     return DeliveryProofDisputeBasisStanding.indeterminate;
   }
   if (assessment.assessmentRevision > basis.assessmentRevision) {
+    // A later revision **must** carry a different assessment id.
+    //
+    // *(Corrected by FND-003D2B-FIX-002.)* Advancing the revision was
+    // originally treated as enough to report `superseded`. It is not: ADR-0009
+    // gives every reassessment a **new opaque id**, so a higher revision whose
+    // current record reuses the exact id this basis pinned is impossible
+    // history — the identity the dispute anchored to would have to exist twice,
+    // at two revisions, with whatever verdicts each carried. Certifying that as
+    // a legitimate supersession would let a reused id quietly erase which
+    // assessment was actually contested.
+    //
+    // This compares the basis against the **current** record only. It invents
+    // no in-memory history array and needs no global uniqueness lookup —
+    // historical id uniqueness across records that are no longer current is a
+    // storage guarantee (**DPA11**, NOT RUN), and this check is the part a pure
+    // aggregate genuinely can make.
+    final DeliveryProofAssessmentRecord? later = assessment.current;
+    if (later == null || later.assessmentId == basis.assessmentId) {
+      return DeliveryProofDisputeBasisStanding.indeterminate;
+    }
     return DeliveryProofDisputeBasisStanding.superseded;
   }
 

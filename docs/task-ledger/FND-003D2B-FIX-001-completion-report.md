@@ -406,3 +406,34 @@ confirmation still may not be coded.
 None new. Unchanged and still outstanding: **O6** (currency, fee policy,
 commission ownership — blocks FND-003C and any dispute outcome) and **O7**
 (branch protection / CI governance on `main`).
+
+---
+
+# SUPERSEDED IN PART BY FND-003D2B-FIX-002
+
+**Appended by FND-003D2B-FIX-002 (2026-09-11). Nothing above is rewritten.**
+
+FND-003D2B-FINAL-REVIEW-002 found that **two claims in this report were
+incomplete**, and the candidate it produced (`ded1aa79`) is therefore also not
+acceptable on its own.
+
+1. **§2 finding 1 — "identity is not meaning" was only half the rule.** This
+   report closed the *same-revision verdict* contradiction and left the
+   *higher-revision identity* one open: any revision above the basis still
+   returned `superseded`, including one whose current record reused the basis's
+   assessment id. FIX-002 closes it — that case is now `indeterminate`.
+
+2. **§2 finding 3 — "the evaluator is not the authorization boundary" was
+   asserted, not enforced.** This report's regression
+   *"it duplicates no scope, role or reason check"* actively asserted that a
+   principal who owns nothing "still evaluates here". That was the bypass, not
+   a feature: a non-owner customer could raise, and a customer-only principal
+   could review. FIX-002 requires FND-003A's unforgeable `AuthorizationGrant`
+   on both operations, and that test has been rewritten to assert the correct,
+   narrower property: the evaluator **requires** the canonical decision without
+   re-deciding it.
+
+Everything else in this report — the removal of the invented `reviewerIsRaiser`
+rule, the per-operation read-sets, the `basisFrom` removal, the NOT RUN
+classifications and the git hygiene — stands unchanged and was re-verified by
+FIX-002's negative controls.

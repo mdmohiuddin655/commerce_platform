@@ -58,6 +58,7 @@
 /// | File | Responsibility |
 /// |---|---|
 /// | `…_state.dart` | handling states and the reachable revision per state |
+/// | `…_authorization.dart` | binding an operation to a canonical authorization success |
 /// | `…_basis.dart` | what was disputed, and how that basis stands today |
 /// | `…_command.dart` | named operations, their permissions, and the events |
 /// | `…_denial.dart` | refusal vocabulary (internal, never returned verbatim) |
@@ -68,7 +69,7 @@
 /// | `…_evaluator.dart` | one pure evaluator per operation, each with its own read-set |
 ///
 /// The dependency graph is acyclic and flows one way: vocabulary → model →
-/// shapes → validation → evaluator. No file imports an app or the backend, and
+/// shapes → validation → authorization → evaluator. No file imports an app or the backend, and
 /// no validation rule is duplicated — identifier rules come from `ids.dart`,
 /// the assessment's canonical shape and verdict access from the FND-003D2A
 /// module, and the order's from its own canonical validator.
@@ -76,6 +77,7 @@
 /// See `docs/contracts/delivery-proof-dispute.md`.
 library;
 
+export 'package:cp_contracts/src/delivery_proof_dispute_authorization.dart';
 export 'package:cp_contracts/src/delivery_proof_dispute_basis.dart';
 export 'package:cp_contracts/src/delivery_proof_dispute_command.dart';
 export 'package:cp_contracts/src/delivery_proof_dispute_denial.dart';

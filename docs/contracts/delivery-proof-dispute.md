@@ -1,7 +1,7 @@
 # Fallback delivery-proof dispute
 
 **Contract version 0.9** (FND-003D2B, corrected in place by
-**FND-003D2B-FIX-001**). Source of truth: the module behind the stable barrel
+**FND-003D2B-FIX-001** and **FND-003D2B-FIX-002**). Source of truth: the module behind the stable barrel
 `packages/contracts/lib/src/delivery_proof_dispute.dart`.
 
 FND-003D1 gave the platform a way to *refer to* a proof policy and to protected
@@ -108,6 +108,30 @@ nothing superseded it, the revision never moved — **not** converted to
 `notSatisfied`, and the basis is **not** rewritten. The contradiction is a
 reconciliation case, exactly like a torn aggregate.
 
+### An id is never reusable, at any revision
+
+*(Corrected by FND-003D2B-FIX-002.)* The same rule binds a **higher** revision.
+Advancing the revision was originally enough to report `superseded`; it is not,
+because ADR-0009 gives every reassessment a **new opaque id**. A revision-2
+record that carries the id this basis pinned would mean the contested identity
+exists twice, and certifying it as a legitimate supersession would let a reused
+id quietly erase which assessment was actually contested.
+
+```text
+basis   notSatisfied / A / rev 1
+current              / A / rev 2   -> indeterminate   (impossible history)
+current              / B / rev 2   -> superseded      (a real reassessment)
+```
+
+That aggregate is **structurally canonical** — the shape validator passes and
+`canonicalVerdict` answers — which is exactly why no shape check could catch it.
+It is a *relationship* contradiction between the basis and the history.
+
+The comparison uses the **current record only**. It invents no in-memory history
+array and needs no global uniqueness lookup: uniqueness across records that are
+no longer current is a storage guarantee (**DPA11**, NOT RUN), and this is the
+part a pure aggregate genuinely can check.
+
 **A later `satisfied` assessment does not dismiss the dispute.** Deciding that
 would be deciding the outcome.
 
@@ -125,14 +149,14 @@ would be deciding the outcome.
 | `DeliveryProofDisputeEventType` | two event ids |
 | `DeliveryProofDisputeRecord` | one dispute as currently recorded |
 | `DeliveryProofDisputeFacts` | the aggregate: current record + its own revision |
-| `DeliveryProofDisputeContext` | the canonical resource, resolved server-side |
 | `DeliveryProofDisputeRaiseRequest` | what a raise pins: dispute, assessment and order revisions |
 | `DeliveryProofDisputeReviewRequest` | what review pins: **the dispute revision, and nothing else** |
 | `DeliveryProofDisputeTransition` | the record to store, and every effect as NONE |
 | `DeliveryProofDisputeOutcome` | allow or deny, with `isPolicyDeferred` |
-| `DeliveryProofDisputeDenial` | 19 refusal reasons — internal, never returned verbatim |
+| `DeliveryProofDisputeDenial` | 20 refusal reasons — internal, never returned verbatim |
 | `validateDeliveryProofDisputeAggregate` | canonical stored shape |
 | `canonicalState` / `canonicalBasis` | trusted access, canonical aggregates only |
+| `checkDisputeAuthorization` | binds an operation to a canonical authorization success |
 | `evaluateRaiseDeliveryProofDispute` | the raise evaluator |
 | `evaluateRecordDeliveryProofDisputeReview` | the review evaluator |
 | `evaluateResolveDeliveryProofDispute` | **takes no arguments**; always refuses |
@@ -146,8 +170,8 @@ precondition.**
 
 | Operation | Reads |
 |---|---|
-| `evaluateRaiseDeliveryProofDispute` | resource, dispute, **assessment**, **order** |
-| `evaluateRecordDeliveryProofDisputeReview` | resource, dispute |
+| `evaluateRaiseDeliveryProofDispute` | **grant**, dispute, **assessment**, **order** |
+| `evaluateRecordDeliveryProofDisputeReview` | **grant**, dispute |
 | `evaluateResolveDeliveryProofDispute` | **nothing at all** |
 
 The read-set is now part of the contract rather than a convention, and a test
@@ -161,6 +185,7 @@ every consumer keep one import path:
 | File | Responsibility |
 |---|---|
 | `…_state.dart` | handling states and the reachable revision per state |
+| `…_authorization.dart` | binding an operation to a canonical authorization success |
 | `…_basis.dart` | what was disputed, and how that basis stands today |
 | `…_command.dart` | named operations, their permissions, and the events |
 | `…_denial.dart` | refusal vocabulary |
@@ -232,7 +257,7 @@ closed.
 
 | # | Check | Denial |
 |---|---|---|
-| 1 | canonical `resourceId` is a valid opaque id | `resourceBindingMismatch` |
+| 1 | canonical authorization grant for `customer.dispute.raise`, this principal, this resource | `authorizationGrantMismatch` |
 | 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
 | 2 | the **assessment** aggregate validates | `assessmentAggregateInconsistent` |
 | 2 | the **order** aggregate validates | `orderAggregateInconsistent` |
@@ -252,7 +277,7 @@ closed.
 
 | # | Check | Denial |
 |---|---|---|
-| 1 | canonical `resourceId` is a valid opaque id | `resourceBindingMismatch` |
+| 1 | canonical authorization grant for `admin.dispute.administer`, this principal, this resource | `authorizationGrantMismatch` |
 | 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
 | 3 | it names the canonical order | `resourceBindingMismatch` |
 | 4 | dispute revision compare-and-set | `disputeRevisionConflict` |
@@ -266,6 +291,52 @@ closed.
 
 **Resolve** — no table, because it reads nothing: always
 `resolutionPolicyDeferred`.
+
+### Authorization is required, and is still FND-003A's
+
+*(Added by FND-003D2B-FIX-002.)* Both executable operations take an
+**`AuthorizationGrant`** — the artifact FND-003A made unforgeable (`final`,
+library-private constructor) precisely so downstream steps could rely on it,
+and obtainable **only** from a successful `evaluateAuthorization`.
+
+The previous signatures took a bare `Principal` and *documented* that
+authorization had already run. **A pure function cannot assert that about its
+caller.** Nothing distinguished an authorized call from one that skipped the
+check, so a **non-owner customer could reach a raise transition** and a
+**customer-only principal could reach a review transition**.
+
+What is verified here is only that the grant in hand **is the right grant**:
+
+```text
+grant.permission  == the operation's requiredPermission
+grant.principalId == the acting principal
+grant.resourceId  == the canonical resource, and a valid opaque id
+```
+
+Role, membership status, scope and reason are **not** re-checked: they live in
+`permissionMatrix` and are decided in exactly one place. An out-of-region admin,
+an inactive member, a wrong-role principal or an admin who supplied no reason
+simply never obtains the grant, so there is nothing for them to present. The
+matrix is not copied, and `Permission.values` stays at **38**.
+
+One **generic** denial covers every failure — `authorizationGrantMismatch` —
+because a caller must not be able to probe for a resource's existence, owner or
+scope by comparing refusals, exactly as `AuthorizationDecision.publicMessage` is
+uniform. There is no forgeable `isAuthorized` boolean, no client-supplied role
+or permission, and no authorization data on any command payload.
+
+> **Freshness is still the backend's.** FND-003A-FIX-003 requires fresh
+> authorization on every request including replays and forbids caching or
+> reusing a grant. A grant proves `evaluateAuthorization` allowed *those
+> inputs*; that they were current is **R33–R40**, NOT RUN.
+
+**Raising confers no admin authority.** The historical raiser reaches review
+only by independently holding an admin grant of their own — which is a fact
+about that principal's membership, not about the dispute.
+
+**The grant carries the canonical resource**, so `DeliveryProofDisputeContext`
+was removed: two sources of resource truth could disagree, and the one bound to
+the authorization decision must win.
 
 ### Why review does not check the assessment or the order
 
@@ -496,7 +567,6 @@ a log-injection and amplification surface reachable **before** validation.
 |---|---|---|
 | `DeliveryProofDisputeBasis` | kind + bounded canonical ids | `DeliveryProofDisputeBasis(invalid)` |
 | `DeliveryProofDisputeRecord` | bounded canonical ids + state | `DeliveryProofDisputeRecord(invalid)` |
-| `DeliveryProofDisputeContext` | bounded canonical id | `DeliveryProofDisputeContext(invalid)` |
 | `DeliveryProofDisputeTransition` | command, state, revision, id | `DeliveryProofDisputeTransition(invalid)` |
 | `DeliveryProofDisputeOutcome` | delegates to the above | delegates — cannot reintroduce a raw field |
 

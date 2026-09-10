@@ -43,8 +43,75 @@ Principal worker([String id = outboxWorkerId]) => Principal.systemWorker(id);
 
 // ------------------------------------------------------------------- builders
 
-const DeliveryProofDisputeContext disputeContext =
-    DeliveryProofDisputeContext(resourceId: orderId);
+/// A **real** `AuthorizationGrant`, produced by running the canonical
+/// `evaluateAuthorization` — the only way one can be obtained.
+///
+/// *(Added by FND-003D2B-FIX-002.)* There is no shortcut here on purpose: the
+/// grant is `final` with a library-private constructor, so a test cannot
+/// fabricate one any more than production can. Every allow-path test therefore
+/// travels the same authorization path a backend would.
+AuthorizationGrant disputeGrant({
+  required Permission permission,
+  required String principalId,
+  required CommerceRole role,
+  String resourceId = orderId,
+  String ownerId = raiserId,
+  String memberRegion = region,
+  String resourceRegion = region,
+  MembershipStatus status = MembershipStatus.active,
+  String? reason = 'goods never arrived',
+}) {
+  final AuthorizationDecision decision = evaluateAuthorization(
+    AuthorizationRequest(
+      permission: permission,
+      scope: ResourceScope(
+        resourceId: resourceId,
+        ownerPrincipalId: ownerId,
+        shopId: shopId,
+        regionId: resourceRegion,
+      ),
+      principal: Principal.fromVerifiedSubject(principalId),
+      membership: Membership(
+        principalId: principalId,
+        role: role,
+        status: status,
+        regionId: memberRegion,
+      ),
+      reason: reason,
+    ),
+  );
+  final AuthorizationGrant? grant = decision.grant;
+  if (grant == null) {
+    throw StateError(
+      'fixture expected an allow but got ${decision.reason?.name}',
+    );
+  }
+  return grant;
+}
+
+/// The order owner's canonical grant for raising a dispute.
+AuthorizationGrant customerRaiseGrant({
+  String principalId = raiserId,
+  String resourceId = orderId,
+}) => disputeGrant(
+  permission: Permission.customerRaiseDispute,
+  principalId: principalId,
+  role: CommerceRole.customer,
+  resourceId: resourceId,
+  ownerId: principalId,
+);
+
+/// An in-region active administrator's canonical grant for administering a
+/// dispute, with the required reason.
+AuthorizationGrant adminAdministerGrant({
+  String principalId = adminId,
+  String resourceId = orderId,
+}) => disputeGrant(
+  permission: Permission.adminAdministerDispute,
+  principalId: principalId,
+  role: CommerceRole.admin,
+  resourceId: resourceId,
+);
 
 /// Canonical absence for one order: never disputed.
 const DeliveryProofDisputeFacts noDispute = DeliveryProofDisputeFacts.absent(
@@ -172,8 +239,8 @@ DeliveryProofDisputeFacts reviewedDispute({
 DeliveryProofDisputeOutcome runRaise({
   String disputeId = disputeA,
   Principal? actor,
+  AuthorizationGrant? grant,
   DateTime? at,
-  DeliveryProofDisputeContext context = disputeContext,
   DeliveryProofDisputeFacts? dispute,
   DeliveryProofAssessmentFacts? assessment,
   OrderLifecycleFacts? order,
@@ -194,7 +261,7 @@ DeliveryProofDisputeOutcome runRaise({
       expectedOrderRevision: expectedOrderRevision ?? o.revision,
     ),
     actor: actor ?? customer(),
-    context: context,
+    grant: grant ?? customerRaiseGrant(),
     dispute: d,
     assessment: a,
     order: o,
@@ -210,20 +277,21 @@ DeliveryProofDisputeOutcome runRaise({
 DeliveryProofDisputeOutcome runReview({
   String disputeId = disputeA,
   Principal? actor,
+  AuthorizationGrant? grant,
   DateTime? at,
-  DeliveryProofDisputeContext context = disputeContext,
   DeliveryProofDisputeFacts? dispute,
   int? expectedDisputeRevision,
 }) {
   final DeliveryProofDisputeFacts d = dispute ?? openDispute();
+  final Principal a = actor ?? admin();
   return evaluateRecordDeliveryProofDisputeReview(
     request: DeliveryProofDisputeReviewRequest(
       disputeId: disputeId,
       atUtc: at ?? reviewedAt,
       expectedDisputeRevision: expectedDisputeRevision ?? d.disputeRevision,
     ),
-    actor: actor ?? admin(),
-    context: context,
+    actor: a,
+    grant: grant ?? adminAdministerGrant(principalId: a.id),
     dispute: d,
   );
 }

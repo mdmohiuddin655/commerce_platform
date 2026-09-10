@@ -1,5 +1,4 @@
 import 'package:cp_contracts/src/delivery_proof_dispute_record.dart';
-import 'package:cp_contracts/src/ids.dart';
 import 'package:meta/meta.dart';
 
 /// The fallback dispute aggregate for one order, as loaded from storage.
@@ -56,42 +55,15 @@ class DeliveryProofDisputeFacts {
   bool get hasCurrentRecord => current != null;
 }
 
-/// Canonical identity of the delivery whose proof situation is being disputed,
-/// resolved **server-side**.
+/// **The canonical resource comes from the authorization grant.**
 ///
-/// ```text
-/// order resource id
-///   -> trusted current order / assessment / dispute read-set
-///   -> DeliveryProofDisputeContext
-/// ```
-///
-/// > **Not authority.** This is the shape the backend fills from canonical
-/// > storage, and passing one proves nothing about trust. Fresh authorization
-/// > on every request, including replays, remains FND-003A's and the backend's
-/// > — this contract duplicates none of it.
-///
-/// It carries the resource and nothing else. In particular it does **not**
-/// carry the customer's principal id: whether the actor owns the order is
-/// `ScopeRequirement.ownResource`'s question, answered by
-/// `evaluateAuthorization` against trusted scope, and answering it a second
-/// time here would create a second place for it to drift.
-@immutable
-class DeliveryProofDisputeContext {
-  const DeliveryProofDisputeContext({required this.resourceId});
-
-  /// The order. Validated with the repository's canonical opaque-id rule.
-  final String resourceId;
-
-  /// Whether this context is itself usable. Nothing is trimmed or repaired.
-  bool get isWellFormed => isValidOpaqueId(resourceId);
-
-  /// A **debug representation, and never a validity claim.** A malformed
-  /// context renders no field.
-  @override
-  String toString() => isWellFormed
-      ? 'DeliveryProofDisputeContext($resourceId)'
-      : 'DeliveryProofDisputeContext(invalid)';
-}
+/// *(FND-003D2B-FIX-002 removed `DeliveryProofDisputeContext`.)* It carried a
+/// resource id and nothing else, and once the executable evaluators began
+/// requiring an `AuthorizationGrant` — which already names the exact resource
+/// `evaluateAuthorization` allowed the actor to act on — keeping it would have
+/// meant **two sources of canonical resource truth that could disagree**. The
+/// one bound to the authorization decision is the one that must win, so the
+/// other was deleted rather than left as a second shape to keep in step.
 
 /// What a **raise** consumes, beyond the facts themselves.
 ///
