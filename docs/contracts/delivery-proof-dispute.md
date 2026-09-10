@@ -1,7 +1,8 @@
 # Fallback delivery-proof dispute
 
-**Contract version 0.9** (FND-003D2B). Source of truth: the module behind the
-stable barrel `packages/contracts/lib/src/delivery_proof_dispute.dart`.
+**Contract version 0.9** (FND-003D2B, corrected in place by
+**FND-003D2B-FIX-001**). Source of truth: the module behind the stable barrel
+`packages/contracts/lib/src/delivery_proof_dispute.dart`.
 
 FND-003D1 gave the platform a way to *refer to* a proof policy and to protected
 evidence. FND-003D2A added the trusted, immutable *result* of evaluating one.
@@ -77,12 +78,35 @@ resolveDeliveryProofDisputeBasisStanding(basis: ..., assessment: ...)
 
 | Standing | Meaning |
 |---|---|
-| `current` | the recorded basis is still exactly what the assessment aggregate says |
+| `current` | the recorded basis is still exactly what the assessment aggregate says — **same id, same revision and the same verdict** |
 | `superseded` | the assessment history has moved on; the basis stays historically identifiable and is **never rewritten** |
-| `indeterminate` | malformed basis, torn assessment, mixed resources, or an aggregate sitting *behind* the basis — a partial or stale load |
+| `indeterminate` | malformed basis, torn assessment, mixed resources, an aggregate sitting *behind* the basis, or a **same-id/same-revision verdict contradiction** |
 
 **Corruption is never reported as `current` or `superseded`**, for the same
 reason `canonicalVerdict` never downgrades a torn aggregate to `notSatisfied`.
+
+### Identity is not meaning
+
+*(Corrected by FND-003D2B-FIX-001.)* Matching the assessment id and revision was
+originally treated as enough to report `current`. **It is not.** ADR-0009 gives
+every reassessment a **new opaque id and the next revision**, so assessment A at
+revision 1 can never legitimately change verdict. A basis recorded as
+`notSatisfied` against A/1, compared with a *structurally canonical* A/1 that now
+reads `satisfied`, is a self-contradictory history — and was being certified as
+"still current".
+
+At the same revision the standing therefore requires **all three** to agree:
+
+```text
+assessment id       exact match
+assessment revision exact match
+canonical verdict   still notSatisfied
+```
+
+A mismatch answers `indeterminate`. It is **not** converted to `superseded` —
+nothing superseded it, the revision never moved — **not** converted to
+`notSatisfied`, and the basis is **not** rewritten. The contradiction is a
+reconciliation case, exactly like a torn aggregate.
 
 **A later `satisfied` assessment does not dismiss the dispute.** Deciding that
 would be deciding the outcome.
@@ -102,13 +126,32 @@ would be deciding the outcome.
 | `DeliveryProofDisputeRecord` | one dispute as currently recorded |
 | `DeliveryProofDisputeFacts` | the aggregate: current record + its own revision |
 | `DeliveryProofDisputeContext` | the canonical resource, resolved server-side |
-| `DeliveryProofDisputeRequest` | three constructors, one per operation |
+| `DeliveryProofDisputeRaiseRequest` | what a raise pins: dispute, assessment and order revisions |
+| `DeliveryProofDisputeReviewRequest` | what review pins: **the dispute revision, and nothing else** |
 | `DeliveryProofDisputeTransition` | the record to store, and every effect as NONE |
 | `DeliveryProofDisputeOutcome` | allow or deny, with `isPolicyDeferred` |
-| `DeliveryProofDisputeDenial` | 20 refusal reasons — internal, never returned verbatim |
+| `DeliveryProofDisputeDenial` | 19 refusal reasons — internal, never returned verbatim |
 | `validateDeliveryProofDisputeAggregate` | canonical stored shape |
 | `canonicalState` / `canonicalBasis` | trusted access, canonical aggregates only |
-| `evaluateDeliveryProofDispute` | the pure evaluator |
+| `evaluateRaiseDeliveryProofDispute` | the raise evaluator |
+| `evaluateRecordDeliveryProofDisputeReview` | the review evaluator |
+| `evaluateResolveDeliveryProofDispute` | **takes no arguments**; always refuses |
+
+### One evaluator per operation, one read-set per evaluator
+
+*(Restructured by FND-003D2B-FIX-001.)* These were a single
+`evaluateDeliveryProofDispute` taking every aggregate for every operation, and
+that is exactly the trap: **a shared read-set silently becomes a shared
+precondition.**
+
+| Operation | Reads |
+|---|---|
+| `evaluateRaiseDeliveryProofDispute` | resource, dispute, **assessment**, **order** |
+| `evaluateRecordDeliveryProofDisputeReview` | resource, dispute |
+| `evaluateResolveDeliveryProofDispute` | **nothing at all** |
+
+The read-set is now part of the contract rather than a convention, and a test
+that tries to hand review an assessment or an order **does not compile**.
 
 ### Module layout
 
@@ -122,10 +165,10 @@ every consumer keep one import path:
 | `…_command.dart` | named operations, their permissions, and the events |
 | `…_denial.dart` | refusal vocabulary |
 | `…_record.dart` | one dispute as currently recorded |
-| `…_facts.dart` | the aggregate, the server-resolved context and the request |
+| `…_facts.dart` | the aggregate, the server-resolved context and the per-operation requests |
 | `…_validation.dart` | canonical aggregate shape and trusted access |
 | `…_transition.dart` | the permitted operation and its all-NONE effects |
-| `…_evaluator.dart` | the pure evaluator |
+| `…_evaluator.dart` | one pure evaluator per operation, each with its own read-set |
 
 The graph is **acyclic** and flows one way: vocabulary → model → shapes →
 validation → evaluator. **No validation rule is duplicated** — identifier rules
@@ -182,31 +225,73 @@ evidence is here at all.**
 
 ## 5. Integrity — fail closed
 
-Checks run in this order, and every one of them fails closed:
+Each operation checks **only what it reads**, in order, and every check fails
+closed.
+
+**Raise** — pins the whole read-set its basis comes from:
 
 | # | Check | Denial |
 |---|---|---|
-| 0 | the operation is executable at all | `resolutionPolicyDeferred` |
 | 1 | canonical `resourceId` is a valid opaque id | `resourceBindingMismatch` |
 | 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
 | 2 | the **assessment** aggregate validates | `assessmentAggregateInconsistent` |
 | 2 | the **order** aggregate validates | `orderAggregateInconsistent` |
 | 3 | both aggregates name the canonical order | `resourceBindingMismatch` |
 | 4 | dispute revision compare-and-set | `disputeRevisionConflict` |
+| 4 | assessment revision compare-and-set | `assessmentRevisionConflict` |
 | 4 | order revision compare-and-set | `orderRevisionConflict` |
-| 4 | assessment revision compare-and-set (**raise only**) | `assessmentRevisionConflict` |
 | 5 | the actor is a human principal | `actorNotHumanPrincipal` |
 | 5 | the timestamp is UTC | `timestampNotUtc` |
 | 6 | order is `in_delivery` | `orderNotInDelivery` |
 | 6 | reservation is `committed` | `reservationNotCommitted` |
 | 7 | `disputeId` is a valid opaque id | `disputeIdInvalid` |
-| 8 | **raise:** no dispute already exists | `disputeAlreadyOpen` |
-| 8 | **raise:** the assessment is a fallback ground | `assessmentSatisfied` |
-| 8 | **review:** a dispute exists | `disputeNotFound` |
-| 8 | **review:** it is the named dispute | `disputeIdMismatch` |
-| 8 | **review:** it is still `open` | `disputeNotOpen` |
-| 8 | **review:** the reviewer is not the raiser | `reviewerIsRaiser` |
-| 8 | **review:** review does not precede the raise | `reviewTimestampPrecedesRaise` |
+| 8 | no dispute already exists | `disputeAlreadyOpen` |
+| 9 | the assessment is a fallback ground | `assessmentSatisfied` |
+
+**Record review started** — the dispute, and nothing else:
+
+| # | Check | Denial |
+|---|---|---|
+| 1 | canonical `resourceId` is a valid opaque id | `resourceBindingMismatch` |
+| 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
+| 3 | it names the canonical order | `resourceBindingMismatch` |
+| 4 | dispute revision compare-and-set | `disputeRevisionConflict` |
+| 5 | the actor is a human principal | `actorNotHumanPrincipal` |
+| 5 | the timestamp is UTC | `timestampNotUtc` |
+| 6 | `disputeId` is a valid opaque id | `disputeIdInvalid` |
+| 6 | a dispute exists | `disputeNotFound` |
+| 6 | it is the named dispute | `disputeIdMismatch` |
+| 7 | it is still `open` | `disputeNotOpen` |
+| 8 | review does not precede the raise | `reviewTimestampPrecedesRaise` |
+
+**Resolve** — no table, because it reads nothing: always
+`resolutionPolicyDeferred`.
+
+### Why review does not check the assessment or the order
+
+*(Corrected by FND-003D2B-FIX-001.)* It used to. The shared evaluator validated
+the current assessment, validated the current order, compared the order's
+revision, and required `in_delivery` and `committed` before it would record that
+review started — **none of which that operation reads or changes.**
+
+An open dispute is already canonical and already carries its immutable basis.
+Beginning to review it moves no order, no custody, no assignment, no assessment,
+no stock and no money. Requiring the surrounding lifecycle to be unchanged meant
+a reassessment, a torn assessment read, or an unrelated order write **after a
+validly raised dispute** could freeze it out of review. A fallback that stops
+working when the thing it is a fallback for changes is not a fallback.
+
+**Nothing about a delivery, refusal or return may be inferred from that
+independence.** It says only that review may begin.
+
+**There is also no separation-of-duties rule.** The candidate denied
+`reviewerIsRaiser` when the reviewing principal had earlier raised the dispute.
+No accepted contract asks for that: `admin.dispute.administer` requires an
+active admin membership, `ownRegion` scope and a stored reason, and carries
+`approvalRequired: false`. A denial nobody decided is an invented authorization
+policy, so it was removed from the evaluator, the record validator, the denial
+vocabulary and the tests. **If separation of duties is ever wanted it needs its
+own permission and ADR** — it is not smuggled in here.
 
 Each aggregate keeps **its own** corruption denial, so a log never has to guess
 which one was torn — and, critically, so a torn *assessment* can never be
@@ -263,11 +348,12 @@ record review started -> 1 -> 2   -> underReview
 `reachableSlotRevisionRange` — and with the same discipline: **a state with no
 defined cost returns null**, so every aggregate holding it fails closed.
 
-**Recording review deliberately cannot pin an assessment revision.** The request
-type has no such field on that constructor at all, because review must keep
-working after the basis has been superseded — exactly the situation this slice
-exists to handle. Making the field structurally absent is stronger than
-documenting that it is ignored.
+**Recording review pins the dispute revision, and only that.**
+`DeliveryProofDisputeReviewRequest` has **no assessment revision and no order
+revision**, because the operation reads neither aggregate and a compare-and-set
+on something you never read is meaningless. Making those fields structurally
+absent is stronger than documenting that they are ignored — and it is what stops
+a reassessment freezing a validly raised dispute out of review.
 
 **Correct revisions never bypass identity, state or eligibility checks.** They
 run in addition, not instead, and tests pin that.
@@ -443,6 +529,7 @@ Therefore:
 | Delivery, refusal or return consequence of a dispute | **DEFERRED** | **FND-003B3B** |
 | Any fee, refund, compensation, liability or settlement | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
 | Withdrawal, closure, expiry, escalation, reassignment of a dispute | **NOT INVENTED** | resolution slice |
+| **Separation of duties** between raiser and reviewer | **NOT DECIDED** — an invented `reviewerIsRaiser` denial was removed by FND-003D2B-FIX-001; the accepted permission requires no approval | future permission + ADR |
 | SLA, deadline or response window | **NOT INVENTED** | operational policy |
 | Proof mechanism (OTP/QR/signature/photo/GPS/biometric/attestation) | **DEFERRED** — none selected, named or implied | proof-policy slice |
 | What a proof policy actually requires | **DEFERRED** | proof-policy slice |

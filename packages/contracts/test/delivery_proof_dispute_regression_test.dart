@@ -427,8 +427,15 @@ class Sample {
       expect(DeliveryProofDisputeBasisStanding.values.length, 3);
       expect(DeliveryProofDisputeCommand.values.length, 3);
       // Pinned so `docs/contracts/delivery-proof-dispute.md` cannot drift from
-      // the vocabulary it documents.
-      expect(DeliveryProofDisputeDenial.values.length, 20);
+      // the vocabulary it documents. 20 -> **19** at FND-003D2B-FIX-001, which
+      // removed the invented `reviewerIsRaiser`.
+      expect(DeliveryProofDisputeDenial.values.length, 19);
+      expect(
+        DeliveryProofDisputeDenial.values.map(
+          (DeliveryProofDisputeDenial d) => d.name,
+        ),
+        isNot(contains('reviewerIsRaiser')),
+      );
       expect(DeliveryProofDisputeEventType.all.length, 2);
       expect(reachableDisputeRevisionFor(DeliveryProofDisputeState.open), 1);
       expect(validateDeliveryProofDisputeAggregate(noDispute), isNull);

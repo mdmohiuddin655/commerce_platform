@@ -120,8 +120,10 @@ void main() {
       final DeliveryProofDisputeTransition raiseT = allowedDispute(
         runRaise(assessment: before),
       );
+      // Review does not even receive the assessment since FND-003D2B-FIX-001,
+      // which is the strongest form of "untouched" available.
       final DeliveryProofDisputeTransition reviewT = allowedDispute(
-        runReview(dispute: applyDispute(raiseT), assessment: before),
+        runReview(dispute: applyDispute(raiseT)),
       );
 
       // Same object, same revision, same verdict, same everything.

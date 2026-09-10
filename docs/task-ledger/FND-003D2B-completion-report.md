@@ -538,3 +538,65 @@ confirmation may be coded.
 None new. The outstanding ones this slice touches are unchanged: **O6**
 (currency, fee policy, commission ownership — blocks both FND-003C and any
 dispute outcome) and **O7** (branch protection / CI governance on `main`).
+
+---
+
+# FND-003D2B-FINAL-REVIEW-001 CORRECTION
+
+**Appended by FND-003D2B-FIX-001 (2026-09-11). Nothing above is deleted or
+rewritten — the incorrect statements stay visible, and this section corrects
+them.**
+
+FND-003D2B-FINAL-REVIEW-001 found **three material defects** in the candidate
+this report describes. `b94e5424` alone is therefore **not acceptable**, and the
+report's own status line ("implementation complete") must be read as
+**superseded**: FND-003D2B is **PARTIAL / FIX REQUIRED** until the corrected
+two-commit chain passes a new, separate read-only acceptance review.
+
+## What this report got wrong
+
+### 1. §4 "Supersession is a standing, never a rewrite" — fail-open
+
+The standing calculation compared only the assessment **id and revision**. A
+basis recorded as `notSatisfied` against assessment A revision 1 was reported
+**`current`** when the canonical A/1 read `satisfied` — a contradiction
+ADR-0009's append-only history cannot produce, certified as "still true".
+Corrected: the same-revision comparison now also requires the canonical verdict
+to still be `notSatisfied`, and a mismatch is `indeterminate`.
+
+### 2. §4 "One deliberate tightening, and its precedent" — withdrawn
+
+This report defended `reviewerIsRaiser` as a tightening with the dual-control
+precedent. **That defence was wrong.** `admin.dispute.administer` carries
+`approvalRequired: false` and requires only an active admin membership,
+`ownRegion` scope and a stored reason. No accepted contract asks for separation
+of duties, so the denial was an **invented authorization policy** — the thing
+this repository exists to prevent. It has been removed from the evaluator, the
+record validator, the denial vocabulary (**20 → 19**), the tests and the
+documentation. Flagging an invention in a report does not make it acceptable.
+
+### 3. §4 "What is deliberately not in the read-set" — incomplete
+
+The claim that custody and the rider assignment were excluded was true, but the
+report did not notice that **recording that review started still depended on the
+current assessment and the current order**: a canonical assessment aggregate, a
+canonical order aggregate, the order revision, `in_delivery` and `committed`.
+None of those is read or changed by that operation, so a reassessment or a torn
+assessment read after a validly raised dispute could freeze it out of review.
+Corrected: one evaluator per operation, each with its own read-set, enforced by
+the type system.
+
+## What in this report still stands
+
+The slice's boundaries are unchanged and were not the problem: no permission was
+added (`Permission.values` = 38), resolution remains enumerated and always
+`resolutionPolicyDeferred`, no outcome/fault/fee/refund/compensation/liability
+is decided, no proof mechanism exists, every effect remains NONE, `delivered`,
+customer custody and rider `completed` remain unreachable, **DPD1–DPD12 remain
+NOT RUN**, and the contract stays at **0.9**.
+
+The baseline, git-hygiene and NOT RUN sections of this report are accurate and
+are not modified. **No amend, rebase, squash or force-push was used**, then or
+now.
+
+Full detail: [FND-003D2B-FIX-001 report](FND-003D2B-FIX-001-completion-report.md).

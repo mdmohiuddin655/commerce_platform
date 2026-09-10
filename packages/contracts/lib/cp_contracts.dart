@@ -31,17 +31,23 @@
 ///   order, reservation, inventory, financial, custody and assignment effect is
 ///   NONE. It selects no proof mechanism, has no client-selectable permission,
 ///   and successful delivery remains **not** executable.
-/// - [evaluateDeliveryProofDispute] — the **fallback dispute workflow** for a
-///   missing, superseded or `notSatisfied` assessment: one customer-raised
-///   dispute per order, an immutable [DeliveryProofDisputeBasis] recording
-///   exactly what was contested, a
+/// - [evaluateRaiseDeliveryProofDispute],
+///   [evaluateRecordDeliveryProofDisputeReview] — the **fallback dispute
+///   workflow** for a missing, superseded or `notSatisfied` assessment: one
+///   customer-raised dispute per order, an immutable
+///   [DeliveryProofDisputeBasis] recording exactly what was contested, and a
 ///   [resolveDeliveryProofDisputeBasisStanding] calculation that reports
-///   supersession without rewriting history, and one administrator operation
-///   recording that review started. It **resolves nothing** — resolution is
-///   enumerated and refused `resolutionPolicyDeferred` — decides no outcome,
-///   fault, fee, refund, compensation, liability, return or delivery
-///   consequence, adds **no permission**, and touches no assessment, order,
-///   custody or assignment.
+///   supersession without rewriting history. **One evaluator per operation,
+///   each taking only the facts its own operation reads** — raising pins the
+///   assessment and order it depends on; recording that review started depends
+///   on the dispute alone, so a later reassessment cannot freeze a validly
+///   raised dispute out of review.
+/// - [evaluateResolveDeliveryProofDispute] — **enumerated and never
+///   executable**, always `resolutionPolicyDeferred`, taking no arguments at
+///   all because a deferred edge consumes nothing. The dispute workflow decides
+///   no outcome, fault, fee, refund, compensation, liability, return or
+///   delivery consequence, adds **no permission**, and touches no assessment,
+///   order, custody or assignment.
 ///
 /// What it deliberately does **not** define yet — later slices own these, and
 /// no feature may guess them:

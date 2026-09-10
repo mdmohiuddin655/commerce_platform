@@ -376,7 +376,12 @@ void main() {
       );
     });
 
-    test('self-review and out-of-order review are refused', () {
+    test('the reviewer may be the raiser — FND-003D2B-FIX-001', () {
+      // The candidate treated a record whose reviewer equalled its raiser as
+      // corrupt. That was an **invented separation-of-duties rule**: nothing in
+      // the accepted contract requires it, and `admin.dispute.administer`
+      // carries `approvalRequired: false`. A shape validator must not smuggle
+      // in an authorization policy nobody decided.
       expect(
         disputeRecord(
           disputeRevision: 2,
@@ -384,9 +389,11 @@ void main() {
           reviewStartedByPrincipalId: raiserId,
           reviewStartedAtUtc: reviewedAt,
         ).isWellFormed,
-        isFalse,
-        reason: 'self-review is no review',
+        isTrue,
       );
+    });
+
+    test('out-of-order review is still refused', () {
       expect(
         disputeRecord(
           disputeRevision: 2,

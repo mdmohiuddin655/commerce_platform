@@ -290,17 +290,85 @@ void main() {
       );
     });
 
-    test('self-review is refused', () {
-      expect(
-        runReview(actor: customer()).denial,
-        DeliveryProofDisputeDenial.reviewerIsRaiser,
+    test('no separation-of-duties rule is invented — FND-003D2B-FIX-001', () {
+      // The candidate previously denied `reviewerIsRaiser` when the reviewing
+      // principal had earlier raised the dispute. **No accepted contract asks
+      // for that.** `admin.dispute.administer` requires an active admin
+      // membership, `ownRegion` scope and a stored reason, and carries
+      // `approvalRequired: false` — so refusing on identity alone was an
+      // invented authorization policy, decided nowhere.
+      final PermissionRule rule =
+          permissionMatrix[Permission.adminAdministerDispute]!;
+      expect(rule.approvalRequired, isFalse);
+      expect(rule.reasonRequired, isTrue);
+      expect(rule.scopes, <ScopeRequirement>{ScopeRequirement.ownRegion});
+
+      // A dispute raised by principal X...
+      final DeliveryProofDisputeFacts raisedByAdmin = applyDispute(
+        allowedDispute(runRaise(actor: customer(adminId))),
       );
-      // A different administrator is fine.
+      expect(raisedByAdmin.canonicalState, DeliveryProofDisputeState.open);
+      expect(raisedByAdmin.current!.raisedByPrincipalId, adminId);
+
+      // ...and the SAME principal X, holding a valid active admin membership
+      // in the resource's region with a reason, passes canonical
+      // authorization. That is the accepted matrix's answer, and it is the one
+      // that counts.
+      expect(
+        decide(
+          permission: Permission.adminAdministerDispute,
+          principalId: adminId,
+          role: CommerceRole.admin,
+        ).allowed,
+        isTrue,
+      );
+
+      // The state machine must not add a second, private policy that refuses
+      // what canonical authorization allowed.
+      final DeliveryProofDisputeTransition t = allowedDispute(
+        runReview(dispute: raisedByAdmin, actor: admin()),
+      );
+      expect(t.resultingState, DeliveryProofDisputeState.underReview);
+      expect(t.record.reviewStartedByPrincipalId, adminId);
+      expect(t.record.raisedByPrincipalId, adminId);
+      expect(t.record.isWellFormed, isTrue);
+
+      // The denial vocabulary no longer contains the invented reason at all.
+      expect(
+        DeliveryProofDisputeDenial.values.map(
+          (DeliveryProofDisputeDenial d) => d.name,
+        ),
+        isNot(contains('reviewerIsRaiser')),
+      );
+
+      // A different administrator is of course still fine.
       expect(
         allowedDispute(
           runReview(actor: admin(otherAdminId)),
         ).record.reviewStartedByPrincipalId,
         otherAdminId,
+      );
+    });
+
+    test('a record whose reviewer is also the raiser is canonical', () {
+      // The same correction, at the shape validator: it must not smuggle the
+      // removed policy back in as a "corrupt record" rule.
+      final DeliveryProofDisputeRecord sameParty =
+          DeliveryProofDisputeRecord.reviewStarted(
+            previous: disputeRecord(raisedByPrincipalId: adminId),
+            reviewerPrincipalId: adminId,
+            atUtc: reviewedAt,
+          );
+      expect(sameParty.isWellFormed, isTrue);
+      expect(
+        validateDeliveryProofDisputeAggregate(
+          DeliveryProofDisputeFacts(
+            resourceId: orderId,
+            disputeRevision: 2,
+            current: sameParty,
+          ),
+        ),
+        isNull,
       );
     });
 
@@ -338,22 +406,32 @@ void main() {
     });
 
     test('no request type carries a principal, grant, role or reason', () {
-      final DeliveryProofDisputeRequest r = DeliveryProofDisputeRequest.raise(
-        disputeId: disputeA,
-        atUtc: raisedAt,
-        expectedDisputeRevision: 0,
-        expectedAssessmentRevision: 0,
-        expectedOrderRevision: 5,
-      );
-      expect(r.command, DeliveryProofDisputeCommand.raise);
+      final DeliveryProofDisputeRaiseRequest r =
+          DeliveryProofDisputeRaiseRequest(
+            disputeId: disputeA,
+            atUtc: raisedAt,
+            expectedDisputeRevision: 0,
+            expectedAssessmentRevision: 0,
+            expectedOrderRevision: 5,
+          );
       expect(r.disputeId, disputeA);
-      // The type exposes exactly six members; a reason or actor field would
+      // The type exposes exactly five members; a reason or actor field would
       // have to be added deliberately, and this test would then be updated
       // deliberately too.
       expect(r.expectedDisputeRevision, 0);
       expect(r.expectedAssessmentRevision, 0);
       expect(r.expectedOrderRevision, 5);
       expect(r.atUtc.isUtc, isTrue);
+
+      final DeliveryProofDisputeReviewRequest review =
+          DeliveryProofDisputeReviewRequest(
+            disputeId: disputeA,
+            atUtc: reviewedAt,
+            expectedDisputeRevision: 1,
+          );
+      expect(review.disputeId, disputeA);
+      expect(review.expectedDisputeRevision, 1);
+      expect(review.atUtc.isUtc, isTrue);
     });
   });
 }

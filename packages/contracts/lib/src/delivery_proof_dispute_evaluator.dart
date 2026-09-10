@@ -1,3 +1,51 @@
+/// Evaluators for the fallback delivery-proof dispute operations.
+///
+/// All are pure: no I/O, no clock, no storage. Wall-clock time and client
+/// arrival order are not concurrency control — server transaction and revision
+/// ordering decide races.
+///
+/// ## One evaluator per operation, and one read-set per evaluator
+///
+/// *(Restructured by FND-003D2B-FIX-001.)* These were originally a single
+/// `evaluateDeliveryProofDispute` taking every aggregate for every operation,
+/// and that is precisely why the correction matters: **a shared read-set
+/// silently becomes a shared precondition.** Recording that review started
+/// ended up requiring a canonical current assessment, a canonical current
+/// order, the order's revision, `in_delivery` and `committed` — **none of which
+/// that operation reads or changes**. A reassessment, or a torn assessment
+/// read, occurring after a validly raised dispute could therefore freeze it out
+/// of review. A fallback that stops working when the thing it is a fallback for
+/// changes is not a fallback.
+///
+/// Each function now takes **only the facts its own operation depends on**, so
+/// the read-set is part of the contract rather than a convention:
+///
+/// | Operation | Reads |
+/// |---|---|
+/// | [evaluateRaiseDeliveryProofDispute] | resource, dispute, **assessment**, **order** |
+/// | [evaluateRecordDeliveryProofDisputeReview] | resource, dispute |
+/// | [evaluateResolveDeliveryProofDispute] | **nothing at all** |
+///
+/// ## What these functions are not
+///
+/// They are **not** the authorization boundary. `evaluateAuthorization` has
+/// already run against the canonical matrix, with `customer.dispute.raise`'s
+/// `ownResource` scope, `admin.dispute.administer`'s `ownRegion` scope and both
+/// permissions' `reasonRequired`, and **fresh authorization on every request
+/// including replays remains FND-003A's and the backend's**. Repeating any of
+/// it here would create a second place for it to drift.
+///
+/// What they add is **context integrity**: that the facts describe one
+/// canonical order, that they are current, and that the operation is coherent
+/// with them.
+///
+/// They are also **not** a resolution. No outcome, finding, fault, liability,
+/// fee, refund, compensation, return route or delivery consequence is produced
+/// by any path through any of them.
+///
+/// Any condition not enumerated fails closed.
+library;
+
 import 'package:cp_contracts/src/delivery_proof_assessment_facts.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_record.dart';
 import 'package:cp_contracts/src/delivery_proof_assessment_validation.dart';
@@ -16,15 +64,12 @@ import 'package:cp_contracts/src/order_state.dart';
 import 'package:cp_contracts/src/principal.dart';
 import 'package:cp_contracts/src/reservation_state.dart';
 
-/// Evaluate one fallback delivery-proof dispute operation.
+/// Raise the fallback dispute against the **current canonical** proof
+/// situation.
 ///
-/// Pure: no I/O, no clock, no storage. Wall-clock time and client arrival order
-/// are not concurrency control — server transaction and revision ordering
-/// decide races.
-///
-/// Every aggregate is supplied as trusted current facts read in **one
-/// consistent transaction** (**DPD3**). Passing them proves nothing about
-/// trust; they are the shapes the backend fills from canonical storage.
+/// Raising is the operation that *derives* a basis, so it pins the whole
+/// read-set that basis comes from: the assessment it is recorded against, and
+/// the order whose delivery is in flight. A stale view of either is refused.
 ///
 /// [actor] is the principal the backend derived from **verified**
 /// authentication, and it arrives separately from [request] on purpose: a
@@ -33,56 +78,19 @@ import 'package:cp_contracts/src/reservation_state.dart';
 /// refuses everything that is not a trusted verifier — here only a **person**
 /// may act, because a dispute is a claim someone makes.
 ///
-/// ## What this function is not
-///
-/// It is **not** the authorization boundary. `evaluateAuthorization` has
-/// already run against the canonical matrix, with `customer.dispute.raise`'s
-/// `ownResource` scope, `admin.dispute.administer`'s `ownRegion` scope and both
-/// permissions' `reasonRequired`. Repeating any of that here would create a
-/// second place for it to drift. What this function adds is **context
-/// integrity**: that the facts describe one canonical order, that they are
-/// current, and that the operation is coherent with them.
-///
-/// It is also **not** a resolution. No outcome, finding, fault, liability, fee,
-/// refund, compensation, return route or delivery consequence is produced by
-/// any path through it, and `DeliveryProofDisputeCommand.resolve` is refused
-/// before a single fact is read.
-///
-/// ## What is deliberately not in the read-set
-///
-/// **Custody and the rider assignment.** They are central to
-/// `evaluateDeliveryProofAssessment`, which decides something *about* a rider's
-/// delivery, and they are absent here on purpose:
-///
-/// - the dispute never asserts anything about a rider, so it needs no rider
-///   binding — and the immutable audit identity of the rider attempt that *was*
-///   assessed already lives on the assessment record the basis points at, where
-///   FND-003D2A put it. Copying it onto the dispute would create a projection
-///   free to drift from the record that owns it;
-/// - requiring current custody would make the fallback **unavailable exactly
-///   when something has gone wrong with custody** — a rider reassignment
-///   mid-flight, a corrupt holder record — which is the opposite of a fallback.
-///
-/// Any condition not enumerated fails closed.
-DeliveryProofDisputeOutcome evaluateDeliveryProofDispute({
-  required DeliveryProofDisputeRequest request,
+/// Custody and the rider assignment are deliberately **not** in the read-set: a
+/// dispute asserts nothing about a rider, the audit identity of the rider
+/// attempt that *was* assessed already lives on the assessment record the basis
+/// points at, and requiring current custody would make the fallback unavailable
+/// exactly when custody has gone wrong.
+DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
+  required DeliveryProofDisputeRaiseRequest request,
   required Principal actor,
   required DeliveryProofDisputeContext context,
   required DeliveryProofDisputeFacts dispute,
   required DeliveryProofAssessmentFacts assessment,
   required OrderLifecycleFacts order,
 }) {
-  // 0. Policy-deferred operations are refused **before any fact is read**, so
-  //    no partial evaluation of an undecided edge can happen and the denial is
-  //    identical whatever the facts look like.
-  if (DeliveryProofDisputeCommand.policyDeferredInThisSlice.contains(
-    request.command,
-  )) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.resolutionPolicyDeferred,
-    );
-  }
-
   // 1. The canonical resource identity must itself be usable.
   if (!context.isWellFormed) {
     return const DeliveryProofDisputeOutcome.deny(
@@ -90,10 +98,10 @@ DeliveryProofDisputeOutcome evaluateDeliveryProofDispute({
     );
   }
 
-  // 2. Aggregate integrity for every aggregate, before anything can produce a
-  //    record. Each validator is the canonical one for its own aggregate —
-  //    none is reimplemented here, and each keeps its own denial so a log never
-  //    has to guess which aggregate was torn.
+  // 2. Aggregate integrity for every aggregate this operation reads, before
+  //    anything can produce a record. Each validator is the canonical one for
+  //    its own aggregate — none is reimplemented here, and each keeps its own
+  //    denial so a log never has to guess which aggregate was torn.
   final DeliveryProofDisputeDenial? disputeCorruption =
       validateDeliveryProofDisputeAggregate(dispute);
   if (disputeCorruption != null) {
@@ -124,10 +132,10 @@ DeliveryProofDisputeOutcome evaluateDeliveryProofDispute({
     );
   }
 
-  // 4. Concurrency, before any record is constructed. Every aggregate the
-  //    decision reads is compare-and-set, including the two this operation
-  //    leaves untouched: the decision *depends* on them, so acting on a stale
-  //    view of either is refused.
+  // 4. Concurrency, before any record is constructed. Every aggregate this
+  //    decision reads is compare-and-set, including the two it leaves
+  //    untouched: the decision *depends* on them, so acting on a stale view of
+  //    either is refused.
   //
   //    Correct revisions are never a substitute for the identity, state and
   //    eligibility checks below — they run in addition, not instead.
@@ -136,35 +144,24 @@ DeliveryProofDisputeOutcome evaluateDeliveryProofDispute({
       DeliveryProofDisputeDenial.disputeRevisionConflict,
     );
   }
+  if (request.expectedAssessmentRevision != assessment.assessmentRevision) {
+    return const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.assessmentRevisionConflict,
+    );
+  }
   if (request.expectedOrderRevision != order.revision) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.orderRevisionConflict,
     );
   }
-  // Present only for a raise, structurally — recording that review started must
-  // keep working after the basis has been superseded, which is exactly the
-  // situation this slice exists to handle.
-  final int? expectedAssessmentRevision = request.expectedAssessmentRevision;
-  if (expectedAssessmentRevision != null &&
-      expectedAssessmentRevision != assessment.assessmentRevision) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.assessmentRevisionConflict,
-    );
-  }
 
-  // 5. Actor shape. A trusted worker may not raise or review a dispute: a
-  //    background job in the raiser field is an unattributable audit trail.
-  //    This is an integrity check on what gets recorded, **not** the
-  //    authorization gate — that already ran.
-  if (!actor.isUser) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.actorNotHumanPrincipal,
-    );
-  }
-  if (!request.atUtc.isUtc) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.timestampNotUtc,
-    );
+  // 5. Actor shape and server time.
+  final DeliveryProofDisputeDenial? actorOrTime = _checkActorAndTime(
+    actor,
+    request.atUtc,
+  );
+  if (actorOrTime != null) {
+    return DeliveryProofDisputeOutcome.deny(actorOrTime);
   }
 
   // 6. The delivery whose proof is contested must actually be in flight. Any
@@ -181,57 +178,28 @@ DeliveryProofDisputeOutcome evaluateDeliveryProofDispute({
     );
   }
 
-  // 7. Dispute identity, for every operation.
+  // 7. Dispute identity.
   if (!isValidOpaqueId(request.disputeId)) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.disputeIdInvalid,
     );
   }
 
-  return switch (request.command) {
-    DeliveryProofDisputeCommand.raise => _raise(
-      request: request,
-      actor: actor,
-      context: context,
-      dispute: dispute,
-      assessment: assessment,
-    ),
-    DeliveryProofDisputeCommand.recordReviewStarted => _recordReviewStarted(
-      request: request,
-      actor: actor,
-      dispute: dispute,
-    ),
-    // Unreachable: refused at step 0, before any fact was read. Stated so the
-    // switch is exhaustive and a future resolution slice has to make a
-    // deliberate decision here rather than inherit one.
-    DeliveryProofDisputeCommand.resolve => const DeliveryProofDisputeOutcome
-        .deny(DeliveryProofDisputeDenial.resolutionPolicyDeferred),
-  };
-}
-
-/// Raise the fallback dispute against the **current canonical** proof
-/// situation.
-DeliveryProofDisputeOutcome _raise({
-  required DeliveryProofDisputeRequest request,
-  required Principal actor,
-  required DeliveryProofDisputeContext context,
-  required DeliveryProofDisputeFacts dispute,
-  required DeliveryProofAssessmentFacts assessment,
-}) {
-  // At most one live fallback dispute per order. Every state this contract can
-  // store is open or under review, so any existing record is a live one; a
-  // future resolution slice must decide **deliberately** whether a new dispute
-  // may follow a resolved one, rather than inheriting an answer from here.
+  // 8. At most one live fallback dispute per order. Every state this contract
+  //    can store is open or under review, so any existing record is a live one;
+  //    a future resolution slice must decide **deliberately** whether a new
+  //    dispute may follow a resolved one, rather than inheriting an answer
+  //    from here.
   if (dispute.current != null) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.disputeAlreadyOpen,
     );
   }
 
-  // The basis is derived from trusted state through the canonical accessor,
-  // never from request content: a caller does not get to choose what it is
-  // disputing. The aggregate was validated above, so a null verdict here is
-  // canonical absence rather than corruption — corruption already denied.
+  // 9. The basis is derived from trusted state through the canonical accessor,
+  //    never from request content: a caller does not get to choose what it is
+  //    disputing. The aggregate was validated above, so a null verdict here is
+  //    canonical absence rather than corruption — corruption already denied.
   final DeliveryProofAssessmentVerdict? verdict = assessment.canonicalVerdict;
   final DeliveryProofDisputeBasis basis;
   switch (verdict) {
@@ -272,15 +240,85 @@ DeliveryProofDisputeOutcome _raise({
 
 /// Record that an authorized administrator started reviewing the dispute.
 ///
-/// **Deliberately independent of the basis's standing.** A dispute whose basis
-/// has been superseded is still a dispute, and a reassessment must not be able
-/// to freeze one out of review — that is the whole reason the request cannot
-/// pin an assessment revision.
-DeliveryProofDisputeOutcome _recordReviewStarted({
-  required DeliveryProofDisputeRequest request,
+/// ## The read-set is the dispute, and nothing else
+///
+/// *(Corrected by FND-003D2B-FIX-001.)* This takes **no assessment facts and no
+/// order facts**, because it reads and changes neither. An open dispute is
+/// already canonical and already carries its immutable basis; beginning to
+/// review it moves no order, no custody, no assignment, no assessment, no stock
+/// and no money.
+///
+/// Requiring the surrounding lifecycle to still be intact would mean a
+/// reassessment, a torn assessment read, or an unrelated order write after a
+/// **validly raised** dispute could freeze it out of review — the opposite of
+/// what a fallback is for.
+///
+/// **Nothing about a delivery, refusal or return may be inferred from that
+/// independence.** It says only that review may begin.
+///
+/// ## What it does check
+///
+/// The canonical resource, the canonical stored dispute, the exact dispute id,
+/// the dispute revision (compare-and-set), that the dispute is still `open`,
+/// that the actor is a verified human principal, that the timestamp is server
+/// UTC, and that review does not precede the raise.
+///
+/// **There is deliberately no separation-of-duties rule.** An administrator who
+/// passes fresh canonical authorization for `admin.dispute.administer` is not
+/// refused merely because the same principal earlier raised this dispute: the
+/// accepted matrix requires an active admin membership, `ownRegion` scope and a
+/// stored reason, and sets `approvalRequired: false`. A private second
+/// authorization policy here would be an invented one. If separation of duties
+/// is ever wanted, it needs its own permission and ADR.
+DeliveryProofDisputeOutcome evaluateRecordDeliveryProofDisputeReview({
+  required DeliveryProofDisputeReviewRequest request,
   required Principal actor,
+  required DeliveryProofDisputeContext context,
   required DeliveryProofDisputeFacts dispute,
 }) {
+  // 1. The canonical resource identity must itself be usable.
+  if (!context.isWellFormed) {
+    return const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.resourceBindingMismatch,
+    );
+  }
+
+  // 2. The dispute aggregate must be canonical before anything reads it.
+  final DeliveryProofDisputeDenial? disputeCorruption =
+      validateDeliveryProofDisputeAggregate(dispute);
+  if (disputeCorruption != null) {
+    return DeliveryProofDisputeOutcome.deny(disputeCorruption);
+  }
+
+  // 3. ...and it must be about the canonical order.
+  if (dispute.resourceId != context.resourceId) {
+    return const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.resourceBindingMismatch,
+    );
+  }
+
+  // 4. Compare-and-set on the one aggregate this operation writes.
+  if (request.expectedDisputeRevision != dispute.disputeRevision) {
+    return const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.disputeRevisionConflict,
+    );
+  }
+
+  // 5. Actor shape and server time.
+  final DeliveryProofDisputeDenial? actorOrTime = _checkActorAndTime(
+    actor,
+    request.atUtc,
+  );
+  if (actorOrTime != null) {
+    return DeliveryProofDisputeOutcome.deny(actorOrTime);
+  }
+
+  // 6. Dispute identity.
+  if (!isValidOpaqueId(request.disputeId)) {
+    return const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.disputeIdInvalid,
+    );
+  }
   final DeliveryProofDisputeRecord? current = dispute.current;
   if (current == null) {
     return const DeliveryProofDisputeOutcome.deny(
@@ -292,23 +330,18 @@ DeliveryProofDisputeOutcome _recordReviewStarted({
       DeliveryProofDisputeDenial.disputeIdMismatch,
     );
   }
-  // Only an open dispute can start being reviewed. A repeat of the same
-  // operation is refused rather than silently advancing the revision again.
+
+  // 7. Only an open dispute can start being reviewed. A repeat of the same
+  //    operation is refused rather than silently advancing the revision again.
   if (current.state != DeliveryProofDisputeState.open) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.disputeNotOpen,
     );
   }
-  // Self-review is no review — the same reasoning `evaluateAuthorization`
-  // applies to self-approval.
-  if (current.raisedByPrincipalId == actor.id) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.reviewerIsRaiser,
-    );
-  }
-  // Two server-supplied UTC values that cannot be ordered are incoherent, and
-  // storing them would produce a record the validator refuses. No window,
-  // deadline or duration is derived from either.
+
+  // 8. Two server-supplied UTC values that cannot be ordered are incoherent,
+  //    and storing them would produce a record the validator refuses. No
+  //    window, deadline or duration is derived from either.
   if (request.atUtc.isBefore(current.raisedAtUtc)) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.reviewTimestampPrecedesRaise,
@@ -328,4 +361,49 @@ DeliveryProofDisputeOutcome _recordReviewStarted({
       ),
     ),
   );
+}
+
+/// Resolve a fallback dispute — **enumerated, and never executable.**
+///
+/// Always refuses with [DeliveryProofDisputeDenial.resolutionPolicyDeferred],
+/// and takes **no arguments at all**, because a deferred edge consumes nothing:
+/// there is no request, no read-set and no fact it could partially evaluate.
+/// That is a stronger statement than "refused before any fact is read", and it
+/// is why the signature is empty rather than mirroring the others.
+///
+/// This follows `LifecycleDenial.policyDeferred`'s precedent: a backend must be
+/// able to tell **"not decided yet"** from **"never allowed"** — see
+/// [DeliveryProofDisputeOutcome.isPolicyDeferred] — so nobody fills the gap
+/// with a guessed rule, a zero fee or an automatic cancellation.
+///
+/// Resolving a dispute would require deciding who prevails; whether the order
+/// becomes delivered, refused or returned, and where a return goes; whether a
+/// fee, refund, compensation or liability follows and who bears it; whether
+/// stock is restored; and whether customer participation is optional,
+/// mandatory, sufficient or a veto. **Not one of those is decided anywhere in
+/// this repository** — they need owner decision **O6**, **FND-003C** and
+/// **FND-003B3B**.
+DeliveryProofDisputeOutcome evaluateResolveDeliveryProofDispute() =>
+    const DeliveryProofDisputeOutcome.deny(
+      DeliveryProofDisputeDenial.resolutionPolicyDeferred,
+    );
+
+/// The two checks both executable operations share, in one place so they cannot
+/// drift apart.
+///
+/// A trusted worker may neither raise nor review: a background job recorded as
+/// the raiser or the reviewer is an unattributable audit trail. This is an
+/// integrity check on what gets recorded, **not** the authorization gate — that
+/// already ran.
+DeliveryProofDisputeDenial? _checkActorAndTime(
+  Principal actor,
+  DateTime atUtc,
+) {
+  if (!actor.isUser) {
+    return DeliveryProofDisputeDenial.actorNotHumanPrincipal;
+  }
+  if (!atUtc.isUtc) {
+    return DeliveryProofDisputeDenial.timestampNotUtc;
+  }
+  return null;
 }

@@ -87,23 +87,22 @@ DeliveryProofAssessmentFacts tornAssessment({
   current: record(assessmentRevision: 1, verdict: verdict),
 );
 
-/// A dispute basis pinned to whatever [assessment] currently says.
+/// The basis an **actual raise** produced against [assessment].
 ///
-/// Test-side mirror of what the evaluator derives, used for standing tests that
-/// do not go through a raise.
-DeliveryProofDisputeBasis basisFrom(
-  DeliveryProofAssessmentFacts assessment, {
-  String resourceId = orderId,
-}) {
-  final DeliveryProofAssessmentRecord? current = assessment.current;
-  return current == null
-      ? DeliveryProofDisputeBasis.notAssessed(resourceId: resourceId)
-      : DeliveryProofDisputeBasis.notSatisfied(
-          resourceId: resourceId,
-          assessmentId: current.assessmentId,
-          assessmentRevision: current.assessmentRevision,
-        );
-}
+/// *(Replaces `basisFrom`, removed by FND-003D2B-FIX-001.)* The old helper
+/// mirrored production eligibility logic in the test tree and would happily
+/// manufacture a `notSatisfied` basis from a **satisfied** assessment — a state
+/// the evaluator can never produce. A helper that can build something
+/// production refuses is not a fixture, it is a second implementation, and it
+/// hid exactly the contradiction the standing calculation now rejects.
+///
+/// Canonical positive bases therefore come from a real evaluator-produced raise
+/// transition. Deliberately malformed or contradictory bases are still
+/// constructed directly, inline, where the test can show what is wrong with
+/// them.
+DeliveryProofDisputeBasis raisedBasis({
+  DeliveryProofAssessmentFacts? assessment,
+}) => allowedDispute(runRaise(assessment: assessment)).record.basis;
 
 /// Build one dispute record directly, for validator and rendering tests.
 ///
@@ -185,8 +184,8 @@ DeliveryProofDisputeOutcome runRaise({
   final DeliveryProofDisputeFacts d = dispute ?? noDispute;
   final DeliveryProofAssessmentFacts a = assessment ?? absentAssessment;
   final OrderLifecycleFacts o = order ?? inDelivery();
-  return evaluateDeliveryProofDispute(
-    request: DeliveryProofDisputeRequest.raise(
+  return evaluateRaiseDeliveryProofDispute(
+    request: DeliveryProofDisputeRaiseRequest(
       disputeId: disputeId,
       atUtc: at ?? raisedAt,
       expectedDisputeRevision: expectedDisputeRevision ?? d.disputeRevision,
@@ -202,62 +201,39 @@ DeliveryProofDisputeOutcome runRaise({
   );
 }
 
-/// Record that review started, defaulting to one open dispute on a healthy
-/// dispatched delivery.
+/// Record that review started, defaulting to one open dispute.
+///
+/// **Takes no assessment and no order facts**, because the corrected operation
+/// reads neither — see `evaluateRecordDeliveryProofDisputeReview`. There is
+/// nothing for a fixture to supply, which is the point: the independence is
+/// structural rather than a value a test remembered to pass.
 DeliveryProofDisputeOutcome runReview({
   String disputeId = disputeA,
   Principal? actor,
   DateTime? at,
   DeliveryProofDisputeContext context = disputeContext,
   DeliveryProofDisputeFacts? dispute,
-  DeliveryProofAssessmentFacts? assessment,
-  OrderLifecycleFacts? order,
   int? expectedDisputeRevision,
-  int? expectedOrderRevision,
 }) {
   final DeliveryProofDisputeFacts d = dispute ?? openDispute();
-  final DeliveryProofAssessmentFacts a = assessment ?? absentAssessment;
-  final OrderLifecycleFacts o = order ?? inDelivery();
-  return evaluateDeliveryProofDispute(
-    request: DeliveryProofDisputeRequest.recordReviewStarted(
+  return evaluateRecordDeliveryProofDisputeReview(
+    request: DeliveryProofDisputeReviewRequest(
       disputeId: disputeId,
       atUtc: at ?? reviewedAt,
       expectedDisputeRevision: expectedDisputeRevision ?? d.disputeRevision,
-      expectedOrderRevision: expectedOrderRevision ?? o.revision,
     ),
     actor: actor ?? admin(),
     context: context,
     dispute: d,
-    assessment: a,
-    order: o,
   );
 }
 
 /// Attempt the deliberately non-executable resolution edge.
-DeliveryProofDisputeOutcome runResolve({
-  String disputeId = disputeA,
-  Principal? actor,
-  DeliveryProofDisputeContext context = disputeContext,
-  DeliveryProofDisputeFacts? dispute,
-  DeliveryProofAssessmentFacts? assessment,
-  OrderLifecycleFacts? order,
-}) {
-  final DeliveryProofDisputeFacts d = dispute ?? openDispute();
-  final OrderLifecycleFacts o = order ?? inDelivery();
-  return evaluateDeliveryProofDispute(
-    request: DeliveryProofDisputeRequest.resolve(
-      disputeId: disputeId,
-      atUtc: reviewedAt,
-      expectedDisputeRevision: d.disputeRevision,
-      expectedOrderRevision: o.revision,
-    ),
-    actor: actor ?? admin(),
-    context: context,
-    dispute: d,
-    assessment: assessment ?? absentAssessment,
-    order: o,
-  );
-}
+///
+/// It takes nothing, because `evaluateResolveDeliveryProofDispute` takes
+/// nothing: a deferred edge consumes no request and no fact.
+DeliveryProofDisputeOutcome runResolve() =>
+    evaluateResolveDeliveryProofDispute();
 
 DeliveryProofDisputeTransition allowedDispute(DeliveryProofDisputeOutcome o) {
   final DeliveryProofDisputeTransition? t = o.transition;

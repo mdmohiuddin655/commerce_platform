@@ -164,12 +164,21 @@ class DeliveryProofDisputeRecord {
       case DeliveryProofDisputeState.open:
         return reviewer == null && reviewedAt == null;
       case DeliveryProofDisputeState.underReview:
+        // **No separation-of-duties rule is applied here.**
+        // *(Corrected by FND-003D2B-FIX-001.)* This validator previously also
+        // required `reviewer != raisedByPrincipalId`. Nothing in the accepted
+        // contract asks for that: `admin.dispute.administer` requires an active
+        // admin membership, `ownRegion` scope and a stored reason, and
+        // carries `approvalRequired: false`. Refusing a reviewer because they
+        // had earlier raised the dispute was an **invented authorization
+        // policy**, and inventing policy is exactly what this repository
+        // forbids. If separation of duties is ever wanted it needs its own
+        // permission, ADR and dual-control decision — not a silent rule buried
+        // in a shape validator.
         return reviewer != null &&
             reviewedAt != null &&
             isValidOpaqueId(reviewer) &&
             reviewedAt.isUtc &&
-            // Self-review is no review, and a record claiming it is corrupt.
-            reviewer != raisedByPrincipalId &&
             // Review cannot precede the raise. This orders two server-supplied
             // UTC values; it derives no window, deadline or duration from them.
             !reviewedAt.isBefore(raisedAtUtc);

@@ -1,4 +1,3 @@
-import 'package:cp_contracts/src/delivery_proof_dispute_command.dart';
 import 'package:cp_contracts/src/delivery_proof_dispute_record.dart';
 import 'package:cp_contracts/src/ids.dart';
 import 'package:meta/meta.dart';
@@ -94,7 +93,7 @@ class DeliveryProofDisputeContext {
       : 'DeliveryProofDisputeContext(invalid)';
 }
 
-/// One request to apply a named fallback dispute operation.
+/// What a **raise** consumes, beyond the facts themselves.
 ///
 /// Authorization, idempotency, the reason requirement and the command →
 /// permission mapping have **already happened** by the time this is evaluated.
@@ -104,25 +103,13 @@ class DeliveryProofDisputeContext {
 /// arrives separately, server-derived, exactly as the assessor does in
 /// FND-003D2A.
 ///
-/// **The constructors are the contract.** There is no general public
-/// constructor, so a caller cannot assemble a request whose expectations do not
-/// match its operation:
-///
-/// | Constructor | Pins the assessment revision? |
-/// |---|---|
-/// | [DeliveryProofDisputeRequest.raise] | **yes** — the basis is derived from the assessment the caller actually saw |
-/// | [DeliveryProofDisputeRequest.recordReviewStarted] | **no, and it must not** |
-/// | [DeliveryProofDisputeRequest.resolve] | no — the operation is refused before any fact is read |
-///
-/// The middle row is the important one. Recording that review started must
-/// **keep working after the basis has been superseded** — that is precisely the
-/// situation this slice exists to handle — so requiring the assessment to be
-/// unchanged would make a reassessment silently freeze the dispute. Making the
-/// field structurally absent is stronger than documenting that it is ignored.
+/// **Raising pins the whole read-set it depends on.** The basis is derived from
+/// the current assessment and the operation is only meaningful for an in-flight
+/// delivery, so a stale view of the assessment or the order is refused rather
+/// than silently recorded against facts that have already moved.
 @immutable
-class DeliveryProofDisputeRequest {
-  const DeliveryProofDisputeRequest._({
-    required this.command,
+class DeliveryProofDisputeRaiseRequest {
+  const DeliveryProofDisputeRaiseRequest({
     required this.disputeId,
     required this.atUtc,
     required this.expectedDisputeRevision,
@@ -130,79 +117,69 @@ class DeliveryProofDisputeRequest {
     required this.expectedOrderRevision,
   });
 
-  /// Raise the fallback dispute. [expectedDisputeRevision] is **0**: a raise
-  /// starts from an order that has no dispute.
-  const DeliveryProofDisputeRequest.raise({
-    required String disputeId,
-    required DateTime atUtc,
-    required int expectedDisputeRevision,
-    required int expectedAssessmentRevision,
-    required int expectedOrderRevision,
-  }) : this._(
-         command: DeliveryProofDisputeCommand.raise,
-         disputeId: disputeId,
-         atUtc: atUtc,
-         expectedDisputeRevision: expectedDisputeRevision,
-         expectedAssessmentRevision: expectedAssessmentRevision,
-         expectedOrderRevision: expectedOrderRevision,
-       );
-
-  /// Record that an administrator started reviewing the dispute.
-  const DeliveryProofDisputeRequest.recordReviewStarted({
-    required String disputeId,
-    required DateTime atUtc,
-    required int expectedDisputeRevision,
-    required int expectedOrderRevision,
-  }) : this._(
-         command: DeliveryProofDisputeCommand.recordReviewStarted,
-         disputeId: disputeId,
-         atUtc: atUtc,
-         expectedDisputeRevision: expectedDisputeRevision,
-         expectedAssessmentRevision: null,
-         expectedOrderRevision: expectedOrderRevision,
-       );
-
-  /// **Always refused** — [DeliveryProofDisputeCommand.resolve] is a real edge
-  /// whose business policy is undecided. It is constructible so that the
-  /// deferral is testable rather than merely documented.
-  const DeliveryProofDisputeRequest.resolve({
-    required String disputeId,
-    required DateTime atUtc,
-    required int expectedDisputeRevision,
-    required int expectedOrderRevision,
-  }) : this._(
-         command: DeliveryProofDisputeCommand.resolve,
-         disputeId: disputeId,
-         atUtc: atUtc,
-         expectedDisputeRevision: expectedDisputeRevision,
-         expectedAssessmentRevision: null,
-         expectedOrderRevision: expectedOrderRevision,
-       );
-
-  /// The named operation. Never a target state.
-  final DeliveryProofDisputeCommand command;
-
-  /// For a raise, the **new** server-generated opaque dispute id. For every
-  /// other operation, the id of the dispute being acted on, which must match
-  /// the order's current one exactly.
+  /// The **new** server-generated opaque dispute id.
   final String disputeId;
 
   /// Server UTC time of the operation.
   final DateTime atUtc;
 
-  /// Dispute revision the caller believes is current. **0** for a raise.
+  /// Dispute revision the caller believes is current. **0** for a raise: a
+  /// raise starts from an order that has no dispute.
   final int expectedDisputeRevision;
 
-  /// Assessment revision the caller believes is current, for a raise only.
+  /// Assessment revision the caller believes is current.
   ///
-  /// Null for every other operation, structurally — see the class comment.
-  final int? expectedAssessmentRevision;
+  /// The basis is derived from this aggregate, so raising against a stale view
+  /// of it would record a basis the caller never actually saw.
+  final int expectedAssessmentRevision;
 
   /// Order revision the caller believes is current.
   ///
-  /// Checked even though a dispute leaves the order untouched: the decision
-  /// *depends* on the order still being `in_delivery`, so acting on a stale
-  /// view of it is refused rather than silently recorded against facts that
-  /// have moved.
+  /// Checked even though a dispute leaves the order untouched: raising
+  /// *depends* on the order still being `in_delivery`.
   final int expectedOrderRevision;
+}
+
+/// What **recording that review started** consumes, beyond the dispute itself.
+///
+/// > **Deliberately smaller than a raise.** *(Corrected by
+/// > FND-003D2B-FIX-001.)* This operation used to travel in a shared request
+/// > carrying `expectedOrderRevision`, and the shared evaluator additionally
+/// > validated the current assessment aggregate, the current order aggregate,
+/// > the order's revision, `in_delivery` and `committed` before it would run.
+/// >
+/// > **None of that is anything this operation reads or changes.** An open
+/// > dispute is already canonical, and it already carries its immutable basis;
+/// > beginning to review it moves no order, no custody, no assignment, no
+/// > assessment, no stock and no money. Requiring the surrounding lifecycle to
+/// > be unchanged created a hidden dependency that could **freeze review of a
+/// > validly raised dispute** because something unrelated moved afterwards — a
+/// > reassessment, or a torn assessment read. That is the opposite of what a
+/// > fallback is for.
+/// >
+/// > 0.9 is an unaccepted, unreleased candidate with **no serialization**, so
+/// > the shape was corrected in place rather than keeping a misleading field
+/// > for a compatibility nobody could depend on.
+///
+/// **This independence infers nothing.** It says only that review may begin; it
+/// implies no delivery, refusal, return or outcome, and grants no permission to
+/// conclude one.
+@immutable
+class DeliveryProofDisputeReviewRequest {
+  const DeliveryProofDisputeReviewRequest({
+    required this.disputeId,
+    required this.atUtc,
+    required this.expectedDisputeRevision,
+  });
+
+  /// The dispute being acted on. Must match the order's current one exactly.
+  final String disputeId;
+
+  /// Server UTC time of the operation.
+  final DateTime atUtc;
+
+  /// Dispute revision the caller believes is current — the **only** aggregate
+  /// this operation reads or writes, and therefore the only compare-and-set it
+  /// can honestly perform.
+  final int expectedDisputeRevision;
 }

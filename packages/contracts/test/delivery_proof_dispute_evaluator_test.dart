@@ -58,11 +58,12 @@ void main() {
         DeliveryProofDisputeBasisStanding.superseded,
       );
 
-      // Recording review must still be possible. The request cannot pin an
-      // assessment revision, so a reassessment cannot freeze a dispute out of
-      // review.
+      // Recording review must still be possible. Since FND-003D2B-FIX-001 the
+      // operation does not read the assessment at all, so a reassessment
+      // cannot freeze a dispute out of review — there is no assessment
+      // argument left to pass.
       final DeliveryProofDisputeTransition reviewT = allowedDispute(
-        runReview(dispute: afterRaise, assessment: reassessed),
+        runReview(dispute: afterRaise),
       );
       expect(reviewT.resultingState, DeliveryProofDisputeState.underReview);
       // ...and the basis is carried forward unchanged.
@@ -194,8 +195,8 @@ void main() {
     test('two aggregates agreeing with each other is not enough', () {
       // Both aggregates describe order B; the canonical context says order A.
       expect(
-        evaluateDeliveryProofDispute(
-          request: DeliveryProofDisputeRequest.raise(
+        evaluateRaiseDeliveryProofDispute(
+          request: DeliveryProofDisputeRaiseRequest(
             disputeId: disputeA,
             atUtc: raisedAt,
             expectedDisputeRevision: 0,
@@ -354,6 +355,140 @@ void main() {
     });
   });
 
+  group('review depends on the dispute alone — FND-003D2B-FIX-001', () {
+    /// A dispute raised against a healthy read-set, then applied.
+    DeliveryProofDisputeFacts validlyRaised() =>
+        applyDispute(allowedDispute(runRaise(assessment: assessed())));
+
+    test('the operation cannot read the assessment or the order at all', () {
+      // Structural, not behavioural: `evaluateRecordDeliveryProofDisputeReview`
+      // has no assessment or order parameter, so no state of either can gate
+      // it. This is the shape the correction is really about.
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      final DeliveryProofDisputeOutcome outcome =
+          evaluateRecordDeliveryProofDisputeReview(
+            request: DeliveryProofDisputeReviewRequest(
+              disputeId: disputeA,
+              atUtc: reviewedAt,
+              expectedDisputeRevision: 1,
+            ),
+            actor: admin(),
+            context: disputeContext,
+            dispute: open,
+          );
+      expect(allowedDispute(outcome).resultingState,
+          DeliveryProofDisputeState.underReview);
+    });
+
+    test('a reassessment after the raise cannot freeze review', () {
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      // The world moved: the verifier appended a new assessment, and it even
+      // concluded `satisfied`. The dispute is still reviewable — deciding
+      // otherwise would be deciding the outcome.
+      final DeliveryProofAssessmentFacts reassessed = assessed(
+        assessmentId: asmtB,
+        revision: 2,
+        verdict: DeliveryProofAssessmentVerdict.satisfied,
+        supersedes: asmtA,
+      );
+      expect(
+        resolveDeliveryProofDisputeBasisStanding(
+          basis: open.canonicalBasis!,
+          assessment: reassessed,
+        ),
+        DeliveryProofDisputeBasisStanding.superseded,
+      );
+      expect(allowedDispute(runReview(dispute: open)).resultingState,
+          DeliveryProofDisputeState.underReview);
+    });
+
+    test('a torn assessment read after the raise cannot freeze review', () {
+      // The case the shared read-set got wrong: the assessment aggregate is
+      // unusable, so a raise would rightly be refused — but an ALREADY VALID
+      // dispute must still be reviewable. A fallback that stops working when
+      // the thing it is a fallback for breaks is not a fallback.
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      expect(
+        runRaise(assessment: tornAssessment()).denial,
+        DeliveryProofDisputeDenial.assessmentAggregateInconsistent,
+        reason: 'raising still depends on a readable assessment',
+      );
+      expect(allowedDispute(runReview(dispute: open)).resultingState,
+          DeliveryProofDisputeState.underReview);
+    });
+
+    test('unrelated order movement after the raise cannot freeze review', () {
+      // A raise from these order facts would be refused; review is unaffected,
+      // because it neither reads nor changes the order.
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      expect(
+        runRaise(order: inDelivery(revision: 99), expectedOrderRevision: 5)
+            .denial,
+        DeliveryProofDisputeDenial.orderRevisionConflict,
+      );
+      expect(
+        runRaise(order: const OrderLifecycleFacts.absent()).denial,
+        DeliveryProofDisputeDenial.orderNotInDelivery,
+      );
+      expect(allowedDispute(runReview(dispute: open)).resultingState,
+          DeliveryProofDisputeState.underReview);
+    });
+
+    test('the review transition still changes only the dispute', () {
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      final DeliveryProofDisputeTransition t = allowedDispute(
+        runReview(dispute: open),
+      );
+      expect(t.changesOrderState, isFalse);
+      expect(t.changesCustody, isFalse);
+      expect(t.changesRiderAssignment, isFalse);
+      expect(t.changesAssessment, isFalse);
+      expect(t.inventoryEffect.availableStockDelta, 0);
+      expect(
+        t.financialClassification,
+        FinancialClassification.noneInThisSlice,
+      );
+      expect(t.resultingDisputeRevision, 2);
+      // The basis and the raiser survive the edge untouched.
+      expect(t.record.basis, open.current!.basis);
+      expect(t.record.raisedByPrincipalId, open.current!.raisedByPrincipalId);
+      expect(t.record.raisedAtUtc, open.current!.raisedAtUtc);
+    });
+
+    test('independence infers no delivery, refusal or return', () {
+      // Being reviewable says only that review may begin.
+      final DeliveryProofDisputeFacts open = validlyRaised();
+      final DeliveryProofDisputeTransition t = allowedDispute(
+        runReview(dispute: open),
+      );
+      expect(t.resultingState.isOpenForReview, isTrue);
+      expect(t.resultingState, isNot(DeliveryProofDisputeState.resolved));
+      expect(OrderState.notYetImplemented, <OrderState>{OrderState.delivered});
+    });
+
+    test('raise remains strictly pinned to the full read-set', () {
+      // The correction must not loosen the operation that genuinely depends on
+      // current facts.
+      expect(
+        runRaise(expectedAssessmentRevision: 7).denial,
+        DeliveryProofDisputeDenial.assessmentRevisionConflict,
+      );
+      expect(
+        runRaise(expectedOrderRevision: 7).denial,
+        DeliveryProofDisputeDenial.orderRevisionConflict,
+      );
+      expect(
+        runRaise(order: inDelivery(reservation: ReservationState.released))
+            .denial,
+        DeliveryProofDisputeDenial.orderAggregateInconsistent,
+      );
+      expect(
+        runRaise(assessment: tornAssessment()).denial,
+        DeliveryProofDisputeDenial.assessmentAggregateInconsistent,
+      );
+    });
+  });
+
   group('resolution is a real edge with undecided policy', () {
     test('it is refused, and refused distinctly', () {
       final DeliveryProofDisputeOutcome outcome = runResolve();
@@ -372,27 +507,26 @@ void main() {
       expect(runReview(disputeId: disputeB).isPolicyDeferred, isFalse);
     });
 
-    test('it is refused before any fact is read', () {
-      // Identical denial whatever the facts look like: perfect, absent, torn,
-      // wrong resource, stale. A deferred edge must not leak a partial
-      // evaluation of itself.
-      for (final DeliveryProofDisputeOutcome outcome
-          in <DeliveryProofDisputeOutcome>[
-        runResolve(),
-        runResolve(dispute: noDispute),
-        runResolve(actor: worker()),
-        runResolve(order: const OrderLifecycleFacts.absent()),
-        runResolve(assessment: tornAssessment()),
-        runResolve(
-          context: const DeliveryProofDisputeContext(resourceId: 'short'),
-        ),
-        runResolve(dispute: reviewedDispute()),
-      ]) {
+    test('it cannot read a fact, because it takes none', () {
+      // *(Strengthened by FND-003D2B-FIX-001.)* This used to assert that the
+      // denial was identical whatever facts were supplied. The evaluator now
+      // accepts **no arguments at all**, so a deferred edge cannot partially
+      // evaluate anything even in principle — a structural statement rather
+      // than a behavioural one.
+      for (int i = 0; i < 3; i++) {
+        final DeliveryProofDisputeOutcome outcome = runResolve();
         expect(
           outcome.denial,
           DeliveryProofDisputeDenial.resolutionPolicyDeferred,
         );
+        expect(outcome.transition, isNull);
+        expect(outcome.isPolicyDeferred, isTrue);
       }
+      // The same call, reached directly through the public surface.
+      expect(
+        evaluateResolveDeliveryProofDispute().denial,
+        DeliveryProofDisputeDenial.resolutionPolicyDeferred,
+      );
     });
 
     test('no executable command can reach the resolved state', () {

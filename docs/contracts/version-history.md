@@ -388,6 +388,33 @@ widened to include the new dispute vocabulary, with all three commands and both
 events pinned **by name**. A guard that silently stops covering a new surface
 keeps passing while proving nothing.
 
+**Corrected in place by FND-003D2B-FIX-001 — still 0.9.** FND-003D2B-FINAL-
+REVIEW-001 found three material defects in the unreleased candidate. All are
+corrected in one follow-up commit, and **the contract stays at 0.9**: this is an
+in-place correction to an unmerged, unaccepted candidate, not a release event.
+
+| Defect | Correction |
+|---|---|
+| `resolveDeliveryProofDisputeBasisStanding` reported `current` when the assessment id and revision matched but the **verdict had flipped** — a contradiction ADR-0009's append-only history cannot produce | the same-revision comparison now also requires `canonicalVerdict` to still be `notSatisfied`; a mismatch is `indeterminate`, never `superseded` and never `notSatisfied`, and the basis is not rewritten |
+| An invented `reviewerIsRaiser` denial refused an administrator who had earlier raised the dispute, although `admin.dispute.administer` carries `approvalRequired: false` and no accepted contract asks for separation of duties | the rule was removed from the evaluator, the record validator, the denial vocabulary (**20 → 19**), the tests and the documentation. Separation of duties, if ever wanted, needs its own permission and ADR |
+| Recording that review started required a canonical current assessment, a canonical current order, the order revision, `in_delivery` and `committed` — none of which it reads — so a reassessment or torn assessment read could **freeze a validly raised dispute out of review** | one evaluator per operation, each taking only its own read-set: `evaluateRaiseDeliveryProofDispute` (resource, dispute, assessment, order), `evaluateRecordDeliveryProofDisputeReview` (resource, dispute) and `evaluateResolveDeliveryProofDispute` (**no arguments at all**) |
+
+The single `evaluateDeliveryProofDispute` and the multi-constructor
+`DeliveryProofDisputeRequest` were **replaced**, not deprecated:
+`DeliveryProofDisputeRaiseRequest` pins the dispute, assessment and order
+revisions, and `DeliveryProofDisputeReviewRequest` pins the dispute revision
+alone. 0.9 is an unaccepted, unreleased candidate with **no serialization**, so
+the definition was corrected in place rather than keeping misleading fields for
+a compatibility nobody could depend on. **No migration is required or invented.**
+
+Each correction carries a negative control: reverting it makes a specific named
+test fail, and the read-set independence is enforced by the **type system** — a
+call that hands review an assessment or an order does not compile.
+
+Nothing else moved: `Permission.values` stays **38**, resolution stays
+non-executable, every effect stays NONE, and `delivered`, customer custody and
+rider `completed` stay unreachable.
+
 See [delivery-proof-dispute.md](delivery-proof-dispute.md).
 
 ## Behaviour across versions

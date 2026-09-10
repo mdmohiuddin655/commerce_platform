@@ -269,9 +269,22 @@ enum DeliveryProofDisputeBasisStanding {
 /// Whether [basis] is still the current canonical assessment situation.
 ///
 /// Pure and fail closed. Reads the assessment aggregate through
-/// `validateDeliveryProofAssessmentAggregate`, so a torn load can never produce
-/// a confident answer, and **nothing here mutates, relabels or reinterprets any
-/// assessment** — this function only compares.
+/// `validateDeliveryProofAssessmentAggregate` and `canonicalVerdict`, so a torn
+/// load can never produce a confident answer, and **nothing here mutates,
+/// relabels or reinterprets any assessment** — this function only compares.
+///
+/// > **Identity is not meaning.** *(Corrected by FND-003D2B-FIX-001.)* Matching
+/// > the assessment id and revision was originally treated as enough to report
+/// > [DeliveryProofDisputeBasisStanding.current]. It is not: a basis recorded as
+/// > `notSatisfied` against assessment A revision 1, compared with a *canonical*
+/// > A-revision-1 that now reads `satisfied`, would have been certified as
+/// > "still current" — a self-contradictory history, since ADR-0009 gives every
+/// > reassessment a **new id and the next revision**, so the same id at the same
+/// > revision can never legitimately change verdict. That is corruption, and it
+/// > now answers [DeliveryProofDisputeBasisStanding.indeterminate]: it is not
+/// > converted to `superseded` (nothing superseded it), not converted to
+/// > `notSatisfied` (nobody reached that verdict), and the basis is not
+/// > rewritten.
 DeliveryProofDisputeBasisStanding resolveDeliveryProofDisputeBasisStanding({
   required DeliveryProofDisputeBasis basis,
   required DeliveryProofAssessmentFacts assessment,
@@ -297,11 +310,12 @@ DeliveryProofDisputeBasisStanding resolveDeliveryProofDisputeBasisStanding({
     return DeliveryProofDisputeBasisStanding.superseded;
   }
 
-  // Same revision: the identities must agree exactly, or the aggregate is not
-  // the history this basis came from.
+  // Same revision: identity **and** meaning must both agree, or the aggregate
+  // is not the history this basis came from.
   final DeliveryProofAssessmentRecord? current = assessment.current;
   return switch (basis.kind) {
     DeliveryProofDisputeBasisKind.notAssessed =>
+      // Canonical absence: no record, and therefore no verdict to compare.
       current == null
           ? DeliveryProofDisputeBasisStanding.current
           : DeliveryProofDisputeBasisStanding.indeterminate,
@@ -310,7 +324,13 @@ DeliveryProofDisputeBasisStanding resolveDeliveryProofDisputeBasisStanding({
               basis.identifiesAssessment(
                 assessmentId: current.assessmentId,
                 assessmentRevision: current.assessmentRevision,
-              )
+              ) &&
+              // The verdict must still be the one this basis was recorded
+              // against. Read through the trusted accessor, never off raw
+              // facts. Same id + same revision + opposite verdict is a
+              // contradiction ADR-0009's append-only history cannot produce.
+              assessment.canonicalVerdict ==
+                  DeliveryProofAssessmentVerdict.notSatisfied
           ? DeliveryProofDisputeBasisStanding.current
           : DeliveryProofDisputeBasisStanding.indeterminate,
   };

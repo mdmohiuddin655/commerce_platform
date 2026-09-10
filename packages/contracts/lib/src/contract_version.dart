@@ -80,8 +80,10 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   deliberately non-executable `resolve`), `DeliveryProofDisputeEventType`
   ///   (two ids), the record, aggregate, context, request, transition, outcome
   ///   and denial vocabulary, `validateDeliveryProofDisputeAggregate`,
-  ///   `canonicalState` / `canonicalBasis` and
-  ///   `evaluateDeliveryProofDispute`. **No permission was added** — both
+  ///   `canonicalState` / `canonicalBasis`, and one evaluator per operation:
+  ///   `evaluateRaiseDeliveryProofDispute`,
+  ///   `evaluateRecordDeliveryProofDisputeReview` and the never-executable
+  ///   `evaluateResolveDeliveryProofDispute`. **No permission was added** — both
   ///   executable operations use the accepted `customer.dispute.raise` and
   ///   `admin.dispute.administer` rules unchanged — **no outcome, fault, fee,
   ///   refund, compensation, liability, return or delivery consequence is

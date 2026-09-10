@@ -21,15 +21,11 @@ void main() {
       );
     });
 
-    test('a stale order revision is refused, though the order is untouched', () {
-      // The decision *depends* on the order still being in flight, so acting on
-      // a stale view of it is refused rather than silently recorded.
+    test('a stale order revision is refused on RAISE', () {
+      // Raising *depends* on the order still being in flight, so acting on a
+      // stale view of it is refused rather than silently recorded.
       expect(
         runRaise(expectedOrderRevision: 4).denial,
-        DeliveryProofDisputeDenial.orderRevisionConflict,
-      );
-      expect(
-        runReview(expectedOrderRevision: 99).denial,
         DeliveryProofDisputeDenial.orderRevisionConflict,
       );
     });
@@ -49,31 +45,24 @@ void main() {
       );
     });
 
-    test('review structurally cannot pin an assessment revision', () {
-      // Not "ignored" — absent. A reassessment must never freeze a dispute out
-      // of review, which is exactly the superseded case this slice handles.
-      // There is no general constructor, so no caller can add the field back.
-      final DeliveryProofDisputeRequest review =
-          DeliveryProofDisputeRequest.recordReviewStarted(
+    test('review carries only the revision it can honestly compare', () {
+      // *(Corrected by FND-003D2B-FIX-001.)* The review request no longer has
+      // an assessment revision **or an order revision** to pin: the operation
+      // reads neither aggregate, so a compare-and-set on either would be
+      // meaningless. The fields are absent from the type rather than ignored.
+      final DeliveryProofDisputeReviewRequest review =
+          DeliveryProofDisputeReviewRequest(
             disputeId: disputeA,
             atUtc: reviewedAt,
             expectedDisputeRevision: 1,
-            expectedOrderRevision: 5,
           );
-      expect(review.expectedAssessmentRevision, isNull);
-      expect(review.command, DeliveryProofDisputeCommand.recordReviewStarted);
+      expect(review.expectedDisputeRevision, 1);
+      expect(review.disputeId, disputeA);
+      expect(review.atUtc.isUtc, isTrue);
 
-      final DeliveryProofDisputeRequest resolveRequest =
-          DeliveryProofDisputeRequest.resolve(
-            disputeId: disputeA,
-            atUtc: reviewedAt,
-            expectedDisputeRevision: 1,
-            expectedOrderRevision: 5,
-          );
-      expect(resolveRequest.expectedAssessmentRevision, isNull);
-
-      final DeliveryProofDisputeRequest raiseRequest =
-          DeliveryProofDisputeRequest.raise(
+      // Raising still pins everything it depends on.
+      final DeliveryProofDisputeRaiseRequest raiseRequest =
+          DeliveryProofDisputeRaiseRequest(
             disputeId: disputeA,
             atUtc: raisedAt,
             expectedDisputeRevision: 0,
@@ -81,7 +70,7 @@ void main() {
             expectedOrderRevision: 5,
           );
       expect(raiseRequest.expectedAssessmentRevision, 0);
-      expect(raiseRequest.command, DeliveryProofDisputeCommand.raise);
+      expect(raiseRequest.expectedOrderRevision, 5);
     });
 
     test('correct revisions never bypass an identity or eligibility check', () {
@@ -100,8 +89,8 @@ void main() {
         DeliveryProofDisputeDenial.disputeIdMismatch,
       );
       expect(
-        runReview(actor: customer()).denial,
-        DeliveryProofDisputeDenial.reviewerIsRaiser,
+        runReview(dispute: reviewedDispute(), expectedDisputeRevision: 2).denial,
+        DeliveryProofDisputeDenial.disputeNotOpen,
       );
     });
   });
@@ -203,11 +192,10 @@ void main() {
       final DeliveryProofDisputeFacts open = applyDispute(
         allowedDispute(runRaise(assessment: assessed())),
       );
-      // Three reassessments later, the dispute is still at revision 1.
-      final DeliveryProofDisputeOutcome outcome = runReview(
-        dispute: open,
-        assessment: assessed(assessmentId: asmtB, revision: 4),
-      );
+      // Three reassessments later, the dispute is still at revision 1 — and
+      // since FND-003D2B-FIX-001 review does not even read the assessment, so
+      // there is no reassessment to supply.
+      final DeliveryProofDisputeOutcome outcome = runReview(dispute: open);
       expect(allowedDispute(outcome).resultingDisputeRevision, 2);
       expect(open.disputeRevision, 1);
     });

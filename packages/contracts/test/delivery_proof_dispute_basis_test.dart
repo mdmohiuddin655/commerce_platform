@@ -43,7 +43,7 @@ void main() {
       final DeliveryProofAssessmentFacts a = assessed();
       expect(
         resolveDeliveryProofDisputeBasisStanding(
-          basis: basisFrom(a),
+          basis: raisedBasis(assessment: a),
           assessment: a,
         ),
         DeliveryProofDisputeBasisStanding.current,
@@ -53,7 +53,7 @@ void main() {
     test('becomes superseded when reassessment advances the aggregate', () {
       // The dispute was raised against assessment A at revision 1. A trusted
       // verifier later reassessed, appending B at revision 2.
-      final DeliveryProofDisputeBasis basis = basisFrom(assessed());
+      final DeliveryProofDisputeBasis basis = raisedBasis(assessment: assessed());
       final DeliveryProofAssessmentFacts after = assessed(
         assessmentId: asmtB,
         revision: 2,
@@ -80,7 +80,7 @@ void main() {
     test('a later satisfied assessment does not dismiss the basis', () {
       // Supersession is a fact about the assessment history, not a resolution.
       // Nothing here closes, weakens or validates the dispute.
-      final DeliveryProofDisputeBasis basis = basisFrom(assessed());
+      final DeliveryProofDisputeBasis basis = raisedBasis(assessment: assessed());
       final DeliveryProofAssessmentFacts after = assessed(
         assessmentId: asmtB,
         revision: 2,
@@ -102,13 +102,128 @@ void main() {
     });
   });
 
+  group('identity is not meaning — FND-003D2B-FIX-001', () {
+    test('same id + same revision + opposite verdict is indeterminate', () {
+      // The defect this corrects. ADR-0009 gives every reassessment a NEW id
+      // and the NEXT revision, so assessment A revision 1 can never
+      // legitimately change verdict. A basis recorded as `notSatisfied`
+      // against A/1, compared with a *canonical* A/1 that now reads
+      // `satisfied`, is a self-contradictory history — and was previously
+      // certified as `current`.
+      const DeliveryProofDisputeBasis basis =
+          DeliveryProofDisputeBasis.notSatisfied(
+            resourceId: orderId,
+            assessmentId: asmtA,
+            assessmentRevision: 1,
+          );
+      final DeliveryProofAssessmentFacts contradictory = assessed(
+        assessmentId: asmtA,
+        revision: 1,
+        verdict: DeliveryProofAssessmentVerdict.satisfied,
+      );
+      // The contradiction is not corruption of *shape*: the aggregate is
+      // perfectly canonical, which is exactly why identity alone was not
+      // enough to detect it.
+      expect(
+        validateDeliveryProofAssessmentAggregate(contradictory),
+        isNull,
+        reason: 'the aggregate is well formed; only the pairing is impossible',
+      );
+      expect(
+        basis.identifiesAssessment(assessmentId: asmtA, assessmentRevision: 1),
+        isTrue,
+        reason: 'identity still matches — meaning is what disagrees',
+      );
+
+      expect(
+        resolveDeliveryProofDisputeBasisStanding(
+          basis: basis,
+          assessment: contradictory,
+        ),
+        DeliveryProofDisputeBasisStanding.indeterminate,
+      );
+    });
+
+    test('the contradiction becomes neither superseded nor notSatisfied', () {
+      const DeliveryProofDisputeBasis basis =
+          DeliveryProofDisputeBasis.notSatisfied(
+            resourceId: orderId,
+            assessmentId: asmtA,
+            assessmentRevision: 1,
+          );
+      final DeliveryProofAssessmentFacts contradictory = assessed(
+        assessmentId: asmtA,
+        revision: 1,
+        verdict: DeliveryProofAssessmentVerdict.satisfied,
+      );
+      final DeliveryProofDisputeBasisStanding standing =
+          resolveDeliveryProofDisputeBasisStanding(
+            basis: basis,
+            assessment: contradictory,
+          );
+      // Not `superseded`: nothing superseded it — the revision never moved.
+      expect(standing, isNot(DeliveryProofDisputeBasisStanding.superseded));
+      expect(standing, isNot(DeliveryProofDisputeBasisStanding.current));
+      // The assessment is not relabelled, and the basis is not rewritten.
+      expect(
+        contradictory.canonicalVerdict,
+        DeliveryProofAssessmentVerdict.satisfied,
+      );
+      expect(basis.kind, DeliveryProofDisputeBasisKind.notSatisfied);
+      expect(basis.assessmentId, asmtA);
+      expect(basis.assessmentRevision, 1);
+    });
+
+    test('the ordinary matching notSatisfied case is still current', () {
+      // Re-pinned alongside the correction so the fix cannot over-reach into
+      // refusing the case it exists to allow.
+      final DeliveryProofAssessmentFacts a = assessed(
+        assessmentId: asmtA,
+        revision: 1,
+      );
+      expect(
+        a.canonicalVerdict,
+        DeliveryProofAssessmentVerdict.notSatisfied,
+      );
+      expect(
+        resolveDeliveryProofDisputeBasisStanding(
+          basis: raisedBasis(assessment: a),
+          assessment: a,
+        ),
+        DeliveryProofDisputeBasisStanding.current,
+      );
+    });
+
+    test('a higher revision is still superseded, whatever the verdict', () {
+      final DeliveryProofDisputeBasis basis = raisedBasis(
+        assessment: assessed(),
+      );
+      for (final DeliveryProofAssessmentVerdict v
+          in DeliveryProofAssessmentVerdict.values) {
+        expect(
+          resolveDeliveryProofDisputeBasisStanding(
+            basis: basis,
+            assessment: assessed(
+              assessmentId: asmtB,
+              revision: 2,
+              verdict: v,
+              supersedes: asmtA,
+            ),
+          ),
+          DeliveryProofDisputeBasisStanding.superseded,
+          reason: 'the verdict check applies only at the SAME revision',
+        );
+      }
+    });
+  });
+
   group('indeterminate — corruption is never a confident answer', () {
     test('a torn assessment aggregate is never current or superseded', () {
       for (final DeliveryProofAssessmentVerdict v
           in DeliveryProofAssessmentVerdict.values) {
         expect(
           resolveDeliveryProofDisputeBasisStanding(
-            basis: basisFrom(assessed()),
+            basis: raisedBasis(assessment: assessed()),
             assessment: tornAssessment(verdict: v),
           ),
           DeliveryProofDisputeBasisStanding.indeterminate,
@@ -153,7 +268,7 @@ void main() {
       );
       expect(
         resolveDeliveryProofDisputeBasisStanding(
-          basis: basisFrom(assessed()),
+          basis: raisedBasis(assessment: assessed()),
           assessment: assessed(resourceId: otherOrderId),
         ),
         DeliveryProofDisputeBasisStanding.indeterminate,
@@ -213,7 +328,7 @@ void main() {
     test('resolving a standing leaves both aggregates untouched', () {
       final DeliveryProofAssessmentFacts before = assessed();
       final DeliveryProofAssessmentRecord? recordBefore = before.current;
-      final DeliveryProofDisputeBasis basis = basisFrom(before);
+      final DeliveryProofDisputeBasis basis = raisedBasis(assessment: before);
 
       resolveDeliveryProofDisputeBasisStanding(
         basis: basis,

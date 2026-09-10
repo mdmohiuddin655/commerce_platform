@@ -80,7 +80,13 @@ evaluating a policy — **not the policy**, and **not a proof mechanism**. It ad
 
 | Document | Covers |
 |---|---|
-| [delivery-proof-dispute.md](delivery-proof-dispute.md) | The **fallback dispute workflow** for a missing, superseded or `notSatisfied` assessment: the two fallback grounds, the immutable dispute basis and its `current` / `superseded` / `indeterminate` standing, one live dispute per order, two named operations under the accepted `customer.dispute.raise` and `admin.dispute.administer` rules, an independent dispute revision with compare-and-set, all-NONE effects including the assessment, two privacy-minimal events, the deliberately **non-executable** resolution edge, and the **DPD1–DPD12** backend checklist |
+| [delivery-proof-dispute.md](delivery-proof-dispute.md) | The **fallback dispute workflow** for a missing, superseded or `notSatisfied` assessment: the two fallback grounds, the immutable dispute basis and its `current` / `superseded` / `indeterminate` standing, one live dispute per order, two named operations under the accepted `customer.dispute.raise` and `admin.dispute.administer` rules, **one evaluator per operation with its own read-set**, an independent dispute revision with compare-and-set, all-NONE effects including the assessment, two privacy-minimal events, the deliberately **non-executable** resolution edge, and the **DPD1–DPD12** backend checklist |
+
+Corrected in place by **FND-003D2B-FIX-001**: the basis standing now requires the
+**verdict** to still agree, not just the assessment id and revision; an invented
+`reviewerIsRaiser` separation-of-duties denial was removed; and recording that
+review started no longer depends on current assessment or order facts it never
+reads. **The corrected two-commit candidate is not yet accepted for merge.**
 
 **Successful delivery is still NOT executable, and no dispute resolves.**
 FND-003D2B records *that* the proof situation is contested and *that* review
@@ -205,6 +211,12 @@ From FND-003D2B:
   delivery consequence exists, and none may be derived.
 - **At most one live dispute per order**, with its own revision and
   compare-and-set. Duplicate and reordered intent writes nothing.
+- **An operation reads only what it changes or depends on.** Raising pins the
+  assessment and order it derives its basis from; recording that review started
+  depends on the dispute alone, so a later reassessment or a torn assessment
+  read cannot freeze a validly raised dispute out of review.
+- **Identity is not meaning.** A basis is still `current` only when the
+  assessment id, the revision **and the verdict** all still agree.
 - A dispute record holds **no free text** — the required reason lives with the
   audited command, in FND-003A.
 

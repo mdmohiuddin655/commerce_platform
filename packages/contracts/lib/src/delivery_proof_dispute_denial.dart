@@ -10,6 +10,14 @@
 /// Those would be *outcomes*, and this contract decides no outcome. Every value
 /// here says only that an operation was not applied — the dispute record, where
 /// one exists, is left exactly as it was.
+///
+/// > **`reviewerIsRaiser` was removed by FND-003D2B-FIX-001.** It refused an
+/// > administrator who had earlier raised the dispute, which no accepted
+/// > contract requires: `admin.dispute.administer` needs an active admin
+/// > membership, `ownRegion` scope and a reason, and requires **no** approval
+/// > and no second principal. A denial nobody asked for is an invented
+/// > authorization policy. Separation of duties, if ever wanted, needs its own
+/// > permission and ADR.
 enum DeliveryProofDisputeDenial {
   /// The canonical resource context is unusable, or an aggregate describes a
   /// different order than the one being acted on.
@@ -85,15 +93,6 @@ enum DeliveryProofDisputeDenial {
   /// trusted worker where only a person belongs. A background job that could
   /// raise or review disputes would be an unattributable audit trail.
   actorNotHumanPrincipal,
-
-  /// The principal recording that review started is the principal who raised
-  /// the dispute.
-  ///
-  /// Self-review is no review, in the same way self-approval is no control —
-  /// `evaluateAuthorization` already refuses an `ApprovalEvidence` whose
-  /// approver is the requester, and this applies that settled reasoning to the
-  /// one other place in the contract where two parties must be distinct.
-  reviewerIsRaiser,
 
   /// The order is not `in_delivery`.
   ///

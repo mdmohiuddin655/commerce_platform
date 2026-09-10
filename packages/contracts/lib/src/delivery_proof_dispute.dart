@@ -29,7 +29,9 @@
 /// - A **standing** calculation that reports whether that recorded basis is
 ///   still current, has been **superseded**, or cannot be compared at all,
 ///   without ever mutating, relabelling or reassessing anything.
-/// - One administrator operation: recording that review started.
+/// - One administrator operation: recording that review started, which depends
+///   on the dispute aggregate **alone** — a reassessment or a torn assessment
+///   read cannot freeze a validly raised dispute out of review.
 ///
 /// ## What it deliberately does not do
 ///
@@ -60,10 +62,10 @@
 /// | `…_command.dart` | named operations, their permissions, and the events |
 /// | `…_denial.dart` | refusal vocabulary (internal, never returned verbatim) |
 /// | `…_record.dart` | one dispute as currently recorded |
-/// | `…_facts.dart` | the aggregate, the server-resolved context and the request |
+/// | `…_facts.dart` | the aggregate, the server-resolved context and the per-operation requests |
 /// | `…_validation.dart` | canonical aggregate shape and trusted access |
 /// | `…_transition.dart` | the permitted operation and its all-NONE effects |
-/// | `…_evaluator.dart` | the pure evaluator |
+/// | `…_evaluator.dart` | one pure evaluator per operation, each with its own read-set |
 ///
 /// The dependency graph is acyclic and flows one way: vocabulary → model →
 /// shapes → validation → evaluator. No file imports an app or the backend, and
