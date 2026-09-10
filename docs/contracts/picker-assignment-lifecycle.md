@@ -267,6 +267,48 @@ slice does not implement it, so its cost is unknown.
 `reachableSlotRevisionRange(generation, state)` is exported so a backend
 reconciliation job can apply the identical rule.
 
+### Maintenance invariant — this model is coupled to the transitions
+
+**`reachableSlotRevisionRange` is derived from the mutation cost of every
+currently executable path.** It is not an independent rule; it is arithmetic
+over the transitions this slice implements. Change the transitions and the
+arithmetic is wrong — and, because the validator runs before every effect, the
+symptom is *valid histories failing closed as `aggregateInconsistent`*.
+
+Any future change that:
+
+- makes `AssignmentState.completed` executable;
+- adds another executable assignment state;
+- adds or removes a transition, changing per-generation mutation cost;
+- changes whether an existing transition increments `slotRevision`;
+
+**MUST, in the same change:**
+
+1. update `reachableSlotRevisionRange`;
+2. update the derivation and the table above;
+3. update the canonical and impossible range tests;
+4. update the transition-closure regression test;
+5. prove every newly successful transition still produces an aggregate that
+   `validatePickerAssignmentAggregate` accepts.
+
+Two tests enforce this coupling rather than leaving it to memory:
+
+- **Transition closure** — every successful transition the evaluator produces
+  is applied and the result must pass the validator. It uses evaluator-produced
+  transitions, never hand-written pairs, so the implementation and the model
+  cannot drift apart silently.
+- **Executable-state coverage** — every state in
+  `AssignmentState.executableInThisSlice` must have a non-null range. Making a
+  state executable without giving it a cost fails immediately, with a message
+  saying what to update.
+
+Both were verified by deliberately breaking the model and confirming they fail.
+
+**No mutation cost is invented for `completed`.** Its relationship to custody
+and handoff is FND-003B3's to define; guessing one now would corrupt the model
+in a way that only shows up as spurious corruption denials later. See
+criterion **B3-C1**.
+
 Anything else denies with `aggregateInconsistent`, producing no lifecycle
 effect, no projection change and no event.
 
@@ -312,6 +354,20 @@ R33–R40 and L1–L13, which are likewise unchanged and NOT RUN.
 
 Storage note for P14/P16: assignment attempts should be a bounded or paginated
 indexed collection, **not** an unbounded array inside the order document.
+
+## Future contract acceptance criteria
+
+Distinct from the backend P-series above: these are **contract evolution**
+requirements, checked by whoever changes the contract, not by a deployment
+test.
+
+- [ ] **B3-C1** — If picker `completed` becomes executable, the implementing
+      task updates the reachable slot-revision model, its derivation and range
+      tests, and proves every newly successful transition closes over
+      `validatePickerAssignmentAggregate`.
+
+**Status: NOT RUN / FUTURE** — FND-003B3 has not started. This is a guard on a
+future change, not a blocker to FND-003B2A.
 
 ## Out of scope
 

@@ -707,4 +707,298 @@ void main() {
       }
     });
   });
+
+  group('transition closure — every success validates', () {
+    // The invariant this group exists for:
+    //
+    //   apply(successful transition) -> validatePickerAssignmentAggregate == null
+    //
+    // The revision-range rule in `reachableSlotRevisionRange` is *derived* from
+    // the evaluator's mutation costs. Testing the helper alone would only
+    // prove it agrees with itself; this ties the actual transition
+    // implementation to the validator, so a change to either that drifts from
+    // the other fails here.
+    //
+    // Every fact below comes from a real evaluator transition — nothing is
+    // hand-fabricated, because a fabricated pair could accidentally satisfy a
+    // rule the lifecycle no longer produces.
+
+    /// Asserts [outcome] succeeded, applies it, and requires the resulting
+    /// aggregate to pass validation. Returns the next facts so callers can
+    /// chain a real history.
+    PickerAssignmentFacts closes(
+      String label,
+      PickerAssignmentOutcome outcome,
+    ) {
+      final PickerAssignmentTransition? t = outcome.transition;
+      expect(
+        t,
+        isNotNull,
+        reason: '$label should be allowed, got ${outcome.denial?.name}',
+      );
+      final PickerAssignmentFacts next = apply(t!);
+      expect(
+        validatePickerAssignmentAggregate(next),
+        isNull,
+        reason: '$label produced gen=${t.generation} rev='
+            '${t.resultingSlotRevision} state=${t.toState.id}, which the '
+            'aggregate validator rejects — reachableSlotRevisionRange and the '
+            'evaluator have drifted apart',
+      );
+      return next;
+    }
+
+    PickerAssignmentOutcome offerOn(
+      PickerAssignmentFacts f,
+      String newId,
+      String target,
+    ) => run(
+      AssignmentCommand.offerPickerAssignment,
+      on: f,
+      acting: agentId,
+      newAssignmentId: newId,
+      target: eligible(target),
+    );
+
+    const String assignC = 'asg_Cc11Dd22Ee33Ff44';
+
+    test('initial offer closes', () {
+      final PickerAssignmentFacts f = closes(
+        'initial offer',
+        offerOn(facts(), assignA, pickerA),
+      );
+
+      expect(f.attempt!.generation, 1);
+      expect(f.slotRevision, 1);
+      expect(f.attempt!.state, AssignmentState.offered);
+    });
+
+    test('accept closes', () {
+      final PickerAssignmentFacts offered = closes(
+        'offer',
+        offerOn(facts(), assignA, pickerA),
+      );
+
+      final PickerAssignmentFacts accepted = closes(
+        'accept',
+        run(AssignmentCommand.acceptPickerAssignment, on: offered),
+      );
+
+      expect(accepted.attempt!.state, AssignmentState.accepted);
+      expect(accepted.slotRevision, 2);
+    });
+
+    test('decline closes', () {
+      final PickerAssignmentFacts offered = closes(
+        'offer',
+        offerOn(facts(), assignA, pickerA),
+      );
+
+      expect(
+        closes(
+          'decline',
+          run(AssignmentCommand.declinePickerAssignment, on: offered),
+        ).attempt!.state,
+        AssignmentState.declined,
+      );
+    });
+
+    test('expiry closes', () {
+      final PickerAssignmentFacts offered = closes(
+        'offer',
+        offerOn(facts(), assignA, pickerA),
+      );
+
+      expect(
+        closes(
+          'expiry',
+          run(
+            AssignmentCommand.expirePickerOffer,
+            on: offered,
+            expiryDue: true,
+          ),
+        ).attempt!.state,
+        AssignmentState.expired,
+      );
+    });
+
+    test('revoke closes', () {
+      PickerAssignmentFacts f = closes(
+        'offer',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes('accept', run(AssignmentCommand.acceptPickerAssignment, on: f));
+      f = closes(
+        'revoke',
+        run(
+          AssignmentCommand.revokePickerAssignment,
+          on: f,
+          acting: agentId,
+          safety: ReassignmentSafety.provenNoCustody,
+        ),
+      );
+
+      expect(f.attempt!.state, AssignmentState.revoked);
+      expect(f.slotRevision, 3);
+    });
+
+    test('re-offer after decline closes (previous attempt cost 2)', () {
+      PickerAssignmentFacts f = closes(
+        'offer g1',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes(
+        'decline g1',
+        run(AssignmentCommand.declinePickerAssignment, on: f),
+      );
+      f = closes('offer g2', offerOn(f, assignB, pickerB));
+
+      expect(f.attempt!.generation, 2);
+      expect(f.slotRevision, 3, reason: 'offer + decline + offer');
+    });
+
+    test('re-offer after expiry closes (previous attempt cost 2)', () {
+      PickerAssignmentFacts f = closes(
+        'offer g1',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes(
+        'expire g1',
+        run(AssignmentCommand.expirePickerOffer, on: f, expiryDue: true),
+      );
+      f = closes('offer g2', offerOn(f, assignB, pickerB));
+
+      expect(f.attempt!.generation, 2);
+      expect(f.slotRevision, 3);
+    });
+
+    test('re-offer after revoke closes (previous attempt cost 3)', () {
+      PickerAssignmentFacts f = closes(
+        'offer g1',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes('accept g1', run(AssignmentCommand.acceptPickerAssignment, on: f));
+      f = closes(
+        'revoke g1',
+        run(
+          AssignmentCommand.revokePickerAssignment,
+          on: f,
+          acting: agentId,
+          safety: ReassignmentSafety.provenNoCustody,
+        ),
+      );
+      f = closes('offer g2', offerOn(f, assignB, pickerB));
+
+      expect(f.attempt!.generation, 2);
+      expect(
+        f.slotRevision,
+        4,
+        reason: 'offer + accept + revoke + offer — a costlier history than a '
+            'declined or expired generation',
+      );
+    });
+
+    test('a generation-3 mixed history closes at every step', () {
+      // g1 revoked (3 mutations), g2 declined (2), g3 offered.
+      PickerAssignmentFacts f = closes(
+        'offer g1',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes('accept g1', run(AssignmentCommand.acceptPickerAssignment, on: f));
+      f = closes(
+        'revoke g1',
+        run(
+          AssignmentCommand.revokePickerAssignment,
+          on: f,
+          acting: agentId,
+          safety: ReassignmentSafety.provenNoCustody,
+        ),
+      );
+      f = closes('offer g2', offerOn(f, assignB, pickerB));
+      f = closes(
+        'decline g2',
+        run(
+          AssignmentCommand.declinePickerAssignment,
+          on: f,
+          acting: pickerB,
+        ),
+      );
+      f = closes('offer g3', offerOn(f, assignC, pickerA));
+
+      expect(f.attempt!.generation, 3);
+      expect(f.slotRevision, 6, reason: '3 + 2 + 1 mutations');
+    });
+
+    test('a generation-3 cheapest history closes at every step', () {
+      // g1 declined (2), g2 expired (2), g3 offered — the low end of the range.
+      PickerAssignmentFacts f = closes(
+        'offer g1',
+        offerOn(facts(), assignA, pickerA),
+      );
+      f = closes(
+        'decline g1',
+        run(AssignmentCommand.declinePickerAssignment, on: f),
+      );
+      f = closes('offer g2', offerOn(f, assignB, pickerB));
+      f = closes(
+        'expire g2',
+        run(AssignmentCommand.expirePickerOffer, on: f, expiryDue: true),
+      );
+      f = closes('offer g3', offerOn(f, assignC, pickerA));
+
+      expect(f.attempt!.generation, 3);
+      expect(f.slotRevision, 5, reason: '2 + 2 + 1 mutations — the minimum');
+    });
+
+    test('every executable transition kind is represented above', () {
+      // Guards against a future command being added without closure coverage.
+      expect(AssignmentCommand.values.toSet(), <AssignmentCommand>{
+        AssignmentCommand.offerPickerAssignment,
+        AssignmentCommand.acceptPickerAssignment,
+        AssignmentCommand.declinePickerAssignment,
+        AssignmentCommand.expirePickerOffer,
+        AssignmentCommand.revokePickerAssignment,
+      }, reason: 'a new command needs a transition-closure case here');
+    });
+  });
+
+  group('executable states and the revision model are coupled', () {
+    test('every executable state has a reachable revision range', () {
+      for (final AssignmentState s in AssignmentState.executableInThisSlice) {
+        expect(
+          reachableSlotRevisionRange(1, s),
+          isNotNull,
+          reason: 'No reachable slot-revision range is defined for '
+              '"${s.id}". If a state becomes executable, '
+              'reachableSlotRevisionRange and transition-cost tests must be '
+              'updated in the same contract change — otherwise every '
+              'aggregate in that state fails closed as inconsistent.',
+        );
+      }
+    });
+
+    test('the executable set is exactly the five states modelled today', () {
+      expect(AssignmentState.executableInThisSlice, <AssignmentState>{
+        AssignmentState.offered,
+        AssignmentState.accepted,
+        AssignmentState.declined,
+        AssignmentState.expired,
+        AssignmentState.revoked,
+      });
+    });
+
+    test('completed stays non-executable and has no invented cost', () {
+      expect(
+        AssignmentState.executableInThisSlice
+            .contains(AssignmentState.completed),
+        isFalse,
+      );
+      expect(
+        reachableSlotRevisionRange(1, AssignmentState.completed),
+        isNull,
+        reason: 'its mutation cost is unknown until FND-003B3 defines it; '
+            'guessing one would corrupt the model',
+      );
+    });
+  });
 }

@@ -7,7 +7,9 @@
   `fnd/FND-003B2A-picker-assignment-lifecycle`, working tree clean
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** **0.4, corrected in place** (no bump)
-- **Status:** **DONE**
+- **Status:** **DONE** — production fixes accepted; two missing regression
+  guards were added by **FND-003B2A-FIX-002** (2026-09-10). See
+  [§11 Recheck](#11-recheck-fnd-003b2a-fix-002).
 
 `355aaa7` was not amended. One new commit on the same branch. The tree was
 clean, so **no `git reset --hard` was used**.
@@ -185,3 +187,31 @@ No rider lifecycle, custody, pickup/handoff, delivery, return, proof/dispute,
 payment/COD, fee, commission or settlement rule was introduced. No admin
 override was implemented. **FND-003B2B and FND-003B3 remain NOT STARTED.**
 Nothing merged to `main`, pushed, force-pushed or deployed.
+
+## 11. Recheck (FND-003B2A-FIX-002, 2026-09-10)
+
+**The production fixes in this report remain accepted and unchanged.** The
+`assignmentIdReuse` denial, the reachable-range model and ADR-0006 all stand,
+and no production code was touched by the follow-up.
+
+Final recheck found two missing **regression guards** — not defects in
+behaviour, but gaps in what the tests actually pin:
+
+1. **No test tied the evaluator's output to the validator.** The range tests
+   exercised `reachableSlotRevisionRange` directly, which only proves the
+   helper agrees with itself. Nothing asserted that a transition the evaluator
+   actually produces yields an aggregate the validator accepts — so the two
+   could drift apart, and the symptom would be *valid* histories failing closed
+   as `aggregateInconsistent`.
+
+2. **The maintenance coupling was left to memory.** §2 of this report noted the
+   range model is derived from current mutation costs, and the FND-003B2A-FIX-001
+   handoff flagged the `completed` coupling in prose — but nothing enforced it.
+   Making a state executable without giving it a cost would have silently
+   broken every aggregate in that state.
+
+FND-003B2A-FIX-002 adds a transition-closure regression suite over
+evaluator-produced transitions across generations 1–3, and a structural test
+requiring every executable state to have a range. Both were verified by
+deliberately breaking the model. Full detail:
+[FND-003B2A-FIX-002 report](FND-003B2A-FIX-002-completion-report.md).
