@@ -195,3 +195,51 @@ discharged.
 ## Owner actions needed
 
 None new. **O6** and **O7** remain outstanding, unchanged.
+
+---
+
+# CORRECTION — THE §4 SWEEP CLAIM WAS INCOMPLETE
+
+**Appended by FND-003D2B-FIX-005 (2026-09-11). Nothing above is rewritten.**
+
+FND-003D2B-FINAL-REVIEW-004 found **one additional current-tense statement that
+this report's §4 sweep missed**, in `delivery_proof_dispute_evaluator.dart`:
+
+```text
+/// UTC, and that review does not precede the raise. The canonical resource
+/// comes from the grant.
+```
+
+That is the same defect FIX-004 set out to close, in a file §4 listed as swept.
+**The §4 assertion that "both target claims are gone" was therefore true only of
+the two exact strings searched for, and the broader implication — that no
+equivalent current claim survived — was incomplete.** It is corrected here
+rather than edited above.
+
+## Why the sweep missed it
+
+Not a missing file: the mechanism. §4 used a **line-based** `grep`, and the
+sentence is **wrapped across two lines**. Its own regex
+`canonical resource (comes|came) from the (authorization )?grant` matches the
+sentence when unwrapped, and cannot match it across a newline. Demonstrated:
+
+```text
+line-based grep (the FIX-004 method) : 0 matches
+unwrapping search (the FIX-005 method): 1 match
+```
+
+A prose sweep that cannot see across a line break will keep missing wrapped
+prose, which is most of it.
+
+## What changed
+
+`FND-003D2B-FIX-005` corrects the comment and re-runs the sweep with markers
+stripped and whitespace collapsed, so wrapping cannot hide a statement, and
+against **semantic ideas** rather than two literal strings.
+
+**Executable behaviour was unaffected then and now:** the missed text was a doc
+comment. The FIX-003 runtime binding — `dispute.resourceId` as anchor, the grant
+proving coverage, assessment and order read matching it — was correct throughout
+and is unchanged.
+
+Full detail: [FND-003D2B-FIX-005 report](FND-003D2B-FIX-005-completion-report.md).

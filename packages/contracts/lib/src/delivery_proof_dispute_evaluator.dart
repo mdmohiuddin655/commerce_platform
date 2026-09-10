@@ -295,8 +295,13 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
 /// The authorization grant, the canonical stored dispute, the exact dispute id,
 /// the dispute revision (compare-and-set), that the dispute is still `open`,
 /// that the actor is a verified human principal, that the timestamp is server
-/// UTC, and that review does not precede the raise. The canonical resource
-/// comes from the grant.
+/// UTC, and that review does not precede the raise.
+///
+/// **The canonical resource is anchored by the stored dispute aggregate**; the
+/// grant must **cover** that independently selected resource. It does not
+/// choose, supply or name it — comparing a grant against a value the grant
+/// itself provided would prove nothing, which is the tautology
+/// FND-003D2B-FIX-003 removed.
 ///
 /// ## Authorization
 ///
