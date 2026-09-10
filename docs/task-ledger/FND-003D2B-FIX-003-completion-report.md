@@ -286,3 +286,41 @@ those inputs; that they were current remains **R33–R40**, NOT RUN.
 ## Owner actions needed
 
 None new. **O6** and **O7** remain outstanding, unchanged.
+
+---
+
+# RECHECK — DOCUMENTATION GAP FOUND AT PUBLICATION
+
+**Appended by FND-003D2B-FIX-004 (2026-09-11). Nothing above is rewritten.**
+
+**FND-003D2B-FIX-003-PUSH-001 declined to publish `202a8a9`, and was correct to
+do so.** That push task gated publication on a documentation check — "current
+docs contain no obsolete `DeliveryProofDisputeContext` claim" — and the check
+failed. Two current-tense statements still said the **authorization grant**
+supplies the canonical resource:
+
+```text
+docs/contracts/delivery-proof-dispute.md
+  "The grant carries the canonical resource…"
+packages/contracts/lib/src/delivery_proof_dispute_facts.dart
+  "The canonical resource comes from the authorization grant."
+```
+
+Both contradicted this report's own §3, and the code it describes:
+
+```dart
+final String resourceId = dispute.resourceId;   // raise AND review
+```
+
+**This was a drafting omission in FIX-003, not a defect in its code.** §3 added
+the new binding section but left the superseded FIX-002 paragraphs in place, so
+the module and contract documentation told a reader the opposite of the shipped
+behaviour, two paragraphs apart.
+
+`FND-003D2B-FIX-004` corrects both statements, documentation and
+source-comment only, with **zero executable Dart changed**. Everything else in
+this report stands: the resource-bound order read, the completed raise binding,
+the removal of the tautological `grant.covers` argument, the negative controls
+and the NOT RUN classifications were all re-verified.
+
+Full detail: [FND-003D2B-FIX-004 report](FND-003D2B-FIX-004-completion-report.md).

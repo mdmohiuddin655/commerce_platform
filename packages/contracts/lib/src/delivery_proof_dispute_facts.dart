@@ -57,15 +57,20 @@ class DeliveryProofDisputeFacts {
   bool get hasCurrentRecord => current != null;
 }
 
-/// **The canonical resource comes from the authorization grant.**
+/// **The persisted dispute aggregate anchors the canonical operation resource.**
 ///
-/// *(FND-003D2B-FIX-002 removed `DeliveryProofDisputeContext`.)* It carried a
-/// resource id and nothing else, and once the executable evaluators began
-/// requiring an `AuthorizationGrant` — which already names the exact resource
-/// `evaluateAuthorization` allowed the actor to act on — keeping it would have
-/// meant **two sources of canonical resource truth that could disagree**. The
-/// one bound to the authorization decision is the one that must win, so the
-/// other was deleted rather than left as a second shape to keep in step.
+/// The `AuthorizationGrant` must **cover** that resource; it is not the source
+/// used to choose it. A raise additionally binds the assessment aggregate and
+/// the resource-bound order read to the same anchor, before any order fact can
+/// produce a transition.
+///
+/// > **Historical.** FND-003D2B-FIX-002 removed `DeliveryProofDisputeContext`,
+/// > which carried a resource id and nothing else: once the evaluators required
+/// > a grant, keeping it would have meant **two sources of canonical resource
+/// > truth that could disagree**. At that point the resource was taken *from*
+/// > the grant. FND-003D2B-FIX-003 moved the anchor to the stored dispute
+/// > aggregate, because comparing a grant against a value the grant itself
+/// > supplied proves nothing. The removed type stays removed either way.
 
 /// One order lifecycle read, **bound to the resource it was read from**.
 ///

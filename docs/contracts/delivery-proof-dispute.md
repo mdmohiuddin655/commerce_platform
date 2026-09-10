@@ -336,9 +336,28 @@ or permission, and no authorization data on any command payload.
 only by independently holding an admin grant of their own — which is a fact
 about that principal's membership, not about the dispute.
 
-**The grant carries the canonical resource**, so `DeliveryProofDisputeContext`
-was removed: two sources of resource truth could disagree, and the one bound to
-the authorization decision must win.
+**The persisted dispute aggregate supplies the canonical resource anchor.** The
+`AuthorizationGrant` must **cover** that exact, independently anchored resource
+— it is not itself the source used to choose it. For a raise, the assessment
+aggregate and the resource-bound order read must identify the same resource
+before any order fact can produce a transition.
+
+```text
+dispute.resourceId                 <- the anchor
+  == AuthorizationGrant.resourceId (grant.covers, checked first)
+  == assessment.resourceId
+  == DeliveryProofDisputeOrderRead.resourceId
+```
+
+That direction matters: comparing the grant against a value the grant itself
+supplied would prove nothing, which is exactly the tautology
+FND-003D2B-FIX-003 removed from `checkDisputeAuthorization`.
+
+> **Historical.** FND-003D2B-FIX-002 deleted `DeliveryProofDisputeContext`
+> because two sources of resource truth could disagree, and at that point took
+> the resource from the grant. FND-003D2B-FIX-003 moved the anchor to the stored
+> dispute aggregate and made the grant prove coverage of it instead. The type is
+> gone either way; only the anchor changed.
 
 ### Every member of the raise read-set names one order
 

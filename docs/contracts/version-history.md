@@ -410,8 +410,10 @@ at 0.9**.
 | The executable evaluators took a bare `Principal` and only *documented* that authorization had run, which a pure function cannot assert about its caller — so a **non-owner customer could raise** and a **customer-only principal could review** by calling the evaluator directly | both now require FND-003A's unforgeable `AuthorizationGrant`, verified as bound to this principal, this permission and this resource by `checkDisputeAuthorization`. One generic `authorizationGrantMismatch` denial (19 → **20**); **no policy is re-decided and the matrix is not copied** |
 
 `DeliveryProofDisputeContext` was **removed**: the grant already names the
-canonical resource, and two sources of resource truth could disagree. The
-authorization binding lives in its own file behind the stable barrel, so
+canonical resource, and two sources of resource truth could disagree. *(That
+last clause is superseded by FND-003D2B-FIX-003 below — the anchor moved to the
+stored dispute aggregate, which the grant must cover. The type stays removed.)*
+The authorization binding lives in its own file behind the stable barrel, so
 authorization validation, aggregate validation and transition construction can
 be audited independently.
 
@@ -445,6 +447,19 @@ the grant and the dispute, resolve still takes **zero arguments**, every effect
 still NONE, and `delivered`, customer custody and rider `completed` still
 unreachable. **NC6** proves the new binding can fail, and NC1–NC5 were
 re-verified.
+
+**Corrected a fourth time by FND-003D2B-FIX-004 — still 0.9, and
+documentation only.** Two current-tense statements still said the authorization
+grant supplies the canonical resource, which FIX-003 had already changed: the
+anchor is the **stored dispute aggregate's** resource, and the grant proves
+*coverage* of it. They were in `docs/contracts/delivery-proof-dispute.md` and
+the `delivery_proof_dispute_facts.dart` doc comment, and they contradicted the
+shipped code (`final String resourceId = dispute.resourceId;` in both
+evaluators). **No executable Dart changed** — the FIX-003 runtime correction is
+intact and untouched.
+
+The FND-003D2B-FIX-003 push was **correctly blocked** on exactly this: the push
+task gated publication on a documentation check that failed.
 
 The single `evaluateDeliveryProofDispute` and the multi-constructor
 `DeliveryProofDisputeRequest` were **replaced**, not deprecated:
