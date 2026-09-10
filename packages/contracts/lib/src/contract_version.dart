@@ -51,6 +51,12 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   completion as a cross-aggregate consequence, and a role-aware
   ///   `reachableSlotRevisionRange`. Rider `completed` remains unreachable.
   ///
+  /// - **0.7** (FND-003D1) — additive: mechanism-neutral delivery-proof
+  ///   references — `DeliveryProofPolicyRef`, `DeliveryEvidenceRef`, their
+  ///   structural validators and `DeliveryProofDenial`. **References only**: no
+  ///   proof mechanism, no satisfaction rule, no command, no state and no
+  ///   permission. Successful delivery remains unimplemented.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -60,7 +66,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 6);
+  static const ContractVersion current = ContractVersion(0, 7);
 
   final int major;
   final int minor;

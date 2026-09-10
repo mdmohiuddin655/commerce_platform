@@ -40,9 +40,10 @@ void main() {
       // 0.2 -> 0.3 pre-dispatch order and reservation lifecycle (FND-003B1);
       // 0.3 -> 0.4 picker assignment lifecycle (FND-003B2A);
       // 0.4 -> 0.5 rider assignment lifecycle (FND-003B2B);
-      // 0.5 -> 0.6 custody and picker->rider handoff (FND-003B3A). All
-      // additive, so the major stays 0.
-      expect(ContractVersion.current.toString(), '0.6');
+      // 0.5 -> 0.6 custody and picker->rider handoff (FND-003B3A);
+      // 0.6 -> 0.7 delivery-proof references (FND-003D1). All additive, so the
+      // major stays 0.
+      expect(ContractVersion.current.toString(), '0.7');
     });
 
     test('0.3 and 0.4 share a major, so the policy permits an attempt', () {
@@ -60,19 +61,35 @@ void main() {
       );
     });
 
+    test('0.6 and 0.7 share a major, so the policy permits an attempt', () {
+      // Same policy, same non-claim. 0.6 defined no delivery-proof types, so it
+      // could not decode a 0.7 reference even if one were ever serialized.
+      // None is: cp_contracts still has no serialization.
+      expect(
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(0, 6)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(0, 6)
+            .isVersionCompatibleWith(ContractVersion.current),
+        isTrue,
+      );
+    });
+
     test('0.5 and 0.6 share a major, so the policy permits an attempt', () {
       // Same policy, same non-claim. 0.5 defined no custody types, so it could
       // not decode a 0.6 custody payload even if one existed. The role-aware
       // `reachableSlotRevisionRange` parameter is additive and defaults to the
       // pre-0.6 answer, but that is a statement about the source, not decoding.
       expect(
-        ContractVersion.current
+        const ContractVersion(0, 6)
             .isVersionCompatibleWith(const ContractVersion(0, 5)),
         isTrue,
       );
       expect(
         const ContractVersion(0, 5)
-            .isVersionCompatibleWith(ContractVersion.current),
+            .isVersionCompatibleWith(const ContractVersion(0, 6)),
         isTrue,
       );
     });
@@ -153,7 +170,7 @@ void main() {
       expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
       expect(
         v.toString(),
-        '0.6',
+        '0.7',
         reason: 'version policy only; decode behaviour is a decoder property',
       );
     });

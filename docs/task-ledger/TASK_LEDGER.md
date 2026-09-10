@@ -39,7 +39,8 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B3A-FIX-001 | ADMIN | Bind custody to canonical resource/shop identity, add picker/rider slot-revision CAS, make custody initialisation create-once, correct exported state metadata and the test-count evidence | FND-003B3A | **DONE** | [FND-003B3A-FIX-001 report](FND-003B3A-FIX-001-completion-report.md) |
 | FND-003B3A-FIX-002 | ADMIN | Reconcile contract status across the picker, rider and order documents, the package docs and source comments with what FND-003B3A actually implements | FND-003B3A-FIX-001 | **DONE** | [FND-003B3A-FIX-002 report](FND-003B3A-FIX-002-completion-report.md) · **documentation and source-comment only — zero executable Dart changed** |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
-| FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
+| FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1. **Proof-satisfaction policy and the fallback dispute workflow are still undone**, and remain required before delivery confirmation is coded (CONSTRAINTS invariant 13) |
+| FND-003D1 | ADMIN | Mechanism-neutral delivery-proof policy reference, resource-bound evidence reference and the privacy boundary | FND-003B3A | **DONE** | [FND-003D1 report](FND-003D1-completion-report.md) · [delivery-proof boundary](../contracts/delivery-proof-boundary.md) · contract **0.7**. **References only** — no proof mechanism, no satisfaction rule, no command, state, event or permission. Successful delivery remains **not executable** |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
 
 ### FND-002 status after FND-002A
@@ -236,13 +237,45 @@ report's *"was 522 at branch point"* is corrected to the accepted **520** — 52
 was a real mid-task number taken after two tests had already been added, never
 the branch point, and no rerun was invented to explain it.
 
+**FND-003D1 — DONE (2026-09-10).** The smallest dependency-safe prerequisite for
+delivery confirmation: a way to *refer to* proof policy and protected evidence
+without embedding proof material in events, treating a reference as proof, or
+committing the platform to a method. Contract **0.6 → 0.7** (additive).
+
+`DeliveryProofPolicyRef` says **which** immutable policy applies, never that it
+was satisfied, and imposes **no grammar** — the repository has no policy
+vocabulary to reuse, and inventing one would be inventing a contract.
+`DeliveryEvidenceRef` carries an opaque evidence id **bound to its order**, so
+evidence cannot be presented against a different one; it holds **no material**
+and is not a storage locator. Both preserve exact values and repair nothing.
+
+**Nothing became executable.** No command, state, transition, event or
+permission was added; `OrderState.delivered`, `CustodyHolderKind.customer` and
+rider `AssignmentState.completed` all remain unreachable, re-pinned by
+regression test. A source-level test strips doc comments and asserts no proof
+mechanism — OTP, QR, barcode, signature, photo, video, GPS, biometric,
+attestation — and no material, locator or status vocabulary appears in the code.
+
+**Dependency note.** FND-003D was previously recorded as depending on the whole
+of FND-003B, which was a coarser dependency than the work requires: this
+reference boundary needs only the accepted FND-003B3A custody contract, so the
+slice was safely taken now rather than waiting on delivery/refusal/return.
+**FND-003D is now PARTIAL, not complete** — proof satisfaction and the fallback
+dispute workflow are still undone and remain required by `CONSTRAINTS.md`
+invariant 13 before delivery confirmation may be coded.
+
+Retention, visibility, deletion/legal-hold, satisfaction policy, the dispute
+workflow and whether customer participation is required are all recorded
+**DEFERRED, never defaulted**. Financial consequences remain **UNKNOWN /
+DEFERRED TO FND-003C**, blocked on **O6**.
+
 **Remaining slices:**
 
 | Slice | Owns | Status |
 |---|---|---|
 | FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1, **all of B2** and **B3A** done; delivery/refusal/return outstanding |
 | FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
-| FND-003D proof/dispute | Customer OTP/proof format and fallback workflow | **TODO** — needed before delivery confirmation is coded |
+| FND-003D proof/dispute | Proof-satisfaction contract and fallback dispute workflow | **PARTIAL** — the reference/privacy boundary is done (FND-003D1); satisfaction and dispute are **not**, and are still needed before delivery confirmation is coded |
 
 FND-003A depended on FND-001 only. It did **not** require FND-002 runtime
 evidence, notification decisions D1–D3, devices, a Windows runner, Firebase
@@ -278,7 +311,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.6** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. 0.5 (FND-003B2B) adds the picker-originated rider assignment lifecycle, the source-picker binding, the `picker.assignment.offer_rider` and `picker.assignment.revoke_rider` permissions, and moves the role-neutral `AssignmentDenial` and `reachableSlotRevisionRange` into a shared `assignment_integrity.dart` with no name, value or behaviour change. All additive, so minor only. 0.6 (FND-003B3A) adds physical custody — the shop/picker/rider/customer vocabulary, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, a role-aware `reachableSlotRevisionRange` and custody-derived reassignment safety. All additive, so minor only. **No delivery, refusal, return, customer custody, direct agent-to-rider pickup or money rules yet.** See [version history](../contracts/version-history.md). |
+| Wire contract (`cp_contracts`) | **0.7** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. 0.5 (FND-003B2B) adds the picker-originated rider assignment lifecycle, the source-picker binding, the `picker.assignment.offer_rider` and `picker.assignment.revoke_rider` permissions, and moves the role-neutral `AssignmentDenial` and `reachableSlotRevisionRange` into a shared `assignment_integrity.dart` with no name, value or behaviour change. All additive, so minor only. 0.6 (FND-003B3A) adds physical custody — the shop/picker/rider/customer vocabulary, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, a role-aware `reachableSlotRevisionRange` and custody-derived reassignment safety. All additive, so minor only. 0.7 (FND-003D1) adds mechanism-neutral delivery-proof **references** — `DeliveryProofPolicyRef`, `DeliveryEvidenceRef`, their structural validators and `DeliveryProofDenial`. All additive, so minor only. **No delivery, refusal, return, customer custody, direct agent-to-rider pickup, proof mechanism, proof-satisfaction rule or money rules yet.** See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships

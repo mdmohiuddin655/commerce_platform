@@ -201,6 +201,34 @@ narrows to `{delivered}` — a correction of metadata that had become false, not
 removal. **No version bump**: these are edits to an unreleased definition, and a
 review finding is not a release event.
 
+### 0.7 — FND-003D1 (2026-09-10) — additive
+
+Added mechanism-neutral delivery-proof **references**:
+
+- `DeliveryProofPolicyRef` — which immutable proof policy applies
+- `DeliveryEvidenceRef` — a resource-bound pointer to protected evidence
+- `validateDeliveryProofPolicyRef`, `validateDeliveryEvidenceRef`
+- `DeliveryProofDenial` — four **structural** values only
+
+**References, never results.** A policy reference does not say the policy was
+satisfied; an evidence reference does not say the evidence is authentic, or that
+anything was delivered. Neither can move `OrderState` or `CustodyHolder`,
+complete an assignment, authorize a caller or create money.
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, nothing defined at 0.6 changed meaning, and every addition is new
+surface. **No command, state, transition, event or permission was added**, and
+`OrderState.delivered`, `CustodyHolderKind.customer` and rider
+`AssignmentState.completed` all remain unreachable.
+
+**No proof mechanism was selected** — no OTP, QR, barcode, signature,
+photograph, video, GPS, biometric or attestation — and no grammar was imposed on
+the policy reference, because the repository has none to reuse.
+
+**What is *not* claimed.** 0.6 contained no delivery-proof types, so a 0.6 build
+could not decode a 0.7 reference even if one were serialized. None is:
+`cp_contracts` still has no serialization.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
@@ -238,13 +266,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2, 0.3, 0.4, 0.5 and 0.6 are purely additive, so no stored value changes
-  shape or meaning. The 0.5 move of `AssignmentDenial` and
+- 0.2 through 0.7 are purely additive, so no stored value changes shape or
+  meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003B3A commit returns the contract to 0.5,
+**Rollback:** reverting the FND-003D1 commit returns the contract to 0.6,
+reverting the FND-003B3A chain to 0.5,
 reverting the FND-003B2B chain to 0.4,
 reverting the FND-003B2A chain to 0.3,
 reverting the FND-003B1 chain to 0.2, and the FND-003A chain to 0.1 — all with

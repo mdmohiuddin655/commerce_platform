@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.6** (FND-003B3A).
+**Current contract version: 0.7** (FND-003D1).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -54,6 +54,17 @@ picker and rider slot-revision compare-and-set, create-once initialisation,
 honest state metadata) and **FND-003B3A-FIX-002** (contract-status
 reconciliation). The slice is a **candidate**, not yet accepted for merge.
 
+## Delivered — FND-003D1
+
+| Document | Covers |
+|---|---|
+| [delivery-proof-boundary.md](delivery-proof-boundary.md) | Mechanism-neutral delivery-proof **references**: which policy applies (never whether it is satisfied), resource-bound evidence references carrying no material, the event/notification privacy boundary, the deferred retention/visibility/dispute decisions, and what the eventual delivery slice must reconcile |
+
+**Successful delivery is NOT executable.** FND-003D1 added references only — no
+proof mechanism, no satisfaction rule, no command, state, event or permission.
+**FND-003D is PARTIAL**: proof satisfaction and the fallback dispute workflow
+remain required before delivery confirmation may be coded.
+
 ## Not yet defined — later FND-003 slices
 
 **No feature may guess any of these.** If it is not written down, the work is
@@ -65,7 +76,7 @@ blocked, and saying so is the correct outcome.
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
-| **Proof and dispute** | Customer OTP/proof format and the fallback dispute workflow — required **before** delivery confirmation is coded. | Lifecycle slice |
+| **Proof and dispute** (FND-003D, remaining) | Proof-**satisfaction** policy and the fallback dispute workflow — required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1). | — |
 
 ## Rules that already bind every later slice
 
