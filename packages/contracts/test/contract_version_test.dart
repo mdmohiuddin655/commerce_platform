@@ -42,9 +42,26 @@ void main() {
       // 0.4 -> 0.5 rider assignment lifecycle (FND-003B2B);
       // 0.5 -> 0.6 custody and picker->rider handoff (FND-003B3A);
       // 0.6 -> 0.7 delivery-proof references (FND-003D1);
-      // 0.7 -> 0.8 the delivery-proof assessment result (FND-003D2A). All
-      // additive, so the major stays 0.
-      expect(ContractVersion.current.toString(), '0.8');
+      // 0.7 -> 0.8 the delivery-proof assessment result (FND-003D2A);
+      // 0.8 -> 0.9 the fallback delivery-proof dispute workflow (FND-003D2B).
+      // All additive, so the major stays 0.
+      expect(ContractVersion.current.toString(), '0.9');
+    });
+
+    test('0.8 and 0.9 share a major, so the policy permits an attempt', () {
+      // Same policy, same non-claim. 0.8 defined no dispute types, so it could
+      // not decode a 0.9 dispute payload even if one were serialized. None is:
+      // cp_contracts still has no serialization.
+      expect(
+        ContractVersion.current
+            .isVersionCompatibleWith(const ContractVersion(0, 8)),
+        isTrue,
+      );
+      expect(
+        const ContractVersion(0, 8)
+            .isVersionCompatibleWith(ContractVersion.current),
+        isTrue,
+      );
     });
 
     test('0.7 and 0.8 share a major, so the policy permits an attempt', () {
@@ -52,13 +69,13 @@ void main() {
       // could not decode a 0.8 assessment payload even if one were serialized.
       // None is: cp_contracts still has no serialization.
       expect(
-        ContractVersion.current
+        const ContractVersion(0, 8)
             .isVersionCompatibleWith(const ContractVersion(0, 7)),
         isTrue,
       );
       expect(
         const ContractVersion(0, 7)
-            .isVersionCompatibleWith(ContractVersion.current),
+            .isVersionCompatibleWith(const ContractVersion(0, 8)),
         isTrue,
       );
     });
@@ -187,7 +204,7 @@ void main() {
       expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
       expect(
         v.toString(),
-        '0.8',
+        '0.9',
         reason: 'version policy only; decode behaviour is a decoder property',
       );
     });

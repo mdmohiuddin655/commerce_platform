@@ -8,7 +8,7 @@ safe way to *refer to* proof policy and protected evidence without embedding
 proof material in events, treating a reference as proof, or committing the
 platform to a proof method.
 
-> **Still true at 0.8.** FND-003D2A added a separate
+> **Still true at 0.9.** FND-003D2A added a separate
 > [delivery-proof **assessment**](delivery-proof-assessment.md) — a
 > trusted-server-produced, immutable *result* stating whether the referenced
 > policy was satisfied. It **does not weaken anything below**:
@@ -23,7 +23,12 @@ platform to a proof method.
 > `DeliveryEvidenceRef` is still only a structurally valid, resource-bound
 > pointer that proves neither authenticity nor satisfaction. The assessment is a
 > **different object** that carries the verdict; the references never gained
-> one. Successful delivery is still **not executable**.
+> one. FND-003D2B then added the
+> [fallback dispute](delivery-proof-dispute.md) for a missing, superseded or
+> `notSatisfied` assessment — a **third** object, which carries no reference, no
+> evidence handle and no verdict copy at all, only a pointer to the assessment
+> being contested. Successful delivery is still **not executable**, and no
+> dispute resolves.
 
 ---
 
@@ -34,23 +39,36 @@ refusal or failure, starts a return, moves custody to the customer, completes a
 rider assignment, or touches money.
 
 **No command, no state, no transition, no event and no permission was added by
-FND-003D1.** A test sweeps every command type across `LifecycleCommand`,
-`AssignmentCommand` and `CustodyCommand` and every event id across **every**
-event vocabulary, asserting nothing containing `deliver`, `refus`, `return`,
-`proof`, `attempt` or `dispute` exists — with exactly two deliberate exceptions,
-both pinned **by name** so a new `order.delivered` or
-`delivery.proof_submitted` would still fail:
+FND-003D1.** A test sweeps every command type and every event id across
+**every** vocabulary that exists, asserting nothing containing `deliver`,
+`refus`, `return`, `proof`, `attempt` or `dispute` exists — with a short list of
+deliberate exceptions, **every one pinned by name** so a new `order.delivered`
+or `delivery.proof_submitted` would still fail.
+
+The four permitted **events**:
 
 - `order.in_delivery` — FND-003B3A's accepted dispatch boundary;
 - `delivery.proof_assessed` — FND-003D2A's assessment fact, which reports that
-  a trusted assessment happened and **not** that delivery succeeded.
+  a trusted assessment happened and **not** that delivery succeeded;
+- `delivery.proof_dispute_raised` and
+  `delivery.proof_dispute_review_started` — FND-003D2B's fallback dispute
+  facts, which report that a dispute was recorded and that review of it
+  started. **Neither is a resolution, and no resolution event exists.**
+
+The three permitted **commands**, all FND-003D2B's:
+`dispute.raise_delivery_proof`, `dispute.record_delivery_proof_review` and
+`dispute.resolve_delivery_proof` — the last of which is **enumerated and never
+executable**, always refused `resolutionPolicyDeferred`.
 
 The sweep was widened to include `DeliveryProofAssessmentEventType` when that
-vocabulary was introduced. A guard that silently stops covering a new surface
-would keep passing while proving nothing.
+vocabulary was introduced, and again to include `DeliveryProofDisputeEventType`
+and `DeliveryProofDisputeCommand` at FND-003D2B. A guard that silently stops
+covering a new surface would keep passing while proving nothing.
 
-**FND-003D2A still added no command and no permission**: `Permission.values`
-remains **38**, and no `CustodyCommand`-style entry exists for assessment.
+**Neither FND-003D2A nor FND-003D2B added a permission**: `Permission.values`
+remains **38**. No `CustodyCommand`-style entry exists for assessment, and both
+executable dispute operations map to the accepted `customer.dispute.raise` and
+`admin.dispute.administer` rules, unchanged.
 
 ## 2. The two references
 
@@ -229,10 +247,16 @@ question open:
 - **proof acceptance / satisfaction** policy — *what a policy actually
   requires*. FND-003D2A added a place to record the **result** of evaluating
   one, and deliberately not the policy itself;
-- the **fallback dispute workflow** and dispute outcome — **FND-003D2B**;
+- the **dispute outcome** — how a fallback dispute resolves, and whether any
+  delivery, refusal, return, fee, refund, compensation or liability follows.
+  The fallback dispute **workflow** itself is **done** (FND-003D2B, 0.9) and
+  deliberately resolves nothing; the outcome needs **O6**, FND-003C and
+  FND-003B3B;
 - whether **customer participation** is required by any policy. Still
-  **POLICY-DEFINED / DEFERRED** after 0.8: not optional, not mandatory, not
+  **POLICY-DEFINED / DEFERRED** after 0.9: not optional, not mandatory, not
   sufficient, not a veto, and no `customerConfirmed` flag exists to default it.
+  FND-003D2B did not decide it either — **raising a dispute is not
+  participation in proof**.
 
 ## 8. What the eventual delivery slice must reconcile
 
@@ -240,12 +264,15 @@ Before a successful-delivery command can exist, a later bounded task must first
 define the **proof-satisfaction and fallback-dispute contract** that
 `CONSTRAINTS.md` invariant 13 requires.
 
-**Partially advanced by FND-003D2A, and only partially.** There is now a
-trusted, immutable place to record *whether* a policy was satisfied
+**Partially advanced by FND-003D2A and FND-003D2B, and only partially.** There
+is now a trusted, immutable place to record *whether* a policy was satisfied
 ([delivery-proof-assessment.md](delivery-proof-assessment.md)), so a later
-delivery transaction has something to consume. What a policy **requires**, and
-the **fallback dispute workflow** (FND-003D2B), are still undone — so invariant
-13 is **not** discharged and delivery confirmation still may not be coded.
+delivery transaction has something to consume, and a defined fallback for when
+that result is missing, superseded or `notSatisfied`
+([delivery-proof-dispute.md](delivery-proof-dispute.md)) — which resolves
+nothing and decides no outcome. What a policy **requires** is still undone, so
+invariant 13 is **not** discharged and delivery confirmation still may not be
+coded.
 
 That slice must then reconcile, in one design:
 

@@ -681,12 +681,34 @@ void main() {
     });
 
     test('no delivery, refusal or return command exists', () {
+      // **Widened by FND-003D2B.** The sweep must cover every command
+      // vocabulary that exists, or it silently stops guarding the moment a new
+      // one is introduced — the guard would keep passing while proving nothing
+      // about the new surface. `DeliveryProofDisputeCommand` is therefore
+      // included, and its three commands are pinned **by name** exactly the way
+      // `delivery.proof_assessed` is in the event sweep below: pinning is
+      // stronger than skipping the substring, because a new
+      // `dispute.resolve_and_refund` or `order.deliver` still fails.
       final List<String> allCommandTypes = <String>[
         ...LifecycleCommand.values.map((LifecycleCommand c) => c.commandType),
         ...AssignmentCommand.values.map((AssignmentCommand c) => c.commandType),
         ...CustodyCommand.values.map((CustodyCommand c) => c.commandType),
+        ...DeliveryProofDisputeCommand.values.map(
+          (DeliveryProofDisputeCommand c) => c.commandType,
+        ),
+      ];
+      const List<String> pinnedDisputeCommands = <String>[
+        // FND-003D2B's fallback dispute workflow. None of them delivers,
+        // refuses, returns or resolves anything — `resolve` is enumerated and
+        // always denied `resolutionPolicyDeferred`.
+        'dispute.raise_delivery_proof',
+        'dispute.record_delivery_proof_review',
+        'dispute.resolve_delivery_proof',
       ];
       for (final String type in allCommandTypes) {
+        if (pinnedDisputeCommands.contains(type)) {
+          continue;
+        }
         for (final String forbidden in <String>[
           'deliver',
           'refus',
@@ -702,6 +724,18 @@ void main() {
           );
         }
       }
+      // The dispute vocabulary is exactly the three pinned commands.
+      expect(
+        DeliveryProofDisputeCommand.values
+            .map((DeliveryProofDisputeCommand c) => c.commandType)
+            .toList(),
+        pinnedDisputeCommands,
+      );
+      // ...and nothing named for delivery, refusal or return exists anywhere.
+      expect(allCommandTypes, isNot(contains('order.deliver')));
+      expect(allCommandTypes, isNot(contains('delivery.confirm')));
+      expect(allCommandTypes, isNot(contains('order.refuse')));
+      expect(allCommandTypes, isNot(contains('return.start')));
     });
 
     test('no delivery/proof event id was added beyond the two pinned', () {
@@ -716,9 +750,10 @@ void main() {
         ...AssignmentEventType.all,
         ...CustodyEventType.all,
         ...DeliveryProofAssessmentEventType.all,
+        ...DeliveryProofDisputeEventType.all,
       ];
       for (final String e in allEvents) {
-        // Exactly two delivery-adjacent events may exist, both pinned by name.
+        // Exactly four delivery-adjacent events may exist, all pinned by name.
         // Pinning is stronger than skipping the substring: a new
         // `order.delivered` or `delivery.proof_submitted` still fails.
         //
@@ -726,8 +761,15 @@ void main() {
         // - `delivery.proof_assessed` — FND-003D2A's assessment fact, which
         //   reports that a trusted assessment happened and NOT that delivery
         //   succeeded.
+        // - `delivery.proof_dispute_raised` and
+        //   `delivery.proof_dispute_review_started` — FND-003D2B's fallback
+        //   dispute facts, which report that a dispute was recorded and that
+        //   review of it started. Neither is a resolution, and no resolution
+        //   event exists.
         if (e == LifecycleEventType.orderInDelivery ||
-            e == DeliveryProofAssessmentEventType.proofAssessed) {
+            e == DeliveryProofAssessmentEventType.proofAssessed ||
+            e == DeliveryProofDisputeEventType.disputeRaised ||
+            e == DeliveryProofDisputeEventType.disputeReviewStarted) {
           continue;
         }
         for (final String forbidden in <String>[
@@ -752,10 +794,16 @@ void main() {
       expect(allEvents, contains('delivery.proof_assessed'));
       expect(allEvents, isNot(contains('delivery.proof_submitted')));
       expect(allEvents, isNot(contains('delivery.proof_satisfied')));
+      // The two dispute facts exist, and no dispute *outcome* event does.
+      expect(allEvents, contains('delivery.proof_dispute_raised'));
+      expect(allEvents, contains('delivery.proof_dispute_review_started'));
+      expect(allEvents, isNot(contains('delivery.proof_dispute_resolved')));
+      expect(allEvents, isNot(contains('delivery.proof_dispute_closed')));
       expect(LifecycleEventType.all.length, 8);
       expect(AssignmentEventType.all.length, 11);
       expect(CustodyEventType.all.length, 2);
       expect(DeliveryProofAssessmentEventType.all.length, 1);
+      expect(DeliveryProofDisputeEventType.all.length, 2);
     });
   });
 

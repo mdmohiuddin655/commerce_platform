@@ -85,12 +85,28 @@ class Sample {
 
   group('nothing else became executable', () {
     test('no command anywhere maps to proof assessment', () {
+      // **Widened by FND-003D2B**, which introduced a fourth command
+      // vocabulary. A sweep that stops covering a new surface keeps passing
+      // while proving nothing, so the dispute commands are included and pinned
+      // by name — none of them assesses anything, and no assessment command
+      // exists in any vocabulary.
       final List<String> allCommandTypes = <String>[
         ...LifecycleCommand.values.map((LifecycleCommand c) => c.commandType),
         ...AssignmentCommand.values.map((AssignmentCommand c) => c.commandType),
         ...CustodyCommand.values.map((CustodyCommand c) => c.commandType),
+        ...DeliveryProofDisputeCommand.values.map(
+          (DeliveryProofDisputeCommand c) => c.commandType,
+        ),
+      ];
+      const List<String> pinnedDisputeCommands = <String>[
+        'dispute.raise_delivery_proof',
+        'dispute.record_delivery_proof_review',
+        'dispute.resolve_delivery_proof',
       ];
       for (final String type in allCommandTypes) {
+        if (pinnedDisputeCommands.contains(type)) {
+          continue;
+        }
         for (final String forbidden in <String>[
           'proof',
           'assess',
@@ -103,7 +119,14 @@ class Sample {
           expect(type, isNot(contains(forbidden)));
         }
       }
+      // No dispute command asserts, overrides or re-runs an assessment.
+      for (final String type in pinnedDisputeCommands) {
+        expect(type, isNot(contains('assess')));
+        expect(type, isNot(contains('override')));
+        expect(type, isNot(contains('satisf')));
+      }
       expect(CustodyCommand.values.length, 2);
+      expect(DeliveryProofDisputeCommand.values.length, 3);
     });
 
     test('Permission.values and permissionMatrix remain 38', () {
@@ -221,8 +244,19 @@ class Sample {
   });
 
   group('contract version', () {
-    test('the build still reports 0.8 — this is a fix, not a bump', () {
-      expect(ContractVersion.current.toString(), '0.8');
+    test('D2A itself did not bump the version, and 0.8 stayed a fix', () {
+      // FND-003D2A-FIX-001 corrected an unreleased 0.8 candidate in place, so
+      // it was not a release event and the version did not move. The build now
+      // reports **0.9** because FND-003D2B added the fallback dispute workflow
+      // additively on top — a separate slice, with its own bump. Nothing D2A
+      // defined changed meaning, which is what makes that bump a minor one.
+      expect(ContractVersion.current.toString(), '0.9');
+      expect(
+        ContractVersion.current.isVersionCompatibleWith(
+          const ContractVersion(0, 8),
+        ),
+        isTrue,
+      );
     });
 
     test('no serialization was added by this slice', () {

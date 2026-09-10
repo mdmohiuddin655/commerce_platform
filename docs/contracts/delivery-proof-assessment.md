@@ -29,8 +29,12 @@ rider assignment, or touches money.
 | `Permission.values` | **38**, unchanged |
 
 A test sweeps every command type across `LifecycleCommand`,
-`AssignmentCommand` and `CustodyCommand` and asserts nothing containing
-`proof`, `assess`, `deliver`, `refus`, `return`, `attempt` or `dispute` exists.
+`AssignmentCommand`, `CustodyCommand` and — since FND-003D2B widened it —
+`DeliveryProofDisputeCommand`, and asserts nothing containing `proof`,
+`assess`, `deliver`, `refus`, `return`, `attempt` or `dispute` exists, with the
+three FND-003D2B dispute commands pinned **by name** so a new one still fails.
+**No assessment command exists in any vocabulary**, and no dispute command
+asserts, overrides or re-runs an assessment.
 
 ## 2. The verdict vocabulary is two values
 
@@ -423,6 +427,16 @@ revalidated **inside** it (**DPA15**). A missing, malformed, superseded or
 (**DPA16**), and the fallback is FND-003D2B — never an automatic cancellation
 or financial result.
 
+> **Delivered at 0.9, and it still resolves nothing.**
+> [FND-003D2B](delivery-proof-dispute.md) defines that fallback: a
+> customer-raised dispute bound to an **immutable basis** naming exactly which
+> assessment situation was contested, with a standing calculation that reports
+> **supersession without rewriting history**. It changes nothing above — no
+> verdict meaning, no assessment field, no assessor rule — and it decides **no
+> outcome, fault, fee, refund, compensation, liability, return or delivery
+> consequence**. A torn assessment is still never a negative result: it is
+> refused as corruption rather than becoming a dispute basis.
+
 ## 13. Deliberately deferred — never defaulted
 
 | Decision | Status | Owner |
@@ -432,7 +446,8 @@ or financial result.
 | Evidence cardinality and internal material | **DEFERRED** — one D1 handle, no count | storage/policy design |
 | Evidence retention, visibility, deletion, legal hold | **DEFERRED** (unchanged from D1) | privacy/retention slice |
 | **Customer participation requirement** | **POLICY-DEFINED / DEFERRED** — not optional, not mandatory, not sufficient, not a veto | proof-policy slice |
-| Fallback dispute workflow | **NOT STARTED** | **FND-003D2B** |
+| Fallback dispute workflow | **DONE** (0.9) — see [delivery-proof-dispute.md](delivery-proof-dispute.md) | **FND-003D2B** |
+| **How a dispute resolves** | **DEFERRED** — enumerated and refused, never guessed | resolution slice, **O6**, FND-003C, FND-003B3B |
 | Delivery attempts, refusal, returns | **NOT STARTED** | **FND-003B3B** |
 | Any money at all | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
 | Manual/admin assessment override | **NOT INVENTED** — separate audited workflow if ever needed | future ADR |

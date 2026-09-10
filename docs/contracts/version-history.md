@@ -313,6 +313,83 @@ that silently stops covering a new surface keeps passing while proving nothing.
 See [delivery-proof-assessment.md](delivery-proof-assessment.md) and
 [ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md).
 
+### 0.9 — FND-003D2B (2026-09-11) — additive
+
+Added the **fallback delivery-proof dispute** workflow — what happens when the
+assessment a delivery would need is missing, superseded or `notSatisfied`, which
+0.8 deliberately had no place to record:
+
+- `DeliveryProofDisputeState` — `open` / `underReview`, plus a declared but
+  **unreachable** `resolved`
+- `reachableDisputeRevisionFor` — the exact revision each state may carry;
+  **null for `resolved`**, so no resolution cost is invented
+- `DeliveryProofDisputeBasisKind` — `notAssessed` / `notSatisfied`
+- `DeliveryProofDisputeBasis` — the immutable audit identity of what was
+  disputed: an assessment id and revision, and **nothing copied** from the
+  assessment
+- `DeliveryProofDisputeBasisStanding` and
+  `resolveDeliveryProofDisputeBasisStanding` — `current` / `superseded` /
+  `indeterminate`
+- `DeliveryProofDisputeCommand` — `raise`, `recordReviewStarted`, and a
+  deliberately non-executable `resolve`; plus `executableInThisSlice` and
+  `policyDeferredInThisSlice`
+- `DeliveryProofDisputeEventType` — `delivery.proof_dispute_raised` and
+  `delivery.proof_dispute_review_started`
+- `DeliveryProofDisputeRecord` (with `.raised` and `.reviewStarted`),
+  `…Facts` (with `.absent`), `…Context`, `…Request` (three constructors),
+  `…Transition`, `…Outcome`, `…Denial`
+- `validateDeliveryProofDisputeAggregate`, `canonicalState`, `canonicalBasis`,
+  `evaluateDeliveryProofDispute`
+
+**A record, never a resolution.** Every order, reservation, inventory,
+financial, custody, assignment **and assessment** effect is **NONE**, and
+structurally so: the transition type has no field for any of them, so one that
+moves them cannot be constructed. `OrderState.delivered`,
+`CustodyHolderKind.customer` and rider `AssignmentState.completed` all remain
+**unreachable**, and **B3-C2** stays FUTURE.
+
+**No permission was added.** `Permission.values` and `permissionMatrix` stay at
+**38**. Both executable operations map to the accepted FND-003A rules —
+`customer.dispute.raise` (`ownResource`, reason required) and
+`admin.dispute.administer` (`ownRegion`, reason required) — unchanged in role,
+scope, reason requirement and restriction.
+`customer.delivery.confirm_proof` is **not** reinterpreted.
+
+**No outcome was decided.** `DeliveryProofDisputeCommand.resolve` is enumerated
+and always refused `resolutionPolicyDeferred` before any fact is read, following
+`LifecycleDenial.policyDeferred`'s precedent, because resolving a dispute would
+require deciding who prevails, whether the order is delivered, refused or
+returned, whether a fee, refund, compensation or liability follows, and whether
+customer participation is optional, mandatory, sufficient or a veto — **owner
+decision O6, FND-003C and FND-003B3B, none of which has run**.
+
+**The five proof situations stay distinct**: canonical absence, current
+`notSatisfied`, a superseded basis, a torn aggregate, and current `satisfied`.
+Corruption is **never** laundered into `notSatisfied` and never becomes a
+dispute basis.
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, **nothing defined at 0.8 changed meaning**, and every addition is new
+surface. The D1 reference types and the D2A assessment module — their verdicts,
+records, validators, evaluator, denials, event and `toString` behaviour — are
+**untouched**; the dispute reuses `validateDeliveryProofAssessmentAggregate` and
+`canonicalVerdict` rather than reimplementing, widening or mutating anything.
+
+**What is *not* claimed.** 0.8 contained no dispute types at all, so a 0.8 build
+could not decode a 0.9 dispute payload even if one were serialized. None is:
+`cp_contracts` still has no serialization, and **no payload or unknown-field
+compatibility is claimed at any version**.
+
+Four existing test files were updated, all version or coverage pins rather than
+behaviour: three `ContractVersion.current` assertions moved from `0.8` to `0.9`
+(plus one existing 0.7↔0.8 test re-anchored on literals so it keeps testing that
+pair), and the D1 and D2A **command** sweeps plus the D1 **event** sweep were
+widened to include the new dispute vocabulary, with all three commands and both
+events pinned **by name**. A guard that silently stops covering a new surface
+keeps passing while proving nothing.
+
+See [delivery-proof-dispute.md](delivery-proof-dispute.md).
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
@@ -323,6 +400,8 @@ See [delivery-proof-assessment.md](delivery-proof-assessment.md) and
 | 0.2 reader, 0.3 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.2 had no lifecycle types at all. |
 | 0.8 reader, 0.7 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.7 reader, 0.8 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.7 had no assessment types at all. |
+| 0.9 reader, 0.8 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
+| 0.8 reader, 0.9 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.8 had no dispute types at all. |
 | 0.2 reader, 0.1 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.1 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.1 had no envelope or permission decoder at all. |
 | Either reader, 1.x payload | **Refused** — surfaced as an upgrade prompt, never silently partially parsed | n/a |
@@ -352,13 +431,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 through 0.8 are purely additive, so no stored value changes shape or
+- 0.2 through 0.9 are purely additive, so no stored value changes shape or
   meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003D2A commit returns the contract to 0.7,
+**Rollback:** reverting the FND-003D2B commit returns the contract to 0.8,
+reverting the FND-003D2A chain to 0.7,
 reverting the FND-003D1 chain to 0.6,
 reverting the FND-003B3A chain to 0.5,
 reverting the FND-003B2B chain to 0.4,

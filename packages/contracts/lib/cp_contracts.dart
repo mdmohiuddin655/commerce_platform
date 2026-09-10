@@ -1,7 +1,7 @@
 /// Shared wire contract: identity, authorization, and the order, assignment
 /// and custody lifecycles.
 ///
-/// **Contract version 0.8.** What this package defines today:
+/// **Contract version 0.9.** What this package defines today:
 ///
 /// - [CommandEnvelope] — the one shape every trusted command arrives in, with
 ///   no actor field by design.
@@ -31,6 +31,17 @@
 ///   order, reservation, inventory, financial, custody and assignment effect is
 ///   NONE. It selects no proof mechanism, has no client-selectable permission,
 ///   and successful delivery remains **not** executable.
+/// - [evaluateDeliveryProofDispute] — the **fallback dispute workflow** for a
+///   missing, superseded or `notSatisfied` assessment: one customer-raised
+///   dispute per order, an immutable [DeliveryProofDisputeBasis] recording
+///   exactly what was contested, a
+///   [resolveDeliveryProofDisputeBasisStanding] calculation that reports
+///   supersession without rewriting history, and one administrator operation
+///   recording that review started. It **resolves nothing** — resolution is
+///   enumerated and refused `resolutionPolicyDeferred` — decides no outcome,
+///   fault, fee, refund, compensation, liability, return or delivery
+///   consequence, adds **no permission**, and touches no assessment, order,
+///   custody or assignment.
 ///
 /// What it deliberately does **not** define yet — later slices own these, and
 /// no feature may guess them:
@@ -46,15 +57,16 @@
 ///   exists;
 /// - the **proof-satisfaction policy itself** — what a policy requires, which
 ///   mechanism captures evidence, and whether customer participation is
-///   needed — and the fallback dispute workflow, which `CONSTRAINTS.md`
-///   invariant 13 requires **before** delivery confirmation may be coded.
-///   FND-003D1 added the references; FND-003D2A added the *result* of an
-///   evaluation the platform still does not define. The dispute workflow is
-///   FND-003D2B;
+///   needed. FND-003D1 added the references, FND-003D2A the *result* of an
+///   evaluation the platform still does not define, and FND-003D2B the
+///   fallback when that result is missing, superseded or `notSatisfied`. The
+///   policy itself remains undefined, so `CONSTRAINTS.md` invariant 13 is
+///   **not** discharged and delivery confirmation still may not be coded;
+/// - **how a dispute resolves** — who prevails, and whether any delivery,
+///   refusal, return, fee, refund, compensation or liability follows;
 /// - payment and COD lifecycles;
 /// - the cash journal, fees, refusal policy, commissions and settlement
-///   (blocked on owner decision O6);
-/// - proof and dispute workflows.
+///   (blocked on owner decision O6).
 ///
 /// **There is no serialization in this package.** No type has a
 /// `toJson`/`fromJson`, so no build can decode another's payload and no
@@ -74,6 +86,7 @@ export 'package:cp_contracts/src/custody_lifecycle.dart';
 export 'package:cp_contracts/src/custody_state.dart';
 export 'package:cp_contracts/src/delivery_proof.dart';
 export 'package:cp_contracts/src/delivery_proof_assessment.dart';
+export 'package:cp_contracts/src/delivery_proof_dispute.dart';
 export 'package:cp_contracts/src/event_envelope.dart';
 export 'package:cp_contracts/src/idempotency.dart';
 export 'package:cp_contracts/src/ids.dart';

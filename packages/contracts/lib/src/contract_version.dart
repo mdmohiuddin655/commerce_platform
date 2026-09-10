@@ -69,6 +69,26 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   assignment effect is NONE. Successful delivery is still unimplemented:
   ///   `delivered`, customer custody and rider `completed` remain unreachable.
   ///
+  /// - **0.9** (FND-003D2B) — additive: the **fallback delivery-proof dispute**
+  ///   workflow for a missing, superseded or `notSatisfied` assessment —
+  ///   `DeliveryProofDisputeState`, `reachableDisputeRevisionFor`,
+  ///   `DeliveryProofDisputeBasisKind`, the immutable
+  ///   `DeliveryProofDisputeBasis`,
+  ///   `DeliveryProofDisputeBasisStanding` with
+  ///   `resolveDeliveryProofDisputeBasisStanding`,
+  ///   `DeliveryProofDisputeCommand` (two executable operations plus a
+  ///   deliberately non-executable `resolve`), `DeliveryProofDisputeEventType`
+  ///   (two ids), the record, aggregate, context, request, transition, outcome
+  ///   and denial vocabulary, `validateDeliveryProofDisputeAggregate`,
+  ///   `canonicalState` / `canonicalBasis` and
+  ///   `evaluateDeliveryProofDispute`. **No permission was added** — both
+  ///   executable operations use the accepted `customer.dispute.raise` and
+  ///   `admin.dispute.administer` rules unchanged — **no outcome, fault, fee,
+  ///   refund, compensation, liability, return or delivery consequence is
+  ///   decided**, no assessment is mutated, and every order, reservation,
+  ///   inventory, financial, custody and assignment effect is NONE.
+  ///   `delivered`, customer custody and rider `completed` remain unreachable.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -78,7 +98,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 8);
+  static const ContractVersion current = ContractVersion(0, 9);
 
   final int major;
   final int minor;

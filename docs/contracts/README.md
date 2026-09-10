@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.8** (FND-003D2A).
+**Current contract version: 0.9** (FND-003D2B).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8 → 0.9, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -76,9 +76,23 @@ evaluating a policy — **not the policy**, and **not a proof mechanism**. It ad
 `OrderState.delivered`, `CustodyHolderKind.customer` and rider
 `AssignmentState.completed` all remain unreachable.
 
-**FND-003D is PARTIAL**: the proof-satisfaction *policy* and the fallback
-dispute workflow (**FND-003D2B**) remain required by `CONSTRAINTS.md` invariant
-13 before delivery confirmation may be coded.
+## Delivered — FND-003D2B
+
+| Document | Covers |
+|---|---|
+| [delivery-proof-dispute.md](delivery-proof-dispute.md) | The **fallback dispute workflow** for a missing, superseded or `notSatisfied` assessment: the two fallback grounds, the immutable dispute basis and its `current` / `superseded` / `indeterminate` standing, one live dispute per order, two named operations under the accepted `customer.dispute.raise` and `admin.dispute.administer` rules, an independent dispute revision with compare-and-set, all-NONE effects including the assessment, two privacy-minimal events, the deliberately **non-executable** resolution edge, and the **DPD1–DPD12** backend checklist |
+
+**Successful delivery is still NOT executable, and no dispute resolves.**
+FND-003D2B records *that* the proof situation is contested and *that* review
+started. It decides **no outcome, fault, fee, refund, compensation, liability,
+return or delivery consequence**, adds **no permission** (`Permission.values`
+stays at 38), mutates **no assessment**, and leaves `OrderState.delivered`,
+`CustodyHolderKind.customer` and rider `AssignmentState.completed` unreachable.
+
+**FND-003D is PARTIAL**: the proof-satisfaction *policy itself* is still
+undefined, so `CONSTRAINTS.md` invariant 13 is **not discharged** and delivery
+confirmation may not be coded. **How a dispute resolves** is a separate
+undecided question, blocked on **O6**, **FND-003C** and **FND-003B3B**.
 
 ## Not yet defined — later FND-003 slices
 
@@ -91,7 +105,8 @@ blocked, and saying so is the correct outcome.
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
-| **Proof and dispute** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed — and the fallback dispute workflow (**FND-003D2B**). Both required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1) and the assessment **result** is **done** (FND-003D2A). | — |
+| **Proof policy** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed. Required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
+| **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C, FND-003B3B |
 
 ## Rules that already bind every later slice
 
@@ -172,6 +187,26 @@ From FND-003D1 and FND-003D2A:
 - `notSatisfied` means only that the policy was not satisfied. It is not fraud,
   refusal, cancellation, a lost dispute, a fee or a refund, and no financial
   consequence may be derived from it.
+
+From FND-003D2B:
+
+- A **missing, superseded or `notSatisfied`** assessment has one defined
+  fallback: a dispute, raised by the order's customer, bound to the canonical
+  order and to an **immutable basis** naming exactly what was contested.
+- **Corruption is never a fallback ground.** A torn assessment aggregate denies;
+  it never becomes `notSatisfied`, and it never becomes a dispute basis.
+- A **`satisfied`** assessment is not a fallback ground either — that is a
+  different workflow, and no slice defines it.
+- **Supersession is a standing, not a rewrite.** A reassessment never alters or
+  invalidates a dispute's basis, and a later `satisfied` verdict does not
+  dismiss the dispute.
+- **A dispute decides nothing.** Resolution is enumerated and deliberately not
+  executable; no outcome, fault, fee, refund, compensation, liability, return or
+  delivery consequence exists, and none may be derived.
+- **At most one live dispute per order**, with its own revision and
+  compare-and-set. Duplicate and reordered intent writes nothing.
+- A dispute record holds **no free text** — the required reason lives with the
+  audited command, in FND-003A.
 
 From FND-003B2B:
 
