@@ -57,6 +57,18 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   proof mechanism, no satisfaction rule, no command, no state and no
   ///   permission. Successful delivery remains unimplemented.
   ///
+  /// - **0.8** (FND-003D2A) — additive: the delivery-proof **assessment**
+  ///   result — `DeliveryProofAssessmentVerdict` (`satisfied` /
+  ///   `notSatisfied` only), the immutable `DeliveryProofAssessmentRecord`,
+  ///   its aggregate, context, request, transition, outcome and denial
+  ///   vocabulary, `validateDeliveryProofAssessmentAggregate`,
+  ///   `evaluateDeliveryProofAssessment` and one event id. A trusted server
+  ///   worker states **whether** the referenced policy was satisfied; **no
+  ///   proof mechanism was selected, no command and no permission was added**,
+  ///   and every order, reservation, inventory, financial, custody and
+  ///   assignment effect is NONE. Successful delivery is still unimplemented:
+  ///   `delivered`, customer custody and rider `completed` remain unreachable.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -66,7 +78,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 7);
+  static const ContractVersion current = ContractVersion(0, 8);
 
   final int major;
   final int minor;

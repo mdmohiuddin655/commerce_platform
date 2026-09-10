@@ -1,12 +1,29 @@
 # Delivery-proof reference and privacy boundary
 
-**Contract version 0.7** (FND-003D1). Source of truth:
+**Introduced at contract version 0.7** (FND-003D1). Source of truth:
 `packages/contracts/lib/src/delivery_proof.dart`.
 
 This is a **prerequisite contract, not a delivery slice**. It gives later work a
 safe way to *refer to* proof policy and protected evidence without embedding
 proof material in events, treating a reference as proof, or committing the
 platform to a proof method.
+
+> **Still true at 0.8.** FND-003D2A added a separate
+> [delivery-proof **assessment**](delivery-proof-assessment.md) — a
+> trusted-server-produced, immutable *result* stating whether the referenced
+> policy was satisfied. It **does not weaken anything below**:
+>
+> ```text
+> reference != proof
+> structural validation != authorization
+> structural validation != satisfaction
+> ```
+>
+> A `DeliveryProofPolicyRef` still only says *which* policy applies, and a
+> `DeliveryEvidenceRef` is still only a structurally valid, resource-bound
+> pointer that proves neither authenticity nor satisfaction. The assessment is a
+> **different object** that carries the verdict; the references never gained
+> one. Successful delivery is still **not executable**.
 
 ---
 
@@ -16,12 +33,24 @@ Nothing here delivers an order, confirms delivery, records an attempt, handles
 refusal or failure, starts a return, moves custody to the customer, completes a
 rider assignment, or touches money.
 
-**No command, no state, no transition, no event and no permission was added.**
-A test sweeps every command type across `LifecycleCommand`,
-`AssignmentCommand` and `CustodyCommand` and every event id across all three
-vocabularies, asserting nothing containing `deliver`, `refus`, `return`,
-`proof`, `attempt` or `dispute` exists — with one deliberate exception pinned by
-name, `order.in_delivery`, which is FND-003B3A's accepted dispatch boundary.
+**No command, no state, no transition, no event and no permission was added by
+FND-003D1.** A test sweeps every command type across `LifecycleCommand`,
+`AssignmentCommand` and `CustodyCommand` and every event id across **every**
+event vocabulary, asserting nothing containing `deliver`, `refus`, `return`,
+`proof`, `attempt` or `dispute` exists — with exactly two deliberate exceptions,
+both pinned **by name** so a new `order.delivered` or
+`delivery.proof_submitted` would still fail:
+
+- `order.in_delivery` — FND-003B3A's accepted dispatch boundary;
+- `delivery.proof_assessed` — FND-003D2A's assessment fact, which reports that
+  a trusted assessment happened and **not** that delivery succeeded.
+
+The sweep was widened to include `DeliveryProofAssessmentEventType` when that
+vocabulary was introduced. A guard that silently stops covering a new surface
+would keep passing while proving nothing.
+
+**FND-003D2A still added no command and no permission**: `Permission.values`
+remains **38**, and no `CustodyCommand`-style entry exists for assessment.
 
 ## 2. The two references
 
@@ -197,15 +226,26 @@ question open:
 - proof evidence **retention period**;
 - evidence **visibility** for customer, rider, agent and admin;
 - **deletion and legal-hold** policy;
-- **proof acceptance / satisfaction** policy;
-- the **fallback dispute workflow** and dispute outcome;
-- whether **customer participation** is required by any policy.
+- **proof acceptance / satisfaction** policy — *what a policy actually
+  requires*. FND-003D2A added a place to record the **result** of evaluating
+  one, and deliberately not the policy itself;
+- the **fallback dispute workflow** and dispute outcome — **FND-003D2B**;
+- whether **customer participation** is required by any policy. Still
+  **POLICY-DEFINED / DEFERRED** after 0.8: not optional, not mandatory, not
+  sufficient, not a veto, and no `customerConfirmed` flag exists to default it.
 
 ## 8. What the eventual delivery slice must reconcile
 
 Before a successful-delivery command can exist, a later bounded task must first
 define the **proof-satisfaction and fallback-dispute contract** that
 `CONSTRAINTS.md` invariant 13 requires.
+
+**Partially advanced by FND-003D2A, and only partially.** There is now a
+trusted, immutable place to record *whether* a policy was satisfied
+([delivery-proof-assessment.md](delivery-proof-assessment.md)), so a later
+delivery transaction has something to consume. What a policy **requires**, and
+the **fallback dispute workflow** (FND-003D2B), are still undone — so invariant
+13 is **not** discharged and delivery confirmation still may not be coded.
 
 That slice must then reconcile, in one design:
 

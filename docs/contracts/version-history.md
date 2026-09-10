@@ -230,8 +230,8 @@ could not decode a 0.7 reference even if one were serialized. None is:
 `cp_contracts` still has no serialization, and **no payload or unknown-field
 compatibility is claimed at any version**.
 
-**Corrected in place by FND-003D1-FIX-001**, while 0.7 is still an unmerged,
-unreleased candidate — `origin/main` is `e8dacfc`, which predates it. The
+**Corrected in place by FND-003D1-FIX-001**, while 0.7 was still an unmerged,
+unreleased candidate — `origin/main` was `e8dacfc`, which predates it. The
 corrections add `maxDeliveryProofPolicyRefLength` (64) and two denial values
 (`policyRefTooLong`, `expectedResourceIdInvalid`); stop
 `DeliveryProofPolicyRef.toString` reproducing the raw value; make
@@ -246,6 +246,73 @@ policy-reference ceiling now **aliases `maxIdLength`** instead of repeating its
 literal, and `DeliveryEvidenceRef.toString` no longer echoes the fields of a
 **malformed** instance. Both are hardening of the same unreleased candidate.
 
+**0.7 is now accepted and integrated.** FND-003D1-MERGE-001 fast-forwarded
+`main` from `e8dacfc` to **`f03fc99`** on 2026-09-10, preserving the reviewed
+three-commit linear history with no merge, squash, rebase or amend. The three
+statements above describe the state *at the time each correction was made* and
+are retained as history; 0.7 is no longer a candidate. It is still **unreleased**
+in the sense that matters for compatibility — no client has ever been built
+against it, and no data exists under it.
+
+### 0.8 — FND-003D2A (2026-09-10) — additive
+
+Added the delivery-proof **assessment** — the result of evaluating a policy,
+which 0.7 deliberately had no place to record:
+
+- `DeliveryProofAssessmentVerdict` — `satisfied` / `notSatisfied`, and nothing
+  else
+- `DeliveryProofAssessmentRecord` — one immutable result, binding assessment id,
+  resource, revision, policy reference, evidence reference, rider
+  principal/assignment/generation, assessor, server UTC and verdict
+- `DeliveryProofAssessmentFacts` (with `.absent`), `…Context`, `…Request`,
+  `…Transition`, `…Outcome`, `…Denial`
+- `validateDeliveryProofAssessmentAggregate`,
+  `evaluateDeliveryProofAssessment`
+- `executableProofAssessorKinds` — `{PrincipalKind.systemWorker}`
+- `DeliveryProofAssessmentEventType.proofAssessed` —
+  `delivery.proof_assessed`
+
+**A result, never a delivery.** Every order, reservation, inventory, financial,
+custody and assignment effect is **NONE**, and structurally so: the transition
+type has no order, custody or assignment effect field, so one that moves them
+cannot be constructed. `OrderState.delivered`, `CustodyHolderKind.customer` and
+rider `AssignmentState.completed` all remain **unreachable**, and **no revision
+cost for rider completion was invented** — **B3-C2** stays FUTURE.
+
+**No command and no permission was added.** `Permission.values` and
+`permissionMatrix` stay at **38**. A normal assessment is produced only under
+trusted server authority, in the same way `initialiseCustodyAtShop` is — a
+client-selectable "declare proof satisfied" operation would be the arbitrary
+status patch this contract forbids.
+
+**No proof mechanism was selected** — no OTP, QR, barcode, signature,
+photograph, video, GPS, biometric or attestation — and **no evidence cardinality
+was invented**: the record carries the single D1 `DeliveryEvidenceRef` and says
+nothing about what the protected record behind it holds.
+
+**Absence is "not assessed"**, expressed once as revision 0 with no record.
+There is no `pending` verdict, so the two cannot disagree.
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, **nothing defined at 0.7 changed meaning**, and every addition is new
+surface. The D1 reference types, their validators, their bound and their
+`toString` behaviour are **byte-for-byte untouched** — the assessment reuses
+them and maps their denials rather than reimplementing or widening them.
+
+**What is *not* claimed.** 0.7 contained no assessment types at all, so a 0.7
+build could not decode a 0.8 assessment payload even if one were serialized.
+None is: `cp_contracts` still has no serialization, and **no payload or
+unknown-field compatibility is claimed at any version**.
+
+Three existing tests were updated, all version or coverage pins rather than
+behaviour: two `ContractVersion.current` assertions moved from `0.7` to `0.8`,
+and the D1 event sweep was widened to include the new event vocabulary and to
+pin `delivery.proof_assessed` by name alongside `order.in_delivery`. A guard
+that silently stops covering a new surface keeps passing while proving nothing.
+
+See [delivery-proof-assessment.md](delivery-proof-assessment.md) and
+[ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md).
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
@@ -254,6 +321,8 @@ literal, and `DeliveryEvidenceRef.toString` no longer echoes the fields of a
 | 0.3 reader, 0.4 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.3 had no assignment types at all. |
 | 0.3 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.2 reader, 0.3 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.2 had no lifecycle types at all. |
+| 0.8 reader, 0.7 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
+| 0.7 reader, 0.8 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.7 had no assessment types at all. |
 | 0.2 reader, 0.1 payload | Attempt permitted (same major) | **Not claimed.** No decoder exists to test. |
 | 0.1 reader, 0.2 payload | Attempt permitted (same major) | **Not claimed, and not plausible** — 0.1 had no envelope or permission decoder at all. |
 | Either reader, 1.x payload | **Refused** — surfaced as an upgrade prompt, never silently partially parsed | n/a |
@@ -283,13 +352,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 through 0.7 are purely additive, so no stored value changes shape or
+- 0.2 through 0.8 are purely additive, so no stored value changes shape or
   meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003D1 commit returns the contract to 0.6,
+**Rollback:** reverting the FND-003D2A commit returns the contract to 0.7,
+reverting the FND-003D1 chain to 0.6,
 reverting the FND-003B3A chain to 0.5,
 reverting the FND-003B2B chain to 0.4,
 reverting the FND-003B2A chain to 0.3,

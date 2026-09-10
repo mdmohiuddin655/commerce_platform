@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.7** (FND-003D1).
+**Current contract version: 0.8** (FND-003D2A).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -52,7 +52,7 @@ done. Delivery attempts, refusal, returns and customer custody are not.
 Corrected in place by **FND-003B3A-FIX-001** (canonical resource/shop binding,
 picker and rider slot-revision compare-and-set, create-once initialisation,
 honest state metadata) and **FND-003B3A-FIX-002** (contract-status
-reconciliation). The slice is a **candidate**, not yet accepted for merge.
+reconciliation). **Accepted and integrated** into `main` at `e8dacfc`.
 
 ## Delivered — FND-003D1
 
@@ -60,10 +60,25 @@ reconciliation). The slice is a **candidate**, not yet accepted for merge.
 |---|---|
 | [delivery-proof-boundary.md](delivery-proof-boundary.md) | Mechanism-neutral delivery-proof **references**: which policy applies (never whether it is satisfied), resource-bound evidence references carrying no material, the event/notification privacy boundary, the deferred retention/visibility/dispute decisions, and what the eventual delivery slice must reconcile |
 
-**Successful delivery is NOT executable.** FND-003D1 added references only — no
-proof mechanism, no satisfaction rule, no command, state, event or permission.
-**FND-003D is PARTIAL**: proof satisfaction and the fallback dispute workflow
-remain required before delivery confirmation may be coded.
+FND-003D1 added references only — no proof mechanism, no satisfaction rule, no
+command, state, event or permission. Corrected in place by **FIX-001** and
+**FIX-002**; **accepted and integrated** into `main` at `f03fc99`.
+
+## Delivered — FND-003D2A
+
+| Document | Covers |
+|---|---|
+| [delivery-proof-assessment.md](delivery-proof-assessment.md) | The trusted-server-produced, immutable proof **assessment**: two verdicts (`satisfied` / `notSatisfied`), absence as *not assessed*, the immutable record and its exact resource/policy/evidence/rider binding, an independent `assessmentRevision` with four-way compare-and-set, append-only reassessment, all-NONE commercial effects, one privacy-minimal event, the trust boundary, and the **DPA1–DPA16** backend checklist |
+
+**Successful delivery is still NOT executable.** FND-003D2A adds the *result* of
+evaluating a policy — **not the policy**, and **not a proof mechanism**. It adds
+**no command and no permission** (`Permission.values` stays at 38);
+`OrderState.delivered`, `CustodyHolderKind.customer` and rider
+`AssignmentState.completed` all remain unreachable.
+
+**FND-003D is PARTIAL**: the proof-satisfaction *policy* and the fallback
+dispute workflow (**FND-003D2B**) remain required by `CONSTRAINTS.md` invariant
+13 before delivery confirmation may be coded.
 
 ## Not yet defined — later FND-003 slices
 
@@ -76,7 +91,7 @@ blocked, and saying so is the correct outcome.
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
-| **Proof and dispute** (FND-003D, remaining) | Proof-**satisfaction** policy and the fallback dispute workflow — required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1). | — |
+| **Proof and dispute** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed — and the fallback dispute workflow (**FND-003D2B**). Both required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1) and the assessment **result** is **done** (FND-003D2A). | — |
 
 ## Rules that already bind every later slice
 
@@ -137,6 +152,26 @@ From FND-003B3A:
   proves shop receipt **and** inspection.
 - Unknown or corrupt custody is **unsafe** for reassignment. "The record does
   not name this worker" is not proof they hold nothing.
+
+From FND-003D1 and FND-003D2A:
+
+- A **reference is not a result**: naming a policy never asserts it was
+  satisfied, and an evidence reference proves neither authenticity nor delivery.
+- Only **trusted server authority** may produce a proof assessment. No customer,
+  rider, picker, agent or admin permission can self-declare proof satisfied, and
+  no client command exists for it.
+- A pure Dart record **cannot authenticate its own origin**. The backend must
+  ignore client-supplied assessments and trust only what it loaded.
+- Assessment history is **append-only**: a reassessment takes a new opaque id
+  and the next revision, and never rewrites, relabels or erases the previous
+  record.
+- **Absence of an assessment means *not assessed*** — never "not satisfied", and
+  never a `pending` business state.
+- A `satisfied` verdict **delivers nothing**: every order, reservation,
+  inventory, financial, custody and assignment effect is NONE, structurally.
+- `notSatisfied` means only that the policy was not satisfied. It is not fraud,
+  refusal, cancellation, a lost dispute, a fee or a refund, and no financial
+  consequence may be derived from it.
 
 From FND-003B2B:
 

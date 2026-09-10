@@ -1,7 +1,7 @@
 /// Shared wire contract: identity, authorization, and the order, assignment
 /// and custody lifecycles.
 ///
-/// **Contract version 0.7.** What this package defines today:
+/// **Contract version 0.8.** What this package defines today:
 ///
 /// - [CommandEnvelope] — the one shape every trusted command arrives in, with
 ///   no actor field by design.
@@ -25,6 +25,12 @@
 ///   shop initialisation, `shop → picker` pickup, and `picker → rider` receipt,
 ///   which is the dispatch boundary that moves an order to `in_delivery` and
 ///   completes the picker assignment.
+/// - [evaluateDeliveryProofAssessment] — a **trusted-server-produced,
+///   immutable** result stating whether the referenced proof policy was
+///   satisfied. Two verdicts only, append-only reassessment, and **every**
+///   order, reservation, inventory, financial, custody and assignment effect is
+///   NONE. It selects no proof mechanism, has no client-selectable permission,
+///   and successful delivery remains **not** executable.
 ///
 /// What it deliberately does **not** define yet — later slices own these, and
 /// no feature may guess them:
@@ -38,9 +44,13 @@
 /// - a handoff-proof protocol — rider receipt is an *authorized assertion*,
 ///   not independent proof, and no OTP, QR, signature or photo mechanism
 ///   exists;
-/// - delivery-proof **satisfaction** and the fallback dispute workflow, which
-///   `CONSTRAINTS.md` invariant 13 requires **before** delivery confirmation
-///   may be coded — FND-003D1 added the references only;
+/// - the **proof-satisfaction policy itself** — what a policy requires, which
+///   mechanism captures evidence, and whether customer participation is
+///   needed — and the fallback dispute workflow, which `CONSTRAINTS.md`
+///   invariant 13 requires **before** delivery confirmation may be coded.
+///   FND-003D1 added the references; FND-003D2A added the *result* of an
+///   evaluation the platform still does not define. The dispute workflow is
+///   FND-003D2B;
 /// - payment and COD lifecycles;
 /// - the cash journal, fees, refusal policy, commissions and settlement
 ///   (blocked on owner decision O6);
@@ -63,6 +73,7 @@ export 'package:cp_contracts/src/custody_effect.dart';
 export 'package:cp_contracts/src/custody_lifecycle.dart';
 export 'package:cp_contracts/src/custody_state.dart';
 export 'package:cp_contracts/src/delivery_proof.dart';
+export 'package:cp_contracts/src/delivery_proof_assessment.dart';
 export 'package:cp_contracts/src/event_envelope.dart';
 export 'package:cp_contracts/src/idempotency.dart';
 export 'package:cp_contracts/src/ids.dart';

@@ -35,14 +35,16 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B2B | ADMIN | Picker-originated rider assignment: offer/accept/decline/expiry/controlled-revoke, source-picker binding, shared revision model | FND-003B2A | **DONE** (as corrected) | Accepted state = **`9d1e262` + the FND-003B2B-FIX-001 commit**. Reports: [FND-003B2B](FND-003B2B-completion-report.md) + [FIX-001](FND-003B2B-FIX-001-completion-report.md) · [ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) · contract **0.5**. Adds **RA1–RA18** and **B3-C2**, all **NOT RUN**. **`9d1e262` alone is not the accepted contract** |
 | FND-003B2B-FIX-001 | ADMIN | Require the canonical opaque-id rule for assignment principal identities, in eligibility **and** stored aggregates, for both roles | FND-003B2B | **DONE** | [FND-003B2B-FIX-001 report](FND-003B2B-FIX-001-completion-report.md) |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **PARTIAL** | parent; custody acquisition and the picker→rider handoff delivered by FND-003B3A. Delivery attempts, refusal, returns, customer custody and post-dispatch inventory restoration outstanding |
-| FND-003B3A | ADMIN | Physical custody: shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion | FND-003B2B | **DONE** (as corrected) | Candidate state = **`c29df0f` + `18ad750` + the FND-003B3A-FIX-002 commit**. Reports: [FND-003B3A](FND-003B3A-completion-report.md) + [FIX-001](FND-003B3A-FIX-001-completion-report.md) + [FIX-002](FND-003B3A-FIX-002-completion-report.md) · [custody lifecycle](../contracts/custody-lifecycle.md) · contract **0.6**. Adds **CA1–CA23** (NOT RUN); **satisfies B3-C1** by contract test; **B3-C2 stays FUTURE**. **Neither `c29df0f` alone nor `c29df0f` + `18ad750` alone is the candidate contract after FINAL-REVIEW-002. FND-003B3A-FIX-002 itself still requires final read-only acceptance before merge** |
+| FND-003B3A | ADMIN | Physical custody: shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion | FND-003B2B | **DONE** (as corrected) | **ACCEPTED AND INTEGRATED.** Accepted state = **`c29df0f` + `18ad750` + `e8dacfc`**, on `main` since FND-003B3A was merged. Reports: [FND-003B3A](FND-003B3A-completion-report.md) + [FIX-001](FND-003B3A-FIX-001-completion-report.md) + [FIX-002](FND-003B3A-FIX-002-completion-report.md) · [custody lifecycle](../contracts/custody-lifecycle.md) · contract **0.6**. Adds **CA1–CA23** (NOT RUN); **satisfies B3-C1** by contract test; **B3-C2 stays FUTURE**. **No earlier commit alone is the accepted contract** |
 | FND-003B3A-FIX-001 | ADMIN | Bind custody to canonical resource/shop identity, add picker/rider slot-revision CAS, make custody initialisation create-once, correct exported state metadata and the test-count evidence | FND-003B3A | **DONE** | [FND-003B3A-FIX-001 report](FND-003B3A-FIX-001-completion-report.md) |
 | FND-003B3A-FIX-002 | ADMIN | Reconcile contract status across the picker, rider and order documents, the package docs and source comments with what FND-003B3A actually implements | FND-003B3A-FIX-001 | **DONE** | [FND-003B3A-FIX-002 report](FND-003B3A-FIX-002-completion-report.md) · **documentation and source-comment only — zero executable Dart changed** |
 | FND-003D1-FIX-001 | ADMIN | Bound the proof-policy reference at 64, stop its `toString` reproducing the raw value, make evidence `belongsTo` fail closed, and correct the stale package version header | FND-003D1 | **DONE** | [FND-003D1-FIX-001 report](FND-003D1-FIX-001-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) |
 | FND-003D1-FIX-002 | ADMIN | Alias the proof-policy ceiling to the canonical `maxIdLength` instead of repeating its literal, and make `DeliveryEvidenceRef.toString` fail safe for malformed instances | FND-003D1-FIX-001 | **DONE** | [FND-003D1-FIX-002 report](FND-003D1-FIX-002-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) amended |
+| FND-003D2A | ADMIN | Mechanism-neutral, trusted-server-produced delivery-proof **assessment** result | FND-003D1 | **DONE** | Accepted state = **the FND-003D2A commit** on `fnd/FND-003D2A-proof-assessment-contract`, branched from `main` @ `f03fc99`. [FND-003D2A report](FND-003D2A-completion-report.md) · [delivery-proof assessment](../contracts/delivery-proof-assessment.md) · [ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md) · contract **0.8**. Adds **DPA1–DPA16**, all **NOT RUN**. **No command and no permission added** (`Permission.values` stays 38); every order/reservation/inventory/financial/custody/assignment effect is **NONE**. Successful delivery remains **not executable** |
+| FND-003D2B | ADMIN | Fallback dispute workflow for a missing, superseded or `notSatisfied` assessment | FND-003D2A | **NOT STARTED** | required by CONSTRAINTS invariant 13 before delivery confirmation may be coded |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
-| FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1. **Proof-satisfaction policy and the fallback dispute workflow are still undone**, and remain required before delivery confirmation is coded (CONSTRAINTS invariant 13) |
-| FND-003D1 | ADMIN | Mechanism-neutral delivery-proof policy reference, resource-bound evidence reference and the privacy boundary | FND-003B3A | **DONE** (as corrected) | Candidate state = **`913b1ac` + `f615ea6` + the FND-003D1-FIX-002 commit**. Reports: [FND-003D1](FND-003D1-completion-report.md) + [FIX-001](FND-003D1-FIX-001-completion-report.md) + [FIX-002](FND-003D1-FIX-002-completion-report.md) · [delivery-proof boundary](../contracts/delivery-proof-boundary.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) · contract **0.7**. **`913b1ac` alone is NOT accepted; `913b1ac` + `f615ea6` is also NOT the final accepted candidate after FINAL-REVIEW-002; and FND-003D1-FIX-002 itself still requires read-only acceptance before merge.** **References only** — no proof mechanism, no satisfaction rule, no command, state, event or permission. Successful delivery remains **not executable** |
+| FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1, and the trusted immutable proof **assessment result** by FND-003D2A. **The proof-satisfaction policy itself and the fallback dispute workflow (FND-003D2B) are still undone**, and remain required before delivery confirmation is coded (CONSTRAINTS invariant 13) |
+| FND-003D1 | ADMIN | Mechanism-neutral delivery-proof policy reference, resource-bound evidence reference and the privacy boundary | FND-003B3A | **DONE** (as corrected) | **ACCEPTED AND INTEGRATED.** Accepted state = **`913b1ac` + `f615ea6` + `f03fc99`**, fast-forwarded onto `main` by FND-003D1-MERGE-001 (2026-09-10) with no merge, squash, rebase or amend commit. `main` is now **`f03fc99`**. Reports: [FND-003D1](FND-003D1-completion-report.md) + [FIX-001](FND-003D1-FIX-001-completion-report.md) + [FIX-002](FND-003D1-FIX-002-completion-report.md) · [delivery-proof boundary](../contracts/delivery-proof-boundary.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) · contract **0.7**. **No earlier commit alone is the accepted contract.** **References only** — no proof mechanism, no satisfaction rule, no command, state, event or permission. Successful delivery remains **not executable** |
 | FND-004 | ADMIN | CI/platform runners, emulator security tests, design system, auth, cache/queue/API shell | FND-002, FND-003 | **TODO** | needs Firebase CLI (not installed) |
 
 ### FND-002 status after FND-002A
@@ -271,13 +273,78 @@ workflow and whether customer participation is required are all recorded
 **DEFERRED, never defaulted**. Financial consequences remain **UNKNOWN /
 DEFERRED TO FND-003C**, blocked on **O6**.
 
+**FND-003D1 — ACCEPTED AND INTEGRATED (2026-09-10).** FND-003D1-MERGE-001
+fast-forwarded `main` from `e8dacfc` to **`f03fc99`**, preserving the reviewed
+three-commit linear history — no merge, squash, rebase or amend commit exists,
+and the feature branch was preserved. Live GitHub inspection at merge time found
+`main` **unprotected with no rulesets**, which is why a direct fast-forward was
+permitted; that is not a substitute for **O7**, which stays outstanding.
+
+**FND-003D2A — DONE (2026-09-10).** The missing half of the proof prerequisite:
+somewhere to record **whether** the referenced policy was satisfied. Contract
+**0.7 → 0.8** (additive).
+
+An assessment is a **trusted-server-produced, immutable result**, not a claim.
+`executableProofAssessorKinds` is exactly `{PrincipalKind.systemWorker}`, and
+**no command and no permission was added** — `Permission.values` stays at 38.
+There is no `customer.proof.accept`, no `rider.proof.mark_satisfied`, no
+`admin.proof.override` and no generic proof-status setter, because a
+client-selectable "declare proof satisfied" operation would be exactly the
+arbitrary status patch this contract forbids, aimed at the one status that gates
+delivery, custody handover and eventually money. The precedent is
+`initialiseCustodyAtShop`, which has no command either.
+
+**A pure Dart record cannot authenticate its own origin**, and a test proves a
+forged `satisfied` record is structurally well formed — because it is. The
+backend must ignore client-supplied assessments; only one loaded from trusted
+state may later authorize progression. That honesty is criteria **DPA1**/**DPA2**,
+NOT RUN.
+
+Two verdicts, `satisfied` and `notSatisfied`, and **no `pending`**: absence
+already means *not assessed*, and a verifier's job queue is backend operational
+state rather than domain truth. `notSatisfied` means only that the policy was
+not satisfied — **not** fraud, refusal, cancellation, delivery failure, a lost
+dispute, a fee, a refund or financial default.
+
+Reassessment is **append-only**: a new opaque `assessmentId`, revision `r → r+1`,
+and a `supersedesAssessmentId` backward pointer. Nothing is mutated, relabelled
+or erased — there is no `setAssessmentStatus`, `overrideVerdict` or `copyWith` —
+because FND-003D2B has to be able to point at "the assessment that was current
+when X happened" and have that mean something.
+
+The assessment has its **own** `assessmentRevision`, and the request pins four
+revisions (assessment, order, custody, rider slot) because the decision depends
+on all four. **Correct revisions never bypass identity, state, reference or
+binding checks** — a test supplies every correct revision alongside the wrong
+rider and still gets a denial.
+
+**Every commercial effect is NONE, structurally**: the transition type has no
+order, custody or assignment effect field, so one that moves them cannot be
+constructed. `OrderState.delivered`, `CustodyHolderKind.customer` and rider
+`AssignmentState.completed` all remain unreachable, and **no rider completion
+cost was invented** — **B3-C2** stays FUTURE. The financial classification
+describes the *recording*; whether a `notSatisfied` outcome ever costs anyone
+anything is **UNKNOWN and deferred to FND-003C**, blocked on **O6**, never zero.
+
+**No proof mechanism was selected** — no OTP, QR, barcode, signature,
+photograph, video, GPS, biometric or attestation — and **no evidence cardinality
+was invented**: the record carries the single D1 `DeliveryEvidenceRef`. Customer
+participation stays **POLICY-DEFINED / DEFERRED**, with no `customerConfirmed`
+flag that would default the answer, and `customer.delivery.confirm_proof` keeps
+its exact participation-only meaning.
+
+New backend criteria **DPA1–DPA16**, all **NOT RUN**. **FND-003D stays PARTIAL**
+— the satisfaction *policy* and the dispute workflow (**FND-003D2B**) are
+undone, so `CONSTRAINTS.md` invariant 13 is **not** discharged and delivery
+confirmation still may not be coded.
+
 **Remaining slices:**
 
 | Slice | Owns | Status |
 |---|---|---|
 | FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1, **all of B2** and **B3A** done; delivery/refusal/return outstanding |
 | FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
-| FND-003D proof/dispute | Proof-satisfaction contract and fallback dispute workflow | **PARTIAL** — the reference/privacy boundary is done (FND-003D1); satisfaction and dispute are **not**, and are still needed before delivery confirmation is coded |
+| FND-003D proof/dispute | Proof-satisfaction policy and fallback dispute workflow | **PARTIAL** — the reference/privacy boundary (FND-003D1) and the trusted assessment **result** (FND-003D2A) are done; the **policy itself** and the **dispute workflow (FND-003D2B)** are **not**, and are still needed before delivery confirmation is coded |
 
 FND-003A depended on FND-001 only. It did **not** require FND-002 runtime
 evidence, notification decisions D1–D3, devices, a Windows runner, Firebase
@@ -313,7 +380,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.7** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. 0.5 (FND-003B2B) adds the picker-originated rider assignment lifecycle, the source-picker binding, the `picker.assignment.offer_rider` and `picker.assignment.revoke_rider` permissions, and moves the role-neutral `AssignmentDenial` and `reachableSlotRevisionRange` into a shared `assignment_integrity.dart` with no name, value or behaviour change. All additive, so minor only. 0.6 (FND-003B3A) adds physical custody — the shop/picker/rider/customer vocabulary, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, a role-aware `reachableSlotRevisionRange` and custody-derived reassignment safety. All additive, so minor only. 0.7 (FND-003D1) adds mechanism-neutral delivery-proof **references** — `DeliveryProofPolicyRef`, `DeliveryEvidenceRef`, their structural validators and `DeliveryProofDenial`. All additive, so minor only. **No delivery, refusal, return, customer custody, direct agent-to-rider pickup, proof mechanism, proof-satisfaction rule or money rules yet.** See [version history](../contracts/version-history.md). |
+| Wire contract (`cp_contracts`) | **0.8** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. 0.5 (FND-003B2B) adds the picker-originated rider assignment lifecycle, the source-picker binding, the `picker.assignment.offer_rider` and `picker.assignment.revoke_rider` permissions, and moves the role-neutral `AssignmentDenial` and `reachableSlotRevisionRange` into a shared `assignment_integrity.dart` with no name, value or behaviour change. All additive, so minor only. 0.6 (FND-003B3A) adds physical custody — the shop/picker/rider/customer vocabulary, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, a role-aware `reachableSlotRevisionRange` and custody-derived reassignment safety. All additive, so minor only. 0.7 (FND-003D1) adds mechanism-neutral delivery-proof **references** — `DeliveryProofPolicyRef`, `DeliveryEvidenceRef`, their structural validators and `DeliveryProofDenial`. 0.8 (FND-003D2A) adds the delivery-proof **assessment result** — `DeliveryProofAssessmentVerdict` (`satisfied` / `notSatisfied` only), the immutable `DeliveryProofAssessmentRecord`, its aggregate, context, request, transition, outcome and denial vocabulary, `validateDeliveryProofAssessmentAggregate`, `evaluateDeliveryProofAssessment`, `executableProofAssessorKinds` and one event id. All additive, so minor only. **No delivery, refusal, return, customer custody, direct agent-to-rider pickup, proof mechanism, proof-satisfaction policy or money rules yet.** See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships

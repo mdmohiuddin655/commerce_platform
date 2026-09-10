@@ -704,18 +704,30 @@ void main() {
       }
     });
 
-    test('no delivery/proof event id was added', () {
+    test('no delivery/proof event id was added beyond the two pinned', () {
+      // **Updated by FND-003D2A.** The sweep must cover every event vocabulary
+      // that exists, or it silently stops guarding the moment a new one is
+      // introduced — the guard would still pass while proving nothing about
+      // the new surface. `DeliveryProofAssessmentEventType` is therefore
+      // included here, and its one event is pinned by name below exactly the
+      // way the dispatch boundary is.
       final List<String> allEvents = <String>[
         ...LifecycleEventType.all,
         ...AssignmentEventType.all,
         ...CustodyEventType.all,
+        ...DeliveryProofAssessmentEventType.all,
       ];
       for (final String e in allEvents) {
-        // `order.in_delivery` is the accepted FND-003B3A dispatch boundary and
-        // is the ONLY delivery-adjacent event that may exist. Pinning it by
-        // name is stronger than skipping the substring: a new
-        // `order.delivered` or `delivery.proof_submitted` would still fail.
-        if (e == LifecycleEventType.orderInDelivery) {
+        // Exactly two delivery-adjacent events may exist, both pinned by name.
+        // Pinning is stronger than skipping the substring: a new
+        // `order.delivered` or `delivery.proof_submitted` still fails.
+        //
+        // - `order.in_delivery` — the accepted FND-003B3A dispatch boundary.
+        // - `delivery.proof_assessed` — FND-003D2A's assessment fact, which
+        //   reports that a trusted assessment happened and NOT that delivery
+        //   succeeded.
+        if (e == LifecycleEventType.orderInDelivery ||
+            e == DeliveryProofAssessmentEventType.proofAssessed) {
           continue;
         }
         for (final String forbidden in <String>[
@@ -736,9 +748,14 @@ void main() {
       expect(allEvents, contains('order.in_delivery'));
       // ...and nothing named for delivery *completion* exists.
       expect(allEvents, isNot(contains('order.delivered')));
+      // The assessment fact exists and is the only proof-named event.
+      expect(allEvents, contains('delivery.proof_assessed'));
+      expect(allEvents, isNot(contains('delivery.proof_submitted')));
+      expect(allEvents, isNot(contains('delivery.proof_satisfied')));
       expect(LifecycleEventType.all.length, 8);
       expect(AssignmentEventType.all.length, 11);
       expect(CustodyEventType.all.length, 2);
+      expect(DeliveryProofAssessmentEventType.all.length, 1);
     });
   });
 
