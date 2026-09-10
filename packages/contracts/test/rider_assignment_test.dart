@@ -218,6 +218,58 @@ void main() {
       );
     });
 
+    // ---------------------------------------------------------------------
+    // Principal identity. Added by FND-003B2B-FIX-001: qualification checked
+    // presence and equality but never the canonical opaque-id rule, so a
+    // malformed trusted target could produce a successful transition whose
+    // resulting aggregate the validator refuses.
+    // ---------------------------------------------------------------------
+
+    const Map<String, String> malformedIds = <String, String>{
+      'empty': '',
+      'too short': 'usr_short',
+      'overlong': 'usr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'illegal character': r'usr_bad!principal01',
+      'sequential-looking': '1234567890123456',
+    };
+
+    test('a malformed target principal id cannot qualify', () {
+      malformedIds.forEach((String label, String id) {
+        expect(
+          isValidOpaqueId(id),
+          isFalse,
+          reason: '$label should be rejected by the canonical id rule',
+        );
+        expect(
+          riderEligible(id).qualifiesAsActiveRider,
+          isFalse,
+          reason: '$label must not qualify',
+        );
+      });
+    });
+
+    test('a malformed target principal id produces no transition', () {
+      malformedIds.forEach((String label, String id) {
+        final RiderAssignmentOutcome o = offerTo(riderEligible(id));
+        expect(o.denial, AssignmentDenial.targetNotEligible, reason: label);
+        expect(o.transition, isNull, reason: label);
+      });
+    });
+
+    test('a malformed membership principal id cannot qualify', () {
+      for (final String bad in <String>['', 'usr_short', '1234567890123456']) {
+        final RiderAssignmentOutcome o =
+            offerTo(riderEligible(riderA, membershipOf: bad));
+        expect(o.denial, AssignmentDenial.targetNotEligible, reason: bad);
+        expect(o.transition, isNull, reason: bad);
+      }
+    });
+
+    test('a well-formed active target still qualifies', () {
+      expect(riderEligible(riderA).qualifiesAsActiveRider, isTrue);
+      expect(offerTo(riderEligible(riderA)).allowed, isTrue);
+    });
+
     test('a missing target is denied', () {
       expect(
         runRider(

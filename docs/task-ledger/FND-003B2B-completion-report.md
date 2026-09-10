@@ -8,7 +8,9 @@
 - **Branch:** `fnd/FND-003B2B-rider-assignment-lifecycle`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.4 → **0.5**
-- **Status:** **DONE**
+- **Status:** **DONE** — as corrected by **FND-003B2B-FIX-001** (2026-09-10).
+  See [§24 Recheck](#24-recheck-fnd-003b2b-fix-001). `9d1e262` alone is not the
+  accepted state.
 
 ## 1. Baseline
 
@@ -422,3 +424,50 @@ distance threshold, shift policy or dispatch scoring invented.
 Contract and tests only. No backend handler, no Firestore rule, no application
 feature, no platform dependency. Nothing merged to `main`, pushed,
 force-pushed or deployed. **FND-003B3 not started.**
+
+## 24. Recheck (FND-003B2B-FIX-001, 2026-09-10)
+
+The rider lifecycle **behaviour** described above is accepted and unchanged:
+picker-authority prerequisite, the source-picker binding, recipient-vs-assignee
+separation, the accept-vs-expiry race, exactly-one invariants, custody
+fail-closed, the shared revision model, and both approved asymmetries (§9) all
+stand. No state, transition, revision formula, command mapping or permission
+changed.
+
+Final review found **one identity-integrity defect**, and it is a real hole in
+the invariant this report claims in §14.
+
+**`RiderEligibility.qualifiesAsActiveRider` never checked the canonical
+opaque-id rule.** It required a human principal, `membershipPrincipalId ==
+principalId`, `rider` role and `active` status — but not that the identity was
+a *well-formed* principal id. Reproduced against `9d1e262` before changing
+anything:
+
+```text
+qualifiesAsActiveRider = true          // principalId = '', membership = ''
+offer outcome          = Allow(... offered, gen=1, rev=1)
+recipient              = ""
+validator on applied   = AssignmentDenial.aggregateInconsistent
+```
+
+So a malformed trusted target produced a **successful** transition whose
+applied aggregate `validateRiderAssignmentAggregate` refuses — breaking the
+closure invariant §14 states, for malformed eligibility facts. A
+sequential-looking id (`'1234567890123456'`, which `isValidOpaqueId` rejects)
+also qualified.
+
+**The same root weakness existed in `PickerEligibility.qualifiesAsActivePicker`**,
+and was corrected in the same change rather than knowingly leaving the two
+assignment roles with different identity guarantees. That is a correction at
+the shared identity boundary, not a redesign of the accepted picker lifecycle.
+
+The aggregate validators were tightened at the same boundary: stored
+`offerRecipientPrincipalId`, the rider binding's `pickerPrincipalId` and
+`resourceId` are now checked with the canonical rule rather than merely for
+emptiness.
+
+Contract stays **0.5** — a correctness tightening of an existing invariant on
+an unmerged, unreleased slice, not a new wire feature.
+
+Full detail:
+[FND-003B2B-FIX-001 report](FND-003B2B-FIX-001-completion-report.md).

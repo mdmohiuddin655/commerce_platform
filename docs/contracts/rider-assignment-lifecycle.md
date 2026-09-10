@@ -97,6 +97,30 @@ Required, all of them:
 - a region that **exists** and equals the order's region. Absence is not a
   match on either side.
 
+### Trusted facts are still structurally validated
+
+*(FND-003B2B-FIX-001.)* "Loaded from trusted storage" answers **where the facts
+came from**, not **whether they are well-formed**. The two are complementary,
+and conflating them was a real defect: qualification checked presence, equality,
+role and status, but never that the identity satisfied the repository's
+canonical opaque-id rule, so an empty or sequential principal could qualify and
+reach a successful transition.
+
+Principal ids are opaque ids everywhere else in this contract — `Principal`
+validates them, and so do `CommandEnvelope` and `EventEnvelope`. Qualification
+therefore requires `isValidOpaqueId` on **both** `principalId` and
+`membershipPrincipalId`, in addition to their equality. It **fails closed**;
+nothing is trimmed or repaired.
+
+What this does **not** change:
+
+- the object still **authenticates nobody**, and asserts nothing about session,
+  revocation or freshness;
+- a client still cannot authoritatively supply eligibility — it never reaches
+  this evaluator;
+- **fresh authorization on every request, including replays, remains FND-003A's
+  and the backend's**, not something a value object can establish.
+
 **Deliberately absent, and not invented:** workload limits, availability
 scores, ratings, route distance, vehicle type, shift schedules. Those are
 **dispatch policy**, not lifecycle.
@@ -266,9 +290,15 @@ Canonical shapes:
 | `expired` | present | **null** | present |
 | `revoked` | present | present (history), **== recipient** | present |
 
-Also validated: non-empty `resourceId`; opaque `assignmentId`;
+**Every principal identity is an opaque id, not merely non-empty**
+*(FIX-001)*: the stored `offerRecipientPrincipalId` and the binding's
+`pickerPrincipalId` are both validated with the canonical rule, and because
+`accepted`/`revoked` require the assignee to **equal** the recipient, the
+assignee inherits the same guarantee.
+
+Also validated: opaque `resourceId`; opaque `assignmentId`;
 `generation >= 1`; reachable `slotRevision` (§14); non-empty recipient;
-non-blank `timeoutPolicyRef`; non-empty source picker principal; opaque source
+non-blank `timeoutPolicyRef`; opaque source picker principal; opaque source
 picker assignment id; source picker generation `>= 1`; a slot with no attempt
 must be at revision 0; a slot holding an attempt must be at revision `>= 1`.
 

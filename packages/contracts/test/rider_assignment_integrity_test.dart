@@ -419,6 +419,77 @@ void main() {
       );
     });
 
+    test('a malformed stored offer recipient id is corruption', () {
+      // FIX-001: emptiness alone was checked. A stored counter-like or
+      // truncated recipient could drive a projection change.
+      for (final String bad in <String>[
+        '',
+        'usr_short',
+        '1234567890123456',
+        r'usr_bad!principal01',
+      ]) {
+        expect(
+          validateRiderAssignmentAggregate(
+            riderFacts(slotRevision: 1, current: riderAttempt(recipient: bad)),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: 'recipient "$bad"',
+        );
+      }
+    });
+
+    test('an accepted assignee cannot bypass the recipient id rule', () {
+      // The accepted/revoked branch requires assignee == recipient, so an
+      // invalid assignee can only appear by also being an invalid recipient —
+      // which the rule above already refuses. Both shapes are pinned.
+      for (final AssignmentState s in <AssignmentState>[
+        AssignmentState.accepted,
+        AssignmentState.revoked,
+      ]) {
+        final int rev = s == AssignmentState.revoked ? 3 : 2;
+        expect(
+          validateRiderAssignmentAggregate(
+            riderFacts(
+              slotRevision: rev,
+              current: riderAttempt(
+                state: s,
+                recipient: '1234567890123456',
+                assignee: '1234567890123456',
+              ),
+            ),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: '${s.id} with a sequential-looking identity',
+        );
+        expect(
+          validateRiderAssignmentAggregate(
+            riderFacts(
+              slotRevision: rev,
+              current: riderAttempt(
+                state: s,
+                recipient: riderA,
+                assignee: 'usr_short',
+              ),
+            ),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: '${s.id} with a mismatched invalid assignee',
+        );
+      }
+    });
+
+    test('a malformed resource id is corruption', () {
+      // Resource ids carry the same opaque contract CommandEnvelope and
+      // EventEnvelope already enforce.
+      for (final String bad in <String>['', 'ord_short', '1234567890123456']) {
+        expect(
+          validateRiderAssignmentAggregate(riderFacts(resourceId: bad)),
+          AssignmentDenial.aggregateInconsistent,
+          reason: 'resourceId "$bad"',
+        );
+      }
+    });
+
     test('a blank timeout policy reference is corruption', () {
       for (final String ref in <String>['', '   ']) {
         expect(
@@ -486,6 +557,24 @@ void main() {
           ),
           AssignmentDenial.aggregateInconsistent,
         );
+      });
+
+      test('a malformed picker principal id is corruption', () {
+        // FIX-001: this was an isEmpty check only.
+        for (final String bad in <String>[
+          '',
+          'usr_short',
+          '1234567890123456',
+          r'usr_bad!principal01',
+        ]) {
+          expect(
+            validateRiderAssignmentAggregate(
+              withSource(source(pickerId: bad)),
+            ),
+            AssignmentDenial.aggregateInconsistent,
+            reason: 'source picker "$bad"',
+          );
+        }
       });
 
       test('a non-opaque picker assignment id is corruption', () {
@@ -855,6 +944,44 @@ void main() {
         reachableSlotRevisionRange(3, AssignmentState.offered)!.max,
         7,
       );
+    });
+
+    test('no malformed target can produce a validator-invalid transition', () {
+      // The exact FIX-001 defect, pinned as a property rather than a single
+      // case. Before the fix, an empty target principal qualified, the offer
+      // was ALLOWED with recipient "", and applyRider produced an aggregate
+      // the validator refused - breaking the closure invariant for malformed
+      // trusted eligibility facts.
+      //
+      // This holds either way round: a malformed target must be denied, or,
+      // if some future change allows one, the applied aggregate must still
+      // validate. Weakening the eligibility rule alone fails it.
+      for (final String bad in <String>[
+        '',
+        'usr_short',
+        '1234567890123456',
+        r'usr_bad!principal01',
+        'usr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ]) {
+        final RiderAssignmentOutcome o = offerOn(riderFacts(), rideAsgA, bad);
+        if (o.transition == null) {
+          expect(o.denial, AssignmentDenial.targetNotEligible, reason: bad);
+          continue;
+        }
+        expect(
+          validateRiderAssignmentAggregate(applyRider(o.transition!)),
+          isNull,
+          reason: 'malformed target "$bad" produced gen=${o.transition!.generation} '
+              'rev=${o.transition!.resultingSlotRevision} whose aggregate the '
+              'validator rejects - the FIX-001 defect has recurred',
+        );
+      }
+    });
+
+    test('a malformed identity creates no scope projection effect', () {
+      final RiderAssignmentOutcome o = offerOn(riderFacts(), rideAsgA, '');
+      expect(o.transition, isNull);
+      expect(o.denial, AssignmentDenial.targetNotEligible);
     });
 
     test('every executable RIDER transition kind is represented above', () {

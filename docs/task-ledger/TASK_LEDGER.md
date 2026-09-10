@@ -28,11 +28,12 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle (FND-003B1) and the full assignment lifecycle (FND-003B2) delivered. **Custody, delivery-attempt and return lifecycles outstanding — FND-003B3** |
 | FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** (as corrected) | Accepted state = **`697d170` + the FND-003B1-FIX-001 commit**. Reports: [FND-003B1](FND-003B1-completion-report.md) + [FIX-001](FND-003B1-FIX-001-completion-report.md) · contract **0.3**. `697d170` alone is **not** the accepted contract |
 | FND-003B1-FIX-001 | ADMIN | Validate canonical order/reservation aggregate before any lifecycle effect; pair-specific release paths | FND-003B1 | **DONE** | [FND-003B1-FIX-001 report](FND-003B1-FIX-001-completion-report.md) |
-| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **DONE** | both sub-slices complete: picker by FND-003B2A, rider by FND-003B2B. Custody, delivery and returns are **not** part of this task — they are FND-003B3 |
+| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **DONE** (as corrected) | both sub-slices complete: picker by FND-003B2A, rider by FND-003B2B as corrected by FND-003B2B-FIX-001. Custody, delivery and returns are **not** part of this task — they are FND-003B3 |
 | FND-003B2A | ADMIN | Picker assignment offer/accept/decline/expiry/revoke and controlled reassignment lifecycle | FND-003B1 | **DONE** (as corrected) | Accepted state = **`355aaa7` + `ce44b29` + the FND-003B2A-FIX-002 commit**. Reports: [FND-003B2A](FND-003B2A-completion-report.md) + [FIX-001](FND-003B2A-FIX-001-completion-report.md) + [FIX-002](FND-003B2A-FIX-002-completion-report.md) · contract **0.4**. **No earlier commit alone is the accepted contract** |
 | FND-003B2A-FIX-001 | ADMIN | Deny assignment-id reuse; enforce reachable generation/revision coherence; record ADR-0006 admin-override governance | FND-003B2A | **DONE** | [FND-003B2A-FIX-001 report](FND-003B2A-FIX-001-completion-report.md) |
 | FND-003B2A-FIX-002 | ADMIN | Pin transition-closure over the aggregate validator; couple executable states to the revision model; record B3-C1 | FND-003B2A-FIX-001 | **DONE** | [FND-003B2A-FIX-002 report](FND-003B2A-FIX-002-completion-report.md) |
-| FND-003B2B | ADMIN | Picker-originated rider assignment: offer/accept/decline/expiry/controlled-revoke, source-picker binding, shared revision model | FND-003B2A | **DONE** | [FND-003B2B report](FND-003B2B-completion-report.md) · [ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) · contract **0.5**. Adds backend criteria **RA1–RA18** and contract criterion **B3-C2**, all **NOT RUN** |
+| FND-003B2B | ADMIN | Picker-originated rider assignment: offer/accept/decline/expiry/controlled-revoke, source-picker binding, shared revision model | FND-003B2A | **DONE** (as corrected) | Accepted state = **`9d1e262` + the FND-003B2B-FIX-001 commit**. Reports: [FND-003B2B](FND-003B2B-completion-report.md) + [FIX-001](FND-003B2B-FIX-001-completion-report.md) · [ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) · contract **0.5**. Adds **RA1–RA18** and **B3-C2**, all **NOT RUN**. **`9d1e262` alone is not the accepted contract** |
+| FND-003B2B-FIX-001 | ADMIN | Require the canonical opaque-id rule for assignment principal identities, in eligibility **and** stored aggregates, for both roles | FND-003B2B | **DONE** | [FND-003B2B-FIX-001 report](FND-003B2B-FIX-001-completion-report.md) |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **TODO — NOT STARTED** | — |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
@@ -163,6 +164,25 @@ that admin rider intervention must be a separate audited override;
 New backend criteria **RA1–RA18** and contract criterion **B3-C2** — all
 **NOT RUN**. **FND-003B2 is now DONE**; FND-003B stays **PARTIAL** because
 custody, delivery and returns (FND-003B3) are outstanding.
+
+**FND-003B2B-FIX-001 — DONE (2026-09-10).** Final review of `9d1e262` found one
+identity-integrity defect, reproduced before any change was made: rider target
+eligibility qualified on presence and equality but never on the repository's
+canonical opaque-id rule, so an empty or sequential principal id could qualify,
+produce a **successful** offer transition with `offerRecipientPrincipalId = ''`,
+and yield an aggregate the validator refuses — breaking transition closure for
+malformed trusted facts.
+
+`PickerEligibility` carried the identical weakness and was corrected at the same
+boundary rather than leaving the two assignment roles with different identity
+guarantees. The aggregate validators now apply the canonical rule to stored
+recipients, the rider source-picker principal and `resourceId` — the same rule
+`Principal`, `CommandEnvelope` and `EventEnvelope` already enforce, reused, not
+reinvented.
+
+Contract stays **0.5**: a correctness tightening of an existing invariant on an
+unmerged, unreleased slice. No state, transition, revision formula, command
+mapping, permission or ADR changed.
 
 **Remaining slices:**
 

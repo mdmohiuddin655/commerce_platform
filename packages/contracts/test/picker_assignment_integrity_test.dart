@@ -265,6 +265,69 @@ void main() {
       });
     }
 
+    test('a malformed stored offer recipient id is corruption', () {
+      // FIX-001: emptiness alone was checked here, so a stored counter-like or
+      // truncated recipient could drive a projection change. Principal ids are
+      // opaque ids everywhere else in this contract.
+      for (final String bad in <String>[
+        '',
+        'usr_short',
+        '1234567890123456',
+        r'usr_bad!principal01',
+      ]) {
+        expect(
+          validatePickerAssignmentAggregate(
+            facts(slotRevision: 1, current: attempt(recipient: bad)),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: 'recipient "$bad"',
+        );
+      }
+    });
+
+    test('an accepted assignee cannot bypass the recipient id rule', () {
+      // assignee == recipient is already required, so an invalid assignee can
+      // only appear by also being an invalid recipient. Both shapes pinned.
+      for (final AssignmentState st in <AssignmentState>[
+        AssignmentState.accepted,
+        AssignmentState.revoked,
+      ]) {
+        final int rev = st == AssignmentState.revoked ? 3 : 2;
+        expect(
+          validatePickerAssignmentAggregate(
+            facts(
+              slotRevision: rev,
+              current: attempt(
+                state: st,
+                recipient: '1234567890123456',
+                assignee: '1234567890123456',
+              ),
+            ),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: '${st.id} with a sequential-looking identity',
+        );
+      }
+    });
+
+    test('a malformed resource id is corruption', () {
+      // Same opaque contract CommandEnvelope and EventEnvelope enforce.
+      for (final String bad in <String>['', 'ord_short', '1234567890123456']) {
+        expect(
+          validatePickerAssignmentAggregate(
+            PickerAssignmentFacts(
+              resourceId: bad,
+              slotRevision: 0,
+              orderState: OrderState.accepted,
+              orderRegionId: region,
+            ),
+          ),
+          AssignmentDenial.aggregateInconsistent,
+          reason: 'resourceId "$bad"',
+        );
+      }
+    });
+
     test('malformed facts produce no effect for ANY command', () {
       final PickerAssignmentFacts corrupt = facts(
         slotRevision: 1,
@@ -976,6 +1039,31 @@ void main() {
 
       expect(f.attempt!.generation, 3);
       expect(f.slotRevision, 5, reason: '2 + 2 + 1 mutations — the minimum');
+    });
+
+    test('no malformed target can produce a validator-invalid transition', () {
+      // The picker half of the FIX-001 defect: PickerEligibility qualified on
+      // presence and equality without the canonical opaque-id rule, so a
+      // malformed trusted target could produce a successful offer whose
+      // applied aggregate the validator refuses.
+      for (final String bad in <String>[
+        '',
+        'usr_short',
+        '1234567890123456',
+        r'usr_bad!principal01',
+      ]) {
+        final PickerAssignmentOutcome o = offerOn(facts(), assignA, bad);
+        if (o.transition == null) {
+          expect(o.denial, AssignmentDenial.targetNotEligible, reason: bad);
+          continue;
+        }
+        expect(
+          validatePickerAssignmentAggregate(apply(o.transition!)),
+          isNull,
+          reason: 'malformed target "$bad" produced an aggregate the validator '
+              'rejects - the FIX-001 defect has recurred',
+        );
+      }
     });
 
     test('every executable PICKER transition kind is represented above', () {

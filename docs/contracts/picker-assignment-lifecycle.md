@@ -103,6 +103,30 @@ status `active`, in the **order's region**.
 > shape the backend fills from current records. A caller never reaches this
 > evaluator, so a caller cannot make a worker eligible by constructing one.
 
+### Trusted facts are still structurally validated
+
+*(FND-003B2B-FIX-001.)* "Loaded from trusted storage" answers **where the facts
+came from**, not **whether they are well-formed**. The two are complementary,
+and conflating them was a real defect: qualification checked presence, equality,
+role and status, but never that the identity satisfied the repository's
+canonical opaque-id rule, so an empty or sequential principal could qualify and
+reach a successful transition.
+
+Principal ids are opaque ids everywhere else in this contract — `Principal`
+validates them, and so do `CommandEnvelope` and `EventEnvelope`. Qualification
+therefore requires `isValidOpaqueId` on **both** `principalId` and
+`membershipPrincipalId`, in addition to their equality. It **fails closed**;
+nothing is trimmed or repaired.
+
+What this does **not** change:
+
+- the object still **authenticates nobody**, and asserts nothing about session,
+  revocation or freshness;
+- a client still cannot authoritatively supply eligibility — it never reaches
+  this evaluator;
+- **fresh authorization on every request, including replays, remains FND-003A's
+  and the backend's**, not something a value object can establish.
+
 Deliberately **not** modelled: workload limits, ratings, distance thresholds,
 availability scoring, shift rules. Those are **dispatch policy**, not lifecycle,
 and none was invented.
@@ -241,6 +265,13 @@ effect**.
 | `declined` | recipient set; assignee null |
 | `expired` | recipient set; assignee null |
 | `revoked` | recipient set; historical assignee set and equal to recipient |
+
+**Every principal identity in the aggregate is an opaque id, not merely
+non-empty** *(FIX-001)* — the stored `offerRecipientPrincipalId` is validated
+with the canonical rule, and because `accepted`/`revoked` require the assignee
+to **equal** the recipient, the assignee inherits the same guarantee. The
+`resourceId` carries the same contract `CommandEnvelope` and `EventEnvelope`
+already enforce.
 
 Also required for any attempt: opaque `assignmentId`, `generation >= 1`,
 non-blank `timeoutPolicyRef`, non-empty recipient. A slot with no attempt must

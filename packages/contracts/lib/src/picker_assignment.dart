@@ -101,8 +101,20 @@ class PickerEligibility {
 
   /// Whether these facts qualify the worker to receive picker work at all.
   /// Region matching is checked separately, against the order.
+  ///
+  /// **Identity is checked structurally, not merely for presence.** Principal
+  /// ids are opaque ids everywhere else in this contract — `Principal` itself
+  /// validates them, as do the command and event envelopes — so a malformed
+  /// one is corrupt input, not a trusted fact this evaluator should honour.
+  /// Without this, an empty or sequential id could reach
+  /// [PickerAssignmentTransition.offerRecipientPrincipalId] and produce an
+  /// aggregate `validatePickerAssignmentAggregate` refuses.
+  ///
+  /// Fails closed. Nothing is trimmed or repaired.
   bool get qualifiesAsActivePicker =>
       isHumanPrincipal &&
+      isValidOpaqueId(principalId) &&
+      isValidOpaqueId(membershipPrincipalId) &&
       membershipPrincipalId == principalId &&
       role == CommerceRole.picker &&
       status == MembershipStatus.active;
@@ -308,6 +320,11 @@ AssignmentDenial? validatePickerAssignmentAggregate(
   if (facts.slotRevision < 0) {
     return AssignmentDenial.aggregateInconsistent;
   }
+  // Resource ids are opaque ids by the repository's existing contract —
+  // `CommandEnvelope` and `EventEnvelope` both validate them the same way.
+  if (!isValidOpaqueId(facts.resourceId)) {
+    return AssignmentDenial.aggregateInconsistent;
+  }
 
   final PickerAssignmentAttempt? attempt = facts.attempt;
   if (attempt == null) {
@@ -343,8 +360,12 @@ AssignmentDenial? validatePickerAssignmentAggregate(
       facts.slotRevision > reachable.max) {
     return AssignmentDenial.aggregateInconsistent;
   }
-  if (attempt.offerRecipientPrincipalId.isEmpty) {
-    // The recipient is immutable history and is never erased.
+  // The recipient is immutable history, is never erased, and is an opaque
+  // principal id — the same rule `Principal` and the envelopes apply. Checking
+  // only for emptiness would let a stored counter-like or truncated id drive a
+  // projection change. The accepted/revoked branch below requires the assignee
+  // to equal the recipient, so the assignee inherits this guarantee.
+  if (!isValidOpaqueId(attempt.offerRecipientPrincipalId)) {
     return AssignmentDenial.aggregateInconsistent;
   }
   if (attempt.timeoutPolicyRef.trim().isEmpty) {

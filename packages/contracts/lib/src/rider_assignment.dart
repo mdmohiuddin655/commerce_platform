@@ -153,8 +153,20 @@ class RiderEligibility {
 
   /// Whether these facts qualify the worker to receive rider work at all.
   /// Region matching is checked separately, against the order.
+  ///
+  /// **Identity is checked structurally, not merely for presence.** Principal
+  /// ids are opaque ids everywhere else in this contract — `Principal` itself
+  /// validates them, as do the command and event envelopes — so a malformed
+  /// one is corrupt input, not a trusted fact this evaluator should honour.
+  /// Without this, an empty or sequential id could reach
+  /// [RiderAssignmentTransition.offerRecipientPrincipalId] and produce an
+  /// aggregate `validateRiderAssignmentAggregate` refuses.
+  ///
+  /// Fails closed. Nothing is trimmed or repaired.
   bool get qualifiesAsActiveRider =>
       isHumanPrincipal &&
+      isValidOpaqueId(principalId) &&
+      isValidOpaqueId(membershipPrincipalId) &&
       membershipPrincipalId == principalId &&
       role == CommerceRole.rider &&
       status == MembershipStatus.active;
@@ -357,7 +369,9 @@ AssignmentDenial? validateRiderAssignmentAggregate(RiderAssignmentFacts facts) {
   if (facts.slotRevision < 0) {
     return AssignmentDenial.aggregateInconsistent;
   }
-  if (facts.resourceId.isEmpty) {
+  // Resource ids are opaque ids by the repository's existing contract —
+  // `CommandEnvelope` and `EventEnvelope` both validate them the same way.
+  if (!isValidOpaqueId(facts.resourceId)) {
     return AssignmentDenial.aggregateInconsistent;
   }
 
@@ -396,8 +410,11 @@ AssignmentDenial? validateRiderAssignmentAggregate(RiderAssignmentFacts facts) {
       facts.slotRevision > reachable.max) {
     return AssignmentDenial.aggregateInconsistent;
   }
-  if (attempt.offerRecipientPrincipalId.isEmpty) {
-    // The recipient is immutable history and is never erased.
+  // The recipient is immutable history, is never erased, and is an opaque
+  // principal id — the same rule `Principal` and the envelopes apply. The
+  // accepted/revoked branch below requires the assignee to equal the
+  // recipient, so the assignee inherits this guarantee.
+  if (!isValidOpaqueId(attempt.offerRecipientPrincipalId)) {
     return AssignmentDenial.aggregateInconsistent;
   }
   if (attempt.timeoutPolicyRef.trim().isEmpty) {
@@ -409,7 +426,7 @@ AssignmentDenial? validateRiderAssignmentAggregate(RiderAssignmentFacts facts) {
   // against the current picker assignment, which is the whole protection
   // against a replaced picker inheriting another picker's offer.
   final SourcePickerBinding source = attempt.source;
-  if (source.pickerPrincipalId.isEmpty ||
+  if (!isValidOpaqueId(source.pickerPrincipalId) ||
       !isValidOpaqueId(source.pickerAssignmentId) ||
       source.pickerGeneration < 1) {
     return AssignmentDenial.aggregateInconsistent;
