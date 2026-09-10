@@ -1,6 +1,7 @@
 # Delivery-proof assessment
 
-**Contract version 0.8** (FND-003D2A). Source of truth:
+**Contract version 0.8** (FND-003D2A, corrected in place by
+**FND-003D2A-FIX-001**). Source of truth: the module behind the stable barrel
 `packages/contracts/lib/src/delivery_proof_assessment.dart`.
 
 FND-003D1 gave the platform a way to *refer to* a proof policy and to protected
@@ -41,7 +42,7 @@ Wire ids are `satisfied` and `not_satisfied`. `Enum.index` is never serialized.
 
 **Absence means "not assessed".** `DeliveryProofAssessmentFacts.absent` is
 revision `0` with no record, following the repository's existing convention that
-revision 0 means "never written". `currentVerdict` returns `null` there, and
+revision 0 means "never written". `canonicalVerdict` returns `null` there, and
 `null` must never be collapsed into `notSatisfied`.
 
 There is deliberately **no** `pending`, `processing`, `expired`,
@@ -66,22 +67,48 @@ derive a cancellation, a fee or a liability from it. `CONSTRAINTS.md` invariant
 | `DeliveryProofAssessmentVerdict` | `satisfied` / `notSatisfied` |
 | `DeliveryProofAssessmentRecord` | one immutable assessment result |
 | `DeliveryProofAssessmentFacts` | the aggregate: current record + its own revision |
-| `DeliveryProofAssessmentContext` | canonical resource + **server-resolved** policy and evidence references |
+| `DeliveryProofAssessmentContext` | canonical resource + **server-resolved** policy reference, evidence reference and authorized verifier identity |
 | `DeliveryProofAssessmentRequest` | what a trusted verifier reports, plus the expected revisions |
 | `DeliveryProofAssessmentTransition` | the record to append, and every effect as NONE |
 | `DeliveryProofAssessmentOutcome` | allow or deny, with the exact D1 structural reason when relevant |
-| `DeliveryProofAssessmentDenial` | 23 refusal reasons — internal, never returned verbatim |
+| `DeliveryProofAssessmentDenial` | 24 refusal reasons — internal, never returned verbatim |
 | `DeliveryProofAssessmentEventType` | one event id |
 | `executableProofAssessorKinds` | `{PrincipalKind.systemWorker}` |
 | `validateDeliveryProofAssessmentAggregate` | canonical stored shape |
+| `canonicalVerdict` | trusted verdict access, canonical aggregates only |
 | `evaluateDeliveryProofAssessment` | the pure evaluator |
 
-### Why policy and evidence live on the *context*, not the request
+### Module layout
+
+*(FND-003D2A-FIX-001.)* The implementation is split by responsibility behind a
+**stable barrel**, so `cp_contracts.dart` and every consumer keep one import
+path:
+
+| File | Responsibility |
+|---|---|
+| `…_verdict.dart` | the two-value verdict vocabulary |
+| `…_record.dart` | one immutable assessment result |
+| `…_facts.dart` | the aggregate as loaded from storage |
+| `…_denial.dart` | refusal vocabulary |
+| `…_authority.dart` | trusted assessor kinds, server-resolved context, request |
+| `…_transition.dart` | the permitted transition and its outcome |
+| `…_validation.dart` | canonical aggregate shape and trusted verdict access |
+| `…_evaluator.dart` | the pure evaluator |
+| `…_event.dart` | the single assessment event id |
+
+The graph is **acyclic** and flows one way: vocabulary → model → shapes →
+validation → evaluator. **No validation rule is duplicated** — identifier rules
+come from `ids.dart`, proof and evidence rules from `delivery_proof.dart`, and
+the order, custody and rider aggregate rules from their own canonical
+validators. No file imports an app or the backend.
+
+### Why policy, evidence *and the authorized verifier* live on the context
 
 A verifier reports a verdict. It does **not** get to choose which policy it was
-judged against or which evidence it judged. Both references are resolved
-server-side from trusted state and handed in as context — criteria **DPA3** and
-**DPA4**. The request has no policy or evidence field at all.
+judged against, which evidence it judged, **or whether it was the verifier**.
+All three are resolved server-side from trusted state and handed in as context —
+criteria **DPA3**, **DPA4** and **DPA17**. The request has no policy, evidence
+or assessor field at all.
 
 ## 4. What one record binds
 
@@ -94,7 +121,7 @@ evidenceRef                  // DeliveryEvidenceRef — bound to resourceId
 riderPrincipalId             // the rider whose custody was assessed
 riderAssignmentId            // the exact attempt
 riderAssignmentGeneration    // ...and its generation
-assessedByPrincipalId        // the trusted worker
+assessedByPrincipalId        // the EXACT authorized proof verifier
 assessedByKind               // PrincipalKind.systemWorker
 assessedAtUtc                // server UTC
 verdict                      // satisfied | notSatisfied
@@ -134,8 +161,9 @@ delivery. Checks run in this order, and every one of them fails closed:
 | 2 | every aggregate validates | `aggregateInconsistent` |
 | 3 | every aggregate names the canonical order | `resourceBindingMismatch` |
 | 4 | four compare-and-set revision checks | `…RevisionConflict` |
-| 5 | assessor is a system worker | `assessorNotSystemWorker` |
-| 5 | assessor principal id is a valid opaque id | `assessorPrincipalIdInvalid` |
+| 5 | assessor is a system worker **at all** | `assessorNotSystemWorker` |
+| 5 | the context's authorized verifier id is a valid opaque id | `assessorPrincipalIdInvalid` |
+| 5 | assessor **is the authorized verifier**, exactly | `assessorAuthorityMismatch` |
 | 5 | `assessedAtUtc` is UTC | `assessedAtNotUtc` |
 | 6 | order is `in_delivery` | `orderNotInDelivery` |
 | 6 | reservation is `committed` | `reservationNotCommitted` |
@@ -156,6 +184,76 @@ The D1 validators are the **single source** of structural judgement — nothing 
 reimplemented. `DeliveryProofAssessmentOutcome.structuralDenial` carries the
 exact `DeliveryProofDenial` so a log does not have to guess whether a policy
 reference was blank or over-long.
+
+## 5a. Assessor authority — kind is necessary, not sufficient
+
+*(FND-003D2A-FIX-001.)* The evaluator takes the server-derived assessor as a
+**separate `Principal` argument**, never as request content:
+
+```dart
+evaluateDeliveryProofAssessment(
+  request: ...,          // what the verifier concluded
+  assessor: principal,   // WHO it is — derived from verified service auth
+  context: ...,          // WHO IS ALLOWED to be it, for this resource
+  ...
+)
+```
+
+Two independent conditions must both hold:
+
+1. `assessor.kind` is in `executableProofAssessorKinds` — i.e.
+   `PrincipalKind.systemWorker`. A human client fails
+   `assessorNotSystemWorker`.
+2. `assessor.id` **exactly equals**
+   `context.authorizedAssessorPrincipalId`. Any other trusted worker fails
+   `assessorAuthorityMismatch`.
+
+The second condition is the point. `systemWorker` is a **broad infrastructure
+class**: the outbox drain, reservation expiry and scheduled reconciliation all
+hold it, and each is a legitimate trusted process. Accepting the kind alone
+would have let any of them mint the verdict that later gates delivery. Tests
+pin three such workers being refused.
+
+The two denials stay **distinct** — "not a server process" and "the wrong server
+process" are different failures, and a log should not have to guess which
+occurred. A malformed authorized id fails `assessorPrincipalIdInvalid` rather
+than silently falling back to the kind check.
+
+The identity written onto the record is derived from the verified principal
+*after* it matches, so `assessedByPrincipalId` names exactly which verifier
+reached the verdict — the audit identity a superseding reassessment needs.
+
+> **Still no runtime provenance.** Any client can construct the authorized
+> verifier `Principal` and an identical `satisfied` record locally; a test
+> asserts the forgery is structurally perfect, **because it is**. This contract
+> establishes the *claimed* authority shape. That the claim is true is
+> **DPA2** and **DPA17**, both NOT RUN.
+
+## 5b. Fail-closed public accessors
+
+Two convenience members failed **open** before FND-003D2A-FIX-001. Both now
+require canonical inputs:
+
+| Member | Rule |
+|---|---|
+| `DeliveryProofAssessmentRecord.bindsRiderAttempt` | requires a well-formed record, valid opaque `principalId` and `assignmentId`, `generation >= 1`, then exact equality on all three. Identically-malformed values can no longer match their way to `true`. |
+| `canonicalVerdict` | returns a verdict **only** when `validateDeliveryProofAssessmentAggregate` accepts the facts. |
+
+`DeliveryProofAssessmentFacts` deliberately exposes **no verdict getter of its
+own**; `hasCurrentRecord` is a structural fact about the loaded aggregate and
+explicitly not a trust claim.
+
+| Aggregate | `canonicalVerdict` |
+|---|---|
+| canonical, absent | `null` — *not assessed* |
+| canonical, satisfied | `satisfied` |
+| canonical, notSatisfied | `notSatisfied` |
+| torn or malformed, carrying `satisfied` | `null` |
+
+**Corruption is never converted into `notSatisfied`.** A broken aggregate is a
+denial and a reconciliation case, not a negative proof result; downgrading it
+would fabricate a verdict nobody reached. `null` therefore means *no usable
+verdict*, which a caller must not read as "the policy was not satisfied" either.
 
 ## 6. Revisions and compare-and-set
 
@@ -237,6 +335,13 @@ One event id: **`delivery.proof_assessed`**.
 It reports that a trusted assessment record was created. It does **not** mean
 delivery succeeded, the customer accepted, a dispute resolved, or money settled.
 
+**It is structural, not supplied.** *(FND-003D2A-FIX-001.)*
+`DeliveryProofAssessmentTransition` takes only the record;
+`events` is a fixed getter returning a `const` — and therefore deeply immutable
+— single-element list. There is no constructor parameter through which a caller
+could pass an extra, missing or fabricated event id such as
+`delivery.proof_satisfied`, and `events.add(...)` throws `UnsupportedError`.
+
 Payloads carry routing and identity only — resource id, assessment revision,
 assessment id, server UTC. **Never** raw proof, policy contents, photographs,
 signatures, OTP or QR material, GPS or location, address, phone number, order
@@ -258,6 +363,32 @@ A proof policy that wants a validity window has to define one.
 
 A pure Dart UTC value **cannot prove it came from a server**. That it is
 authoritative is criterion **DPA13**, NOT RUN.
+
+## 10a. Debug and log renderings are fail safe
+
+*(FND-003D2A-FIX-001, applying the FND-003D1 lesson consistently.)* The public
+constructors intentionally permit malformed objects — that is what lets the
+validators be tested — so a `toString` that echoed raw fields would be a
+log-injection and amplification surface reachable **before** validation.
+
+| Value | Well formed | Malformed |
+|---|---|---|
+| `DeliveryProofAssessmentRecord` | bounded canonical ids + verdict | `DeliveryProofAssessmentRecord(invalid)` |
+| `DeliveryProofAssessmentContext` | bounded canonical ids | `DeliveryProofAssessmentContext(invalid)` |
+| `DeliveryProofAssessmentTransition` | verdict, revision, ids | `DeliveryProofAssessmentTransition(invalid)` |
+| `DeliveryProofAssessmentOutcome` | delegates to the above | delegates — cannot reintroduce a raw field |
+
+**One bad field suppresses the whole rendering**, including the fields that
+happen to be sound: until validation passes, all of them are untrusted strings.
+The policy reference renders through its own non-disclosing `toString` and the
+evidence reference through its own fail-safe one, so neither leaks here what it
+refuses to leak there. Denials render enum names only.
+
+Nothing is thrown, trimmed, normalised, repaired or hashed into a business
+identity. Tests drive hostile inputs — newline and tab, a URL, a filesystem
+path, a fake secret marker and an oversized string — and assert no fragment
+survives in any rendering, plus a guard that every hostile fixture really is a
+malformed id (one originally was not, and was caught this way).
 
 ## 11. Trust boundary — read this before consuming an assessment
 
@@ -311,7 +442,7 @@ or financial result.
 `customerConfirmed` flag was added — a default `false` would silently choose the
 answer.
 
-## 14. Backend acceptance checklist — DPA1–DPA16
+## 14. Backend acceptance checklist — DPA1–DPA18
 
 **Every item is NOT RUN.** No backend, no persistence, no Firebase project and
 no emulator exists. Contract tests in `packages/contracts` are **not** evidence
@@ -320,7 +451,7 @@ that any of this is implemented.
 | # | Requirement | Status |
 |---|---|---|
 | **DPA1** | The backend constructs the assessment context from trusted current records; a client cannot supply authoritative context. | **NOT RUN** |
-| **DPA2** | Only trusted server/system authority may create a normal assessment; human clients cannot self-declare satisfaction. | **NOT RUN** |
+| **DPA2** | Only trusted server/system authority may create a normal assessment; human clients cannot self-declare satisfaction. **Strengthened by DPA17: server authority alone is not enough.** | **NOT RUN** |
 | **DPA3** | The authoritative current policy reference is resolved server-side and matches the stored assessment exactly. | **NOT RUN** |
 | **DPA4** | The protected evidence reference is loaded from trusted state and belongs to the same resource. | **NOT RUN** |
 | **DPA5** | Order, committed reservation, rider custody and accepted rider assignment are loaded for one canonical resource in one consistent read-set. | **NOT RUN** |
@@ -335,6 +466,8 @@ that any of this is implemented.
 | **DPA14** | The assessment record, current pointer/projection, dedupe result and outbox event commit atomically; raw evidence never enters the event or push. | **NOT RUN** |
 | **DPA15** | A later delivery transaction revalidates and consumes the exact current trusted `satisfied` assessment atomically with order, custody, rider assignment, dedupe and outbox. **D2A contract tests are not evidence this persistence exists.** | **NOT RUN** |
 | **DPA16** | A missing, malformed, superseded or `notSatisfied` assessment cannot be treated as successful delivery; fallback handling is D2B, not an automatic cancellation or financial result. | **NOT RUN** |
+| **DPA17** | *(FND-003D2A-FIX-001.)* The backend **authenticates the invoking internal service principal** and permits a normal assessment only for an **explicitly authorized proof-verifier service identity or capability** for the applicable resource and policy. Holding `PrincipalKind.systemWorker` is **not** sufficient: outbox, reservation-expiry, reconciliation and every other internal worker identity **fail closed** unless explicitly authorized as proof verifiers. The Dart fixtures that name an authorized verifier are test infrastructure and are **not** evidence that any such allow-list exists. | **NOT RUN** |
+| **DPA18** | *(FND-003D2A-FIX-001.)* A **verdict-changing reassessment preserves an immutable audit basis** sufficient to explain the supersession: the backend retains the exact policy and evidence snapshot — or an equivalent immutable assessment-basis reference — associated with **both** assessments, and **never mutates evidence behind a historical assessment in place**. Without it, an unexplained same-basis verdict flip would behave like an undocumented override. This defines **no** dispute outcome, winner, refund, liability, fee or manual-override workflow. | **NOT RUN** |
 
 Earlier series are **unchanged** by this slice: **CA1–CA23**, **R33–R40**,
 **L1–L13**, **P1–P17** and **RA1–RA18** all remain **NOT RUN**. **B3-C1** stays

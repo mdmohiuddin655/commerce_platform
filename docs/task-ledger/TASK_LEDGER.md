@@ -40,7 +40,7 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003B3A-FIX-002 | ADMIN | Reconcile contract status across the picker, rider and order documents, the package docs and source comments with what FND-003B3A actually implements | FND-003B3A-FIX-001 | **DONE** | [FND-003B3A-FIX-002 report](FND-003B3A-FIX-002-completion-report.md) · **documentation and source-comment only — zero executable Dart changed** |
 | FND-003D1-FIX-001 | ADMIN | Bound the proof-policy reference at 64, stop its `toString` reproducing the raw value, make evidence `belongsTo` fail closed, and correct the stale package version header | FND-003D1 | **DONE** | [FND-003D1-FIX-001 report](FND-003D1-FIX-001-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) |
 | FND-003D1-FIX-002 | ADMIN | Alias the proof-policy ceiling to the canonical `maxIdLength` instead of repeating its literal, and make `DeliveryEvidenceRef.toString` fail safe for malformed instances | FND-003D1-FIX-001 | **DONE** | [FND-003D1-FIX-002 report](FND-003D1-FIX-002-completion-report.md) · [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md) amended |
-| FND-003D2A | ADMIN | Mechanism-neutral, trusted-server-produced delivery-proof **assessment** result | FND-003D1 | **DONE** | Accepted state = **the FND-003D2A commit** on `fnd/FND-003D2A-proof-assessment-contract`, branched from `main` @ `f03fc99`. [FND-003D2A report](FND-003D2A-completion-report.md) · [delivery-proof assessment](../contracts/delivery-proof-assessment.md) · [ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md) · contract **0.8**. Adds **DPA1–DPA16**, all **NOT RUN**. **No command and no permission added** (`Permission.values` stays 38); every order/reservation/inventory/financial/custody/assignment effect is **NONE**. Successful delivery remains **not executable** |
+| FND-003D2A | ADMIN | Mechanism-neutral, trusted-server-produced delivery-proof **assessment** result | FND-003D1 | **DONE** (implementation, as corrected) — **NOT YET ACCEPTED FOR MERGE** | **Candidate chain = `6bb23710` + the FND-003D2A-FIX-001 commit**, on `fnd/FND-003D2A-proof-assessment-contract`, branched from `main` @ `f03fc99`. **`6bb23710` alone is NOT accepted**: FND-003D2A-FINAL-REVIEW-001 found technical, maintainability, security and process-evidence defects, all corrected by FND-003D2A-FIX-001. **The corrected chain still requires final read-only acceptance before merge.** **Known process exception, recorded separately and NOT part of the accepted chain:** a local-only commit `a9f3db98` was amended into `6bb23710` before first publication, so FND-003D2A acceptance criterion 48 (no amend) = **FAIL**; no shared history or CI result was rewritten, and it is a one-time pre-publication exception only — see the process-correction section of the [FND-003D2A report](FND-003D2A-completion-report.md). Reports: [FND-003D2A](FND-003D2A-completion-report.md) + [FIX-001](FND-003D2A-FIX-001-completion-report.md) · [delivery-proof assessment](../contracts/delivery-proof-assessment.md) · [ADR-0009](../decisions/ADR-0009-trusted-immutable-proof-assessment.md) · contract **0.8**. Adds **DPA1–DPA18**, all **NOT RUN** (DPA17 verifier authorization, DPA18 reassessment audit basis, both added by FIX-001). **No command and no permission added** (`Permission.values` stays 38); every order/reservation/inventory/financial/custody/assignment effect is **NONE**. Successful delivery remains **not executable** |
 | FND-003D2B | ADMIN | Fallback dispute workflow for a missing, superseded or `notSatisfied` assessment | FND-003D2A | **NOT STARTED** | required by CONSTRAINTS invariant 13 before delivery confirmation may be coded |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: proof-satisfaction contract and fallback dispute workflow | FND-003B | **PARTIAL** | parent; the mechanism-neutral proof/evidence **reference** boundary delivered by FND-003D1, and the trusted immutable proof **assessment result** by FND-003D2A. **The proof-satisfaction policy itself and the fallback dispute workflow (FND-003D2B) are still undone**, and remain required before delivery confirmation is coded (CONSTRAINTS invariant 13) |
@@ -337,6 +337,46 @@ New backend criteria **DPA1–DPA16**, all **NOT RUN**. **FND-003D stays PARTIAL
 — the satisfaction *policy* and the dispute workflow (**FND-003D2B**) are
 undone, so `CONSTRAINTS.md` invariant 13 is **not** discharged and delivery
 confirmation still may not be coded.
+
+**FND-003D2A-FIX-001 — DONE (2026-09-10).** FND-003D2A-FINAL-REVIEW-001 found
+five real defects in the unreleased 0.8 candidate plus one process-evidence
+failure. All are corrected in one follow-up commit; **the contract stays at
+0.8**, because this is an in-place correction to an unmerged, unreleased
+candidate, not a release event.
+
+The security defect was the important one. **`PrincipalKind.systemWorker` is a
+broad infrastructure class** — the outbox drain, reservation expiry and
+scheduled reconciliation all hold it — and the evaluator accepted *any*
+structurally valid system worker. That made the verdict which later gates
+delivery mintable by an unrelated job. The evaluator now takes the assessor as a
+**separate server-derived `Principal`** and requires it to equal the resource's
+`authorizedAssessorPrincipalId`, resolved from trusted state, with a distinct
+`assessorAuthorityMismatch` denial. The request's assessor fields were
+**removed** rather than kept for compatibility: a payload that names its own
+authorizer is not a check.
+
+Three public accessors failed **open** and now fail closed: `bindsRiderAttempt`
+matched identically-malformed values; `currentVerdict` read straight off raw
+facts so a **torn aggregate could expose `satisfied`** (replaced by
+`canonicalVerdict`, which requires the validator to accept the facts, and which
+never downgrades corruption to `notSatisfied`); and `toString` echoed raw fields
+of malformed values before validation. `events` was a caller-supplied list and
+is now a fixed `const` single-element getter. Each fix carries a **negative
+control** — reverting it makes a specific named test fail.
+
+The 980-line module and 1455-line test file were split by responsibility behind
+a **stable barrel**, so the public `cp_contracts` surface is unchanged. New
+criteria **DPA17** (backend must authorize an explicit proof-verifier service
+identity; generic worker status insufficient) and **DPA18** (a verdict-changing
+reassessment retains an immutable audit basis) are both **NOT RUN**.
+
+**Process exception, recorded and not repeated.** Before this branch was first
+published, a local-only commit `a9f3db98` was amended into `6bb23710` to remove
+a `<D2A>` ledger placeholder. FND-003D2A acceptance criterion 48 (no amend) is
+therefore **FAIL** and must never be cited as PASS. No shared history, reviewer
+history or CI result was rewritten — `a9f3db98` was never pushed. It is accepted
+as a **one-time, pre-publication** exception and grants no licence to amend
+anything else; FIX-001 itself used one new normal commit.
 
 **Remaining slices:**
 

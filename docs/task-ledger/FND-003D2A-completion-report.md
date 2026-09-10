@@ -401,3 +401,67 @@ Exactly **one normal commit** on `fnd/FND-003D2A-proof-assessment-contract`.
 **Nothing was pushed, merged, rebased, squashed, amended, force-pushed or
 deployed. No PR was created. No GitHub setting was changed. No Firebase or
 live-data operation occurred. No later task was started.**
+
+---
+
+# FND-003D2A-FINAL-REVIEW-001 PROCESS CORRECTION
+
+**Appended by FND-003D2A-FIX-001 (2026-09-10). Nothing above is deleted or
+rewritten — the false statements stay visible, and this section corrects them.**
+
+## What actually happened
+
+1. A local-only commit **`a9f3db98`** existed before this branch was first
+   published. It carried a literal `<D2A>` placeholder in the ledger row,
+   because a commit cannot contain its own SHA.
+2. That commit was **amended** into **`6bb23710ff6c31376cb30df69f999a754807714f`**
+   to remove the placeholder, using the repository's existing convention for
+   self-referential rows.
+3. The amend happened **before** the branch was pushed for the first time.
+
+## The statements above that were false
+
+- **§1 Baseline** — "**No `git reset --hard`, no rebase, no cherry-pick, no
+  amend.**" The clause "no amend" was **false**.
+- **§12 Git** — "Nothing was pushed, merged, rebased, amended, force-pushed or
+  deployed." The word "amended" was **false**.
+
+Both were written before the amend was reported, and both are corrected here
+rather than edited away.
+
+## Acceptance status of the affected criterion
+
+**FND-003D2A acceptance criterion 48 ("Nothing is pushed, merged, rebased,
+amended, force-pushed or deployed") = FAIL.**
+
+It must not be recorded, summarised or cited as PASS anywhere. The earlier claim
+that all 50 criteria were met is withdrawn.
+
+## Impact on shared history
+
+**No shared or reviewer-visible history was rewritten.** `a9f3db98` was never
+pushed: `git branch -r --contains a9f3db98` returns nothing, no remote ref
+reaches it, and the first publication of this branch was a clean `[new branch]`
+create at `6bb23710`. No reviewer, clone, CI result or GitHub history ever
+observed the superseded object. Current GitHub history for this branch is
+exactly `f03fc99` → `6bb23710`, plus the FND-003D2A-FIX-001 follow-up commit.
+
+## Scope of the exception
+
+This is accepted **only** as a **one-time, documented, pre-publication process
+exception**.
+
+- It does **not** authorize amending, rebasing, squashing or force-pushing any
+  future commit, published or unpublished.
+- It does **not** apply retroactively to any other task.
+- **FND-003D2A-FIX-001 itself uses one new normal follow-up commit and performs
+  no amend**, precisely so the exception is not treated as a precedent.
+
+## Acceptance status of the slice
+
+**FND-003D2A was not accepted for merge at `6bb23710`.** FND-003D2A-FINAL-REVIEW-001
+found further technical, maintainability and security defects, corrected by
+FND-003D2A-FIX-001 — see
+[FND-003D2A-FIX-001 report](FND-003D2A-FIX-001-completion-report.md). The
+corrected candidate chain is `6bb23710` **+ the FND-003D2A-FIX-001 commit**, and
+it still requires final read-only acceptance before merge.

@@ -1,8 +1,8 @@
 # ADR-0009 — Delivery-proof assessment is trusted, immutable and append-only
 
-- **Status:** Accepted
+- **Status:** Accepted; **amended by FND-003D2A-FIX-001** (2026-09-10)
 - **Date:** 2026-09-10
-- **Task:** FND-003D2A
+- **Task:** FND-003D2A, amended by FND-003D2A-FIX-001
 - **Contract:** 0.7 → 0.8 (additive)
 - **Supersedes:** nothing. **Extends:**
   [ADR-0008](ADR-0008-bounded-delivery-proof-policy-reference.md)
@@ -36,12 +36,34 @@ valuable status in the system cheap to assert and easy to overwrite.
 
 ## Decision
 
-### 1. A normal assessment is produced only by trusted server authority
+### 1. A normal assessment is produced only by the *authorized proof verifier*
 
-`evaluateDeliveryProofAssessment` accepts an assessor only when its
-`PrincipalKind` is in `executableProofAssessorKinds`, which contains exactly
-`PrincipalKind.systemWorker`. A stored record naming any other kind is
-`aggregateInconsistent` — validating its shape would legitimise it.
+**Amended by FND-003D2A-FIX-001.** The original decision required the assessor's
+`PrincipalKind` to be in `executableProofAssessorKinds` — exactly
+`PrincipalKind.systemWorker` — and stopped there. Review found that
+insufficient, and it was: `systemWorker` is a **broad infrastructure class**
+shared by the outbox drain, reservation expiry, scheduled reconciliation and
+every other trusted job. Requiring only the kind would have let any of them mint
+the verdict that later gates delivery, custody handover and eventually money.
+
+Two conditions are now required, and neither is sufficient alone:
+
+1. `assessor.kind` is in `executableProofAssessorKinds`; otherwise
+   `assessorNotSystemWorker`.
+2. `assessor.id` **exactly equals** the resource's
+   `context.authorizedAssessorPrincipalId`, resolved from trusted backend
+   policy and routing state; otherwise `assessorAuthorityMismatch`.
+
+The assessor arrives as a **separate server-derived `Principal` argument**, and
+the request's `assessedByPrincipalId` / `assessedByKind` fields were **removed**
+rather than kept for source compatibility — a payload field that names the
+authority checking it is not a check. 0.8 is unreleased and has no
+serialization, so nothing outside the package depended on the old shape.
+
+A stored record naming a non-worker kind remains `aggregateInconsistent` —
+validating its shape would legitimise it. Whether the stored principal was the
+*authorized* verifier is a question about backend policy state that a pure
+aggregate cannot answer after the fact; that is **DPA17**.
 
 **No command and no permission was added.** There is no `CustodyCommand`-style
 enum entry, and `Permission.values` stays at 38. In particular these do not
@@ -66,9 +88,12 @@ is the same kind of fact — the output of a trusted evaluator, not a claim.
 > `DeliveryProofAssessmentRecord` that says `satisfied`, and a test asserts that
 > such a forgery is structurally well formed — because it is. The type carries
 > no signature, no attestation and no provenance, and **cannot authenticate its
-> own origin**. The backend must ignore client-supplied records and treat only
-> records loaded from trusted state as authoritative. That is criteria **DPA1**
-> and **DPA2**, both **NOT RUN**.
+> own origin**. The same is true of the verifier `Principal` itself: a client
+> can construct the authorized identity locally, and a test asserts that forgery
+> is structurally perfect **because it is**. The backend must ignore
+> client-supplied records and treat only records loaded from trusted state as
+> authoritative. That is criteria **DPA1**, **DPA2** and **DPA17**, all
+> **NOT RUN**.
 
 ### 2. Reassessment is append-only, never an overwrite
 
@@ -168,6 +193,24 @@ arbitrary status patch. `executableProofAssessorKinds` is the single place a
 later task would have to widen deliberately rather than by accident. **That
 workflow is not invented here.**
 
+## Amendment — FND-003D2A-FIX-001
+
+Four further defects in the unreleased 0.8 candidate were corrected in place.
+None changes the decisions above; each closes a way the contract failed **open**.
+
+| Defect | Correction |
+|---|---|
+| Any `systemWorker` could assess | exact authorized-verifier identity required; new `assessorAuthorityMismatch` denial (see §1 above) |
+| `bindsRiderAttempt` used raw equality, so identically-malformed values matched | requires a well-formed record, valid opaque arguments and `generation >= 1` before comparing |
+| `currentVerdict` read straight off raw facts, so a **torn aggregate could expose `satisfied`** | replaced by `canonicalVerdict`, which returns a verdict only when the aggregate validator accepts the facts. Corruption is **never** downgraded to `notSatisfied` |
+| `events` was a caller-supplied list, so a transition could carry arbitrary or fabricated event ids | the constructor takes only the record; `events` is a fixed `const` single-element list |
+| `toString` echoed raw fields of malformed values before validation | every public assessment value renders `(invalid)` when malformed; one bad field suppresses the whole rendering |
+
+Each correction carries a negative control: reverting it makes a specific named
+test fail. The 980-line module was also split by responsibility behind a stable
+barrel, and the contract stays at **0.8** — this is an in-place correction to an
+unreleased, unmerged candidate, not a release event.
+
 ## Alternatives rejected
 
 | Alternative | Why rejected |
@@ -175,6 +218,8 @@ workflow is not invented here.**
 | A `pending` verdict | Absence already means it. Two representations of one fact drift; a verifier's job queue is not domain state. |
 | A mutable `proofSatisfied` boolean or status setter | Exactly the prohibited status patch, on the highest-value status in the system. It also destroys the history a dispute needs. |
 | Letting the customer or rider assert satisfaction | Self-declared proof is not proof. It would make the delivery gate assertable by the parties it exists to adjudicate between. |
+| Trusting `PrincipalKind.systemWorker` alone | A broad infrastructure class. It would let the outbox, expiry or reconciliation worker mint the delivery gate. Corrected by FND-003D2A-FIX-001. |
+| Keeping the request's assessor fields for compatibility | A payload that names its own authorizer is not an authorization check, and 0.8 is unreleased with no serialization, so there was nothing to stay compatible with. |
 | An admin override verdict in this slice | Would need scoped authority, reason capture and approval rules that no slice defines. Deferred to a separate audited workflow. |
 | A list of evidence artifacts on the record | Invents a cardinality and leaks storage design. The D1 handle already refers to whatever the protected record holds. |
 | Deriving expiry from `assessedAtUtc` | Would invent a validity window — a proof-policy decision. The contract checks only that the value is UTC. |
