@@ -50,6 +50,77 @@ all**.
 `released` and `expired` are distinguished for audit — "someone acted" versus
 "nobody did" — but their inventory effect is identical.
 
+## Aggregate integrity — trusted facts are validated first
+
+The transition graph is internally consistent: it can never *create* an
+impossible order/reservation combination. That says nothing about facts
+arriving **from storage**. A partially loaded, mid-migration or
+externally-written aggregate must not drive an inventory mutation, so
+`evaluateOrderTransition` validates the aggregate **before any transition
+helper can produce an effect**.
+
+```text
+trusted facts loaded
+  → aggregate integrity check      ← added by FND-003B1-FIX-001
+  → source state / revision / command evaluation
+  → typed transition and effect
+```
+
+### Canonical order ↔ reservation pairs
+
+| Order state | Valid reservation states |
+|---|---|
+| `placed` | `active` **or** `expired` |
+| `accepted` | `committed` |
+| `preparing` | `committed` |
+| `ready` | `committed` |
+| `rejected` | `released` |
+| `cancelled` | `released` |
+
+Two entries deserve comment:
+
+- **`placed + expired` is canonical.** It is precisely the expiry-wins race
+  outcome: units restored, order still `placed`, simply no longer acceptable.
+  Treating it as corruption would break that outcome.
+- **`rejected` and `cancelled` pair only with `released`, never `expired`** —
+  the units came back because someone acted, not because time passed.
+
+Anything else — `placed + committed`, `accepted + active`, `ready + expired`
+and so on — is **corruption** and denies with `aggregateInconsistent`.
+
+### Canonical absence
+
+Placement acts only on an order that is absent in the exact sense:
+
+`state == null` **and** `revision == 0` **and** `reservationState == null`
+**and** `reservedUnits == 0`.
+
+A "non-existent" order carrying a revision or a reservation record is a partial
+load. Treating it as absent would place a duplicate order.
+
+### Revision and unit integrity
+
+- An existing order has `revision >= 1`; it has been written at least once.
+- An absent order has `revision == 0` exactly.
+- Any existing reservation record has `reservedUnits > 0`.
+
+A reservation for zero units is meaningless; for **negative** units it would
+produce an inventory mutation that *destroys* stock. Malformed quantities are
+never clamped or absolute-valued — **the aggregate is denied**.
+
+### This validation does not repair anything
+
+It fails closed and stops. No corrupt aggregate is silently corrected, because
+a repair without an audit trail is indistinguishable from a bug. Reconciliation
+and admin tooling own repair, later.
+
+### It is a second line of defence, not a substitute
+
+The backend must still maintain the canonical pair **atomically** in one
+transaction, and must never intentionally persist an intermediate combination
+such as `accepted + active` or `placed + committed`. This check exists for when
+that guarantee has already failed.
+
 ## Transition matrix
 
 Every executable edge. **Anything not listed fails closed** with
@@ -78,6 +149,11 @@ Notes:
   reservation.
 - Every applied transition advances the order revision, which is what makes a
   stale `expectedRevision` detectable.
+- **Release paths are pair-specific.** `order.reject` and `order.cancel` from
+  `placed` require exactly `placed + active`; `order.cancel` from `accepted`
+  requires exactly `accepted + committed`. A generic "still holds units" test
+  would let an impossible pair through, which is the defect FND-003B1-FIX-001
+  closed.
 
 ## Reservation transition table
 
@@ -176,16 +252,31 @@ units are restored once. A later acceptance attempt is denied
 reservation path, which this slice does not define.
 
 > **An accepted order and restored inventory from the same reservation cannot
-> coexist.** This is structural, not a runtime check: reaching `accepted`
-> requires an `active` reservation, and acceptance moves it to `committed`,
-> after which expiry has no source state to act from. Tested in both orderings,
-> asserting stock conservation each way.
+> coexist.** Precisely, this means two things:
+>
+> 1. **The transition graph cannot produce that combination.** Reaching
+>    `accepted` requires an `active` reservation, and acceptance moves it to
+>    `committed`, after which expiry has no source state to act from. Tested in
+>    both orderings, asserting stock conservation each way.
+> 2. **Facts loaded from storage claiming that combination are rejected**
+>    before any effect, as a non-canonical pair (FND-003B1-FIX-001).
+>
+> What this does **not** claim: Dart types cannot make corrupt persistence
+> impossible. If the backend writes `accepted + active`, the type system will
+> not have prevented it — the evaluator will merely refuse to act on it. Atomic
+> persistence remains a backend obligation.
 
 ## Denial reasons
 
-`wrongSourceState` · `revisionConflict` · `reservationMissing` ·
-`reservationNotActive` · `reservationAlreadyFinal` · `alreadyTerminal` ·
-`policyDeferred` · `reservationUnavailable` · `unknownTransition`
+`wrongSourceState` · `revisionConflict` · `reservationAlreadyFinal` ·
+`alreadyTerminal` · `policyDeferred` · `reservationUnavailable` ·
+`unknownTransition` · `aggregateInconsistent`
+
+`aggregateInconsistent` means **corruption, not a race**: the facts could not
+have been produced by this lifecycle. `reservationMissing` and
+`reservationNotActive` were removed by FND-003B1-FIX-001 — aggregate validation
+subsumes both, and a denial reason a backend can never observe is worse than
+none.
 
 **Internal.** For backend logs, tests and audit — not returned verbatim to an
 untrusted caller, for the same reason `DenyReason` is not.
@@ -259,6 +350,10 @@ existing R33–R40 in `privacy-and-security-boundaries.md`.
 - [ ] L11 — Reordered commands cannot duplicate an inventory effect.
 - [ ] L12 — A TTL deletion of a reservation document does **not** restore
       stock on its own.
+- [ ] L13 — Persisted order/reservation aggregates are reconciled for canonical
+      pair consistency, and an invalid pair never drives an inventory mutation.
+      The backend must never intentionally persist `accepted + active`,
+      `placed + committed` or any other non-canonical pair.
 
 ## Out of scope — next FND-003B slices
 

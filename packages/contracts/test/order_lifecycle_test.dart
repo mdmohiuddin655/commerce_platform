@@ -142,6 +142,8 @@ void main() {
     });
 
     test('an expired reservation cannot be accepted', () {
+      // `placed + expired` IS canonical — it is the expiry-wins outcome — so
+      // this is a genuine lifecycle denial, not corruption.
       expect(
         run(
           LifecycleCommand.acceptOrder,
@@ -151,20 +153,26 @@ void main() {
       );
     });
 
-    test('a released reservation cannot be accepted', () {
+    test('placed + released is corrupt, not a routine denial', () {
+      // A placed order never pairs with `released`: releasing moves the order
+      // to rejected or cancelled in the same transition.
       expect(
         run(
           LifecycleCommand.acceptOrder,
           on: facts(reservation: ReservationState.released),
         ).denial,
-        LifecycleDenial.reservationAlreadyFinal,
+        LifecycleDenial.aggregateInconsistent,
       );
     });
 
-    test('a missing reservation cannot be accepted', () {
+    test('an order with no reservation record is a corrupt aggregate', () {
+      // Every canonical pair includes a reservation, so its absence means the
+      // record was not loaded — not that the order never had one. Reported as
+      // corruption rather than a routine "missing" condition, since the
+      // transition graph cannot produce this.
       expect(
         run(LifecycleCommand.acceptOrder, on: facts(reservation: null)).denial,
-        LifecycleDenial.reservationMissing,
+        LifecycleDenial.aggregateInconsistent,
       );
     });
 
@@ -289,7 +297,10 @@ void main() {
       );
     });
 
-    test('preparation requires the allocation still to belong to the order', () {
+    test('accepted + released is a corrupt aggregate', () {
+      // An accepted order pairs only with `committed`. Releasing its
+      // allocation moves it to `cancelled` in the same transition, so this
+      // combination cannot be produced — it fails closed as corruption.
       expect(
         run(
           LifecycleCommand.startPreparing,
@@ -299,7 +310,7 @@ void main() {
             reservation: ReservationState.released,
           ),
         ).denial,
-        LifecycleDenial.reservationAlreadyFinal,
+        LifecycleDenial.aggregateInconsistent,
       );
     });
   });

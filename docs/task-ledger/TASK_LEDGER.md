@@ -26,7 +26,8 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003A-FIX-002 | ADMIN | Make successful authorization unforgeable and request-bound before idempotency replay | FND-003A-FIX-001 | **DONE** | [FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md) |
 | FND-003A-FIX-001 | ADMIN | Fix offer-vs-assignment scope, approval binding, idempotency principal isolation, version-compatibility semantics | FND-003A | **DONE** | [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md) |
 | FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle delivered by FND-003B1. Assignment, custody, delivery and return lifecycles outstanding |
-| FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** | [FND-003B1 report](FND-003B1-completion-report.md) · contract **0.3** |
+| FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** (as corrected) | Accepted state = **`697d170` + the FND-003B1-FIX-001 commit**. Reports: [FND-003B1](FND-003B1-completion-report.md) + [FIX-001](FND-003B1-FIX-001-completion-report.md) · contract **0.3**. `697d170` alone is **not** the accepted contract |
+| FND-003B1-FIX-001 | ADMIN | Validate canonical order/reservation aggregate before any lifecycle effect; pair-specific release paths | FND-003B1 | **DONE** | [FND-003B1-FIX-001 report](FND-003B1-FIX-001-completion-report.md) |
 | FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **TODO — NOT STARTED** | not blocked by hardware or O6 |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **TODO — NOT STARTED** | — |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
@@ -105,9 +106,18 @@ lifecycle, inventory or money rule was guessed at any point.
 lifecycle: six executable order states, four reservation states, seven named
 commands, a deterministic transition evaluator, typed inventory effects and a
 financial classification that makes "undecided" impossible to read as zero.
-Contract **0.2 → 0.3** (additive). The acceptance-versus-expiry race is closed
-structurally, and cancellation from `preparing`/`ready` is recorded as
-**DECISION REQUIRED** rather than guessed — it needs O6 and FND-003C.
+Contract **0.2 → 0.3** (additive). Cancellation from `preparing`/`ready` is
+recorded as **DECISION REQUIRED** rather than guessed — it needs O6 and
+FND-003C.
+
+Review of `697d170` found one hole, fixed by **FND-003B1-FIX-001**: the
+transition graph never *creates* an impossible order/reservation pair, but the
+evaluator did not validate the facts it was **given**. Malformed trusted
+aggregates — `placed + committed`, `accepted + active`, or a reservation with
+zero or negative units — could reach inventory-producing paths; a negative
+count produced a stock-*destroying* mutation. An aggregate-integrity boundary
+now runs before any effect, and release paths are pair-specific. **Cite both
+commits.**
 
 **Remaining slices:**
 

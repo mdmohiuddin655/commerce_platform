@@ -218,13 +218,24 @@ void main() {
       expect(retry.transition, isNull);
     });
 
-    test('expiry cannot touch an already released reservation', () {
+    test('expiry cannot touch an already expired reservation', () {
+      // The canonical retry case: `placed + expired`.
+      expect(
+        run(
+          LifecycleCommand.expireReservation,
+          on: facts(reservation: ReservationState.expired),
+        ).denial,
+        LifecycleDenial.reservationAlreadyFinal,
+      );
+    });
+
+    test('placed + released is rejected as corruption, not silently ignored', () {
       expect(
         run(
           LifecycleCommand.expireReservation,
           on: facts(reservation: ReservationState.released),
         ).denial,
-        LifecycleDenial.reservationAlreadyFinal,
+        LifecycleDenial.aggregateInconsistent,
       );
     });
   });

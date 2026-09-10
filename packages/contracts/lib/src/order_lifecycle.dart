@@ -19,17 +19,24 @@ enum LifecycleDenial {
   /// writer got there first.
   revisionConflict,
 
-  /// The command needs a reservation and none exists.
-  reservationMissing,
-
-  /// The reservation exists but is not in the state this command needs — for
-  /// example acceptance requires an `active` reservation and found a
-  /// `committed` one.
-  reservationNotActive,
-
   /// The reservation's units were already given back ([ReservationState.released]
   /// or [ReservationState.expired]). Acting again would restore twice.
   reservationAlreadyFinal,
+
+  /// The trusted facts do not form a canonical aggregate: the order state and
+  /// reservation state are a combination this lifecycle can never produce, the
+  /// revision is impossible, or a reservation record holds a non-positive unit
+  /// count.
+  ///
+  /// This is **corruption, not a race**. The transition graph cannot create
+  /// such a pair, so seeing one means the aggregate was partially loaded,
+  /// mid-migration, or written outside the transaction boundary. It fails
+  /// closed: no state machine can safely reason about facts it knows to be
+  /// impossible, and guessing would mean mutating inventory on bad data.
+  ///
+  /// The evaluator deliberately does **not** repair anything — repair belongs
+  /// to reconciliation or admin tooling, with an audit trail.
+  aggregateInconsistent,
 
   /// The order is already `rejected` or `cancelled`. Nothing leaves those.
   alreadyTerminal,
@@ -215,6 +222,86 @@ const Set<OrderState> policyDeferredCancellationSources = <OrderState>{
   OrderState.ready,
 };
 
+/// The only order↔reservation combinations this lifecycle can produce.
+///
+/// Every existing order has exactly one reservation record, and its state is
+/// determined by the order's. Two entries deserve comment:
+///
+/// - `placed` pairs with **either** `active` or `expired`. `placed + expired`
+///   is canonical and is precisely the expiry-wins outcome: the units were
+///   restored, the order stays `placed`, and it simply can no longer be
+///   accepted. Treating it as corruption would break that race outcome.
+/// - `rejected` and `cancelled` pair only with `released`, never `expired`:
+///   the units were given back because someone acted, not because time passed.
+const Map<OrderState, Set<ReservationState>> canonicalAggregatePairs =
+    <OrderState, Set<ReservationState>>{
+  OrderState.placed: <ReservationState>{
+    ReservationState.active,
+    ReservationState.expired,
+  },
+  OrderState.accepted: <ReservationState>{ReservationState.committed},
+  OrderState.preparing: <ReservationState>{ReservationState.committed},
+  OrderState.ready: <ReservationState>{ReservationState.committed},
+  OrderState.rejected: <ReservationState>{ReservationState.released},
+  OrderState.cancelled: <ReservationState>{ReservationState.released},
+};
+
+/// Rejects trusted facts that cannot be a real aggregate, before any
+/// transition helper can produce an inventory effect.
+///
+/// The transition graph is internally consistent — it never *creates* an
+/// impossible pair. This guards the other direction: facts arriving from
+/// storage. A partially loaded, mid-migration or externally written aggregate
+/// must not drive a stock mutation.
+///
+/// Returns null when the facts are canonical.
+LifecycleDenial? validateAggregate(OrderLifecycleFacts facts) {
+  if (!facts.exists) {
+    // Canonical absence is exact: no revision, no reservation, no units.
+    // A "non-existent" order carrying a revision or a reservation record is a
+    // partial load, and treating it as absent would place a duplicate order.
+    if (facts.revision != 0 ||
+        facts.reservationState != null ||
+        facts.reservedUnits != 0) {
+      return LifecycleDenial.aggregateInconsistent;
+    }
+    return null;
+  }
+
+  final OrderState state = facts.state!;
+
+  // States this slice does not own are reported as unknownTransition by the
+  // evaluator; validating their pairing would mean inventing one.
+  if (!OrderState.executableInThisSlice.contains(state)) {
+    return null;
+  }
+
+  // An existing order has been written at least once.
+  if (facts.revision < 1) {
+    return LifecycleDenial.aggregateInconsistent;
+  }
+
+  final ReservationState? reservation = facts.reservationState;
+  if (reservation == null) {
+    // Every canonical pair includes a reservation. Its absence means the
+    // record was not loaded, not that the order never had one.
+    return LifecycleDenial.aggregateInconsistent;
+  }
+
+  // A reservation for zero units is meaningless; for negative units it would
+  // produce an inventory mutation that *destroys* stock. Never clamp or take
+  // an absolute value — deny the aggregate.
+  if (facts.reservedUnits <= 0) {
+    return LifecycleDenial.aggregateInconsistent;
+  }
+
+  if (!canonicalAggregatePairs[state]!.contains(reservation)) {
+    return LifecycleDenial.aggregateInconsistent;
+  }
+
+  return null;
+}
+
 /// Evaluate one pre-dispatch lifecycle transition.
 ///
 /// Pure: no I/O, no clock, no storage, no randomness. Wall-clock time plays no
@@ -227,6 +314,12 @@ LifecycleOutcome evaluateOrderTransition({
   required LifecycleRequest request,
   required OrderLifecycleFacts facts,
 }) {
+  // ---- aggregate integrity, before anything can produce an effect --------
+  final LifecycleDenial? corruption = validateAggregate(facts);
+  if (corruption != null) {
+    return LifecycleOutcome.deny(corruption);
+  }
+
   // ---- placement is the only command acting on a non-existent order -------
   if (request.command == LifecycleCommand.placeOrder) {
     return _evaluatePlacement(request, facts);
@@ -321,9 +414,11 @@ LifecycleOutcome _evaluateAccept(OrderState from, OrderLifecycleFacts facts) {
   if (from != OrderState.placed) {
     return const LifecycleOutcome.deny(LifecycleDenial.wrongSourceState);
   }
-  final LifecycleDenial? reservationIssue = _requireActiveReservation(facts);
-  if (reservationIssue != null) {
-    return LifecycleOutcome.deny(reservationIssue);
+  // Pair-specific: acceptance needs exactly `placed + active`. After
+  // aggregate validation the only other possibility is `placed + expired`,
+  // which means expiry already won and the units are back.
+  if (facts.reservationState != ReservationState.active) {
+    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
   }
 
   return LifecycleOutcome.allow(
@@ -351,9 +446,10 @@ LifecycleOutcome _evaluateReject(OrderState from, OrderLifecycleFacts facts) {
   if (from != OrderState.placed) {
     return const LifecycleOutcome.deny(LifecycleDenial.wrongSourceState);
   }
-  final LifecycleDenial? reservationIssue = _requireHeldReservation(facts);
-  if (reservationIssue != null) {
-    return LifecycleOutcome.deny(reservationIssue);
+  // Pair-specific: `placed + active` only. `placed + expired` already gave
+  // the units back, and restoring again would be a double restore.
+  if (facts.reservationState != ReservationState.active) {
+    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
   }
 
   return LifecycleOutcome.allow(
@@ -362,7 +458,7 @@ LifecycleOutcome _evaluateReject(OrderState from, OrderLifecycleFacts facts) {
       fromState: from,
       toState: OrderState.rejected,
       resultingRevision: facts.revision + 1,
-      fromReservation: facts.reservationState,
+      fromReservation: ReservationState.active,
       toReservation: ReservationState.released,
       inventoryEffect: InventoryEffect.restore(facts.reservedUnits),
       // Whether a rejection carries any financial consequence is FND-003C's.
@@ -384,16 +480,9 @@ LifecycleOutcome _evaluatePreparation(
   if (from != required) {
     return const LifecycleOutcome.deny(LifecycleDenial.wrongSourceState);
   }
-  // The committed allocation must still belong to the order.
-  if (facts.reservationState == null) {
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationMissing);
-  }
-  if (facts.reservationState!.isFinal) {
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
-  }
-  if (facts.reservationState != ReservationState.committed) {
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationNotActive);
-  }
+  // `accepted`, `preparing` and `ready` pair only with `committed`, which
+  // aggregate validation has already established, so the allocation is known
+  // to still belong to the order.
 
   return LifecycleOutcome.allow(
     LifecycleTransition(
@@ -418,9 +507,14 @@ LifecycleOutcome _evaluateCancel(OrderState from, OrderLifecycleFacts facts) {
   if (!executableCancellationSources.contains(from)) {
     return const LifecycleOutcome.deny(LifecycleDenial.wrongSourceState);
   }
-  final LifecycleDenial? reservationIssue = _requireHeldReservation(facts);
-  if (reservationIssue != null) {
-    return LifecycleOutcome.deny(reservationIssue);
+  // Pair-specific per source state, rather than a generic "still holds units"
+  // test: `placed` cancels only from `active`, `accepted` only from
+  // `committed`. A generic check would let an impossible pair through.
+  final ReservationState requiredReservation = from == OrderState.placed
+      ? ReservationState.active
+      : ReservationState.committed;
+  if (facts.reservationState != requiredReservation) {
+    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
   }
 
   return LifecycleOutcome.allow(
@@ -446,17 +540,12 @@ LifecycleOutcome _evaluateExpiry(OrderState from, OrderLifecycleFacts facts) {
   if (from != OrderState.placed) {
     return const LifecycleOutcome.deny(LifecycleDenial.wrongSourceState);
   }
-  if (facts.reservationState == null) {
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationMissing);
-  }
-  if (facts.reservationState!.isFinal) {
-    // A retried worker finds the units already given back and does nothing.
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
-  }
+  // After aggregate validation a `placed` order is `active` or `expired`.
+  // A retried worker finds the units already given back and does nothing.
+  // (Acceptance having won the race is caught above: the order is no longer
+  // `placed`, so expiry has no source state at all.)
   if (!facts.reservationState!.isExpirable) {
-    // Committed: acceptance won the race. Expiry must not restore the
-    // accepted order's stock.
-    return const LifecycleOutcome.deny(LifecycleDenial.reservationNotActive);
+    return const LifecycleOutcome.deny(LifecycleDenial.reservationAlreadyFinal);
   }
 
   return LifecycleOutcome.allow(
@@ -475,30 +564,4 @@ LifecycleOutcome _evaluateExpiry(OrderState from, OrderLifecycleFacts facts) {
       eventType: LifecycleEventType.reservationExpired,
     ),
   );
-}
-
-/// Acceptance needs a reservation that is still expirable-and-held.
-LifecycleDenial? _requireActiveReservation(OrderLifecycleFacts facts) {
-  if (facts.reservationState == null) {
-    return LifecycleDenial.reservationMissing;
-  }
-  if (facts.reservationState!.isFinal) {
-    return LifecycleDenial.reservationAlreadyFinal;
-  }
-  if (facts.reservationState != ReservationState.active) {
-    return LifecycleDenial.reservationNotActive;
-  }
-  return null;
-}
-
-/// Release paths accept either `active` or `committed` — both still hold
-/// units — but never a state that already gave them back.
-LifecycleDenial? _requireHeldReservation(OrderLifecycleFacts facts) {
-  if (facts.reservationState == null) {
-    return LifecycleDenial.reservationMissing;
-  }
-  if (facts.reservationState!.isFinal) {
-    return LifecycleDenial.reservationAlreadyFinal;
-  }
-  return null;
 }

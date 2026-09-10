@@ -8,7 +8,9 @@
 - **Branch:** `fnd/FND-003B1-order-reservation-lifecycle`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.2 → **0.3**
-- **Status:** **DONE**
+- **Status:** **DONE** — as corrected by **FND-003B1-FIX-001** (2026-09-10).
+  See [§15 Recheck](#15-recheck-fnd-003b1-fix-001). `697d170` alone is not the
+  accepted state.
 
 ## 1. Baseline
 
@@ -210,3 +212,34 @@ unchanged; FND-004 unchanged; R33–R40 remain NOT RUN.
 Contract and tests only. No backend handler, no Firestore rule, no application
 feature, no platform dependency. Nothing merged to `main`, nothing pushed,
 nothing deployed. **FND-003B2 not started.**
+
+## 15. Recheck (FND-003B1-FIX-001, 2026-09-10)
+
+The lifecycle design in this report is accepted and unchanged: the cancellation
+split, the acceptance-versus-expiry race, financial deferral and the
+unreachability of `in_delivery`/`delivered` all stand.
+
+**One hole was found.** §7 of this report said the race outcome was safe
+"structurally". That was true of the **transition graph** — it can never
+*create* an impossible order/reservation pair — but the evaluator did not check
+the facts it was *given*. `OrderLifecycleFacts` arrives from storage, and
+nothing validated that the order state, reservation state, revision and unit
+count formed a pair this lifecycle could ever have produced.
+
+Reproduced against `697d170`:
+
+| Malformed facts | Result before the fix |
+|---|---|
+| `placed + committed`, reject | **allowed**, restored 3 units |
+| `accepted + active`, cancel | **allowed**, restored 3 units |
+| `placed + active`, `reservedUnits: 0`, reject | **allowed**, zero-unit effect |
+| `placed + active`, `reservedUnits: -5`, reject | **allowed**, `availableStockDelta = -5` |
+
+The last is the worst: a negative unit count produced an inventory mutation
+that would have **destroyed** stock rather than restoring it.
+
+FND-003B1-FIX-001 adds one narrow aggregate-integrity boundary that runs before
+any transition helper can produce an effect, makes the release paths
+pair-specific, and corrects this report's "structurally" claim to state
+precisely what the transition graph guarantees and what it does not. Full
+detail: [FND-003B1-FIX-001 report](FND-003B1-FIX-001-completion-report.md).
