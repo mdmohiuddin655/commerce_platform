@@ -279,17 +279,33 @@ closed.
 
 | # | Check | Denial |
 |---|---|---|
-| 1 | canonical authorization grant for `admin.dispute.administer`, this principal, this resource | `authorizationGrantMismatch` |
+| 1 | canonical authorization grant for `admin.dispute.administer`, this principal, **covering the stored dispute's resource** | `authorizationGrantMismatch` |
 | 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
-| 3 | it names the canonical order | `resourceBindingMismatch` |
-| 4 | dispute revision compare-and-set | `disputeRevisionConflict` |
-| 5 | the actor is a human principal | `actorNotHumanPrincipal` |
-| 5 | the timestamp is UTC | `timestampNotUtc` |
-| 6 | `disputeId` is a valid opaque id | `disputeIdInvalid` |
-| 6 | a dispute exists | `disputeNotFound` |
-| 6 | it is the named dispute | `disputeIdMismatch` |
-| 7 | it is still `open` | `disputeNotOpen` |
-| 8 | review does not precede the raise | `reviewTimestampPrecedesRaise` |
+| 3 | dispute revision compare-and-set | `disputeRevisionConflict` |
+| 4 | the actor is a human principal | `actorNotHumanPrincipal` |
+| 4 | the timestamp is UTC | `timestampNotUtc` |
+| 5 | `disputeId` is a valid opaque id | `disputeIdInvalid` |
+| 5 | a dispute exists | `disputeNotFound` |
+| 5 | it is the named dispute | `disputeIdMismatch` |
+| 6 | it is still `open` | `disputeNotOpen` |
+| 7 | review does not precede the raise | `reviewTimestampPrecedesRaise` |
+
+> **There is no separate resource-binding step here, and there must not be.**
+> *(Corrected by FND-003D2B-FIX-006.)* This table previously carried a row
+> *"it names the canonical order → `resourceBindingMismatch`"*. **No such check
+> exists in `evaluateRecordDeliveryProofDisputeReview`, and the denial is
+> unreachable from it.**
+>
+> That is by design rather than by omission. The stored dispute *supplies* the
+> anchor, and step 1 already requires the grant to **cover** exactly it — so a
+> second comparison would only ever compare `dispute.resourceId` against itself,
+> which is the same tautology FND-003D2B-FIX-003 removed from
+> `checkDisputeAuthorization`. Raise needs the check because it has other,
+> independently supplied read-set members (the assessment and the order read) to
+> bind; review has none.
+>
+> The row was removed rather than satisfied: **stale prose is not a reason to
+> add a runtime check.**
 
 **Resolve** — no table, because it reads nothing: always
 `resolutionPolicyDeferred`.

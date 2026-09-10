@@ -150,11 +150,17 @@ void main() {
 
   group('resource binding', () {
     test('a grant naming a malformed resource fails closed', () {
-      // *(Reshaped by FND-003D2B-FIX-002.)* The canonical resource now arrives
-      // on the authorization grant, so this is no longer a free-standing
-      // context value a caller can malform — it has to come back from
-      // `evaluateAuthorization`. A grant whose resource is not a canonical
-      // opaque id is refused before any fact is read.
+      // *(Comment corrected by FND-003D2B-FIX-006; the assertions are
+      // unchanged.)* The **stored dispute aggregate remains the operation
+      // resource anchor** — the grant is never the source used to choose it.
+      //
+      // A grant may perfectly well name a different, or a malformed,
+      // authorized resource: that is a fact about what the actor was
+      // authorized for, not about which order is being acted on. Such a grant
+      // simply cannot satisfy `covers` against the independently anchored
+      // stored-dispute resource, so it is refused — here, before any fact is
+      // read, because a resource that is not a canonical opaque id could not
+      // be compared at all.
       for (final String bad in <String>['short', '']) {
         final AuthorizationGrant badGrant = disputeGrant(
           permission: Permission.customerRaiseDispute,

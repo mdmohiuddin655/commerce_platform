@@ -222,3 +222,32 @@ discharged.
 ## Owner actions needed
 
 None new. **O6** and **O7** remain outstanding, unchanged.
+
+---
+
+# RECHECK — THE SWEEP DID NOT YET COVER TEST SOURCE
+
+**Appended by FND-003D2B-FIX-006 (2026-09-11). Nothing above is rewritten.**
+
+FND-003D2B-FINAL-REVIEW-005 extended the semantic sweep to **D2B test-source
+comments**, which §5 of this report did not cover — its sixteen locations were
+production sources and canonical docs only. One surviving stale current-tense
+statement was found there:
+
+```text
+packages/contracts/test/delivery_proof_dispute_evaluator_test.dart
+  "The canonical resource now arrives on the authorization grant…"
+```
+
+The same review also found a canonical-doc row describing a review check that
+**does not exist** (`resourceBindingMismatch`), and `resourceBindingMismatch`'s
+own enum doc still referring to a "canonical resource context".
+
+**This report's §5 sweep was sound in method and incomplete in coverage.** The
+whitespace-collapsing technique was right — and is what found this one — but the
+file list stopped at production and documentation. FIX-006 widens it to test and
+support comments and reconciles the review table mechanically against source.
+
+**Executable behaviour was unaffected then and now.**
+
+Full detail: [FND-003D2B-FIX-006 report](FND-003D2B-FIX-006-completion-report.md).

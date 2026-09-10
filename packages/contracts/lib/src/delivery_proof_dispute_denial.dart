@@ -19,8 +19,26 @@
 /// > authorization policy. Separation of duties, if ever wanted, needs its own
 /// > permission and ADR.
 enum DeliveryProofDisputeDenial {
-  /// The canonical resource context is unusable, or an aggregate describes a
-  /// different order than the one being acted on.
+  /// An independently supplied member of a **raise** read-set describes a
+  /// different order than the stored dispute aggregate does.
+  ///
+  /// *(Wording corrected by FND-003D2B-FIX-006.)* This previously said "the
+  /// canonical resource context is unusable", which named the
+  /// `DeliveryProofDisputeContext` that FND-003D2B-FIX-002 deleted and implied
+  /// a resource-source model the contract no longer uses.
+  ///
+  /// The anchor is `DeliveryProofDisputeFacts.resourceId`. This denial is
+  /// reached when the **assessment aggregate** or the **resource-bound order
+  /// read** does not identify that same order — including an order read whose
+  /// own `resourceId` is not a canonical opaque id, which
+  /// `belongsToResource` refuses rather than matching malformed-to-malformed.
+  ///
+  /// **It is unreachable from `evaluateRecordDeliveryProofDisputeReview`**, and
+  /// deliberately so: that operation has no independently supplied read-set
+  /// member to bind. Its grant must already cover the stored dispute's
+  /// resource, and a further comparison would only check that resource against
+  /// itself. A grant naming the wrong resource therefore fails as
+  /// [authorizationGrantMismatch], not as this.
   resourceBindingMismatch,
 
   /// The stored **dispute** aggregate is a combination this contract can never
