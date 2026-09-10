@@ -338,9 +338,11 @@ AssignmentDenial? validatePickerAssignmentAggregate(
   if (facts.slotRevision < 1) {
     return AssignmentDenial.aggregateInconsistent;
   }
-  if (!AssignmentState.executableInThisSlice.contains(attempt.state)) {
-    // `completed` is declared but not implemented; validating its shape would
-    // mean inventing one. Reported as unknownTransition by the evaluator.
+  if (!AssignmentState.executableForRole(
+    AssignmentRole.picker,
+  ).contains(attempt.state)) {
+    // A state whose shape is not defined for the picker. Reported as
+    // unknownTransition by the evaluator.
     return null;
   }
   if (!isValidOpaqueId(attempt.assignmentId)) {
@@ -354,6 +356,7 @@ AssignmentDenial? validatePickerAssignmentAggregate(
   final ({int min, int max})? reachable = reachableSlotRevisionRange(
     attempt.generation,
     attempt.state,
+    role: AssignmentRole.picker,
   );
   if (reachable == null ||
       facts.slotRevision < reachable.min ||
@@ -383,14 +386,14 @@ AssignmentDenial? validatePickerAssignmentAggregate(
       }
     case AssignmentState.accepted:
     case AssignmentState.revoked:
+    case AssignmentState.completed:
       // Was accepted, so the assignee is recorded — and it can only ever have
-      // been the worker the offer was addressed to.
-      if (assignee == null ||
-          assignee != attempt.offerRecipientPrincipalId) {
+      // been the worker the offer was addressed to. `completed` joins these
+      // in FND-003B3A: a completed picker attempt keeps both identities, which
+      // is what makes the finished work attributable.
+      if (assignee == null || assignee != attempt.offerRecipientPrincipalId) {
         return AssignmentDenial.aggregateInconsistent;
       }
-    case AssignmentState.completed:
-      return null;
   }
   return null;
 }

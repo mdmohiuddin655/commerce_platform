@@ -86,6 +86,10 @@ class LifecycleEventType {
   static const String orderCancelled = 'order.cancelled';
   static const String reservationExpired = 'reservation.expired';
 
+  /// FND-003B3A. Caused by rider custody receipt, never by a command this
+  /// slice's evaluator owns.
+  static const String orderInDelivery = 'order.in_delivery';
+
   static const List<String> all = <String>[
     orderPlaced,
     orderAccepted,
@@ -94,5 +98,6 @@ class LifecycleEventType {
     orderReady,
     orderCancelled,
     reservationExpired,
+    orderInDelivery,
   ];
 }

@@ -133,8 +133,25 @@ enum AssignmentDenial {
 /// cannot produce — generation 2 at revision 1, say, or generation 1 at
 /// revision 99. Checking only `slotRevision >= 1` would accept both.
 ///
-/// Returns null when no range can be stated: a non-positive generation, or
-/// `completed`, which no slice implements and whose cost is therefore unknown.
+/// Returns null when no range can be stated: a non-positive generation, or a
+/// state whose mutation cost is not defined for [role].
+///
+/// ## `completed` and [role] — added additively by FND-003B3A
+///
+/// The five pre-custody ranges above are **identical for both roles and do not
+/// depend on [role] at all**. Only `completed` does.
+///
+/// [role] is optional and defaults to null, which preserves this function's
+/// pre-B3A behaviour **exactly**: `completed` returns null. Existing callers
+/// that ask a purely pre-custody question keep the answer they always had.
+///
+/// - `role: AssignmentRole.picker` — FND-003B3A makes picker completion
+///   reachable, caused by rider custody receipt. An offer, an acceptance and a
+///   completion is **three** mutations for that generation, the same
+///   per-generation cost as the accept-then-revoke path.
+/// - `role: AssignmentRole.rider` — still null. Rider completion depends on
+///   delivery, which no slice implements, and **no cost for it was invented**.
+///   That is contract criterion **B3-C2**, and it stays FUTURE.
 ///
 /// **Maintenance invariant.** This is arithmetic over the currently executable
 /// transitions, not an independent rule. Adding an executable state, changing
@@ -144,8 +161,9 @@ enum AssignmentDenial {
 /// contract criteria B3-C1 (picker) and B3-C2 (rider).
 ({int min, int max})? reachableSlotRevisionRange(
   int generation,
-  AssignmentState state,
-) {
+  AssignmentState state, {
+  AssignmentRole? role,
+}) {
   if (generation < 1) {
     return null;
   }
@@ -161,6 +179,9 @@ enum AssignmentDenial {
     AssignmentState.expired => (min: priorMinimum + 2, max: priorMaximum + 2),
     // offer + accept + revoke
     AssignmentState.revoked => (min: priorMinimum + 3, max: priorMaximum + 3),
-    AssignmentState.completed => null,
+    // offer + accept + completion, for the picker only.
+    AssignmentState.completed => role == AssignmentRole.picker
+        ? (min: priorMinimum + 3, max: priorMaximum + 3)
+        : null,
   };
 }

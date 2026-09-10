@@ -59,9 +59,42 @@ enum AssignmentState {
   };
 
   /// Declared for stability, owned by FND-003B3 (custody and handoff).
+  ///
+  /// **Still accurate for the rider.** FND-003B3A made *picker* completion
+  /// reachable, so `completed` is no longer unimplemented for every role — see
+  /// [executableForRole]. It remains unimplemented for the rider, whose
+  /// completion depends on delivery.
   static const Set<AssignmentState> notYetImplemented = <AssignmentState>{
     AssignmentState.completed,
   };
+
+  /// States whose aggregate shape is **defined** for [role].
+  ///
+  /// Distinct from [executableInThisSlice], and the distinction matters:
+  ///
+  /// - [executableInThisSlice] is the set an assignment **evaluator may act
+  ///   from**. No client command acts from `completed` for either role, so it
+  ///   is not in that set and a command naming a completed attempt still fails
+  ///   closed with `unknownTransition`.
+  /// - This set is what an **aggregate validator may check the shape of**.
+  ///   FND-003B3A made picker completion reachable — caused by rider custody
+  ///   receipt, never selected by a client — so a stored completed *picker*
+  ///   attempt has a canonical shape and a defined revision range.
+  ///
+  /// Rider `completed` stays out, because rider completion depends on delivery
+  /// and **no mutation cost for it was invented**. That is **B3-C2**, FUTURE.
+  static Set<AssignmentState> executableForRole(AssignmentRole role) =>
+      switch (role) {
+        AssignmentRole.picker => const <AssignmentState>{
+          AssignmentState.offered,
+          AssignmentState.accepted,
+          AssignmentState.declined,
+          AssignmentState.expired,
+          AssignmentState.revoked,
+          AssignmentState.completed,
+        },
+        AssignmentRole.rider => executableInThisSlice,
+      };
 
   /// The attempt is over. A new offer needs a **new attempt**, never a
   /// resurrection of this one.

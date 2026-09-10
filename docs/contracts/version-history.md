@@ -155,6 +155,40 @@ roles.
 `cp_contracts` still has no serialization, so the file move is a statement
 about source organisation and **not** payload evidence.
 
+### 0.6 — FND-003B3A (2026-09-10) — additive
+
+Added physical custody and the picker→rider handoff:
+
+- `CustodyHolderKind`, `CustodyHolder`
+- `CustodyFacts` (with `CustodyFacts.initialAtShop`), `CustodyRequest`,
+  `CustodyTransition`, `CustodyOutcome`, `CustodyDenial`
+- `CustodyCommand` (`custody.record_shop_pickup`,
+  `custody.record_rider_receipt`), `CustodyEventType`
+- `CustodyOrderEffect`, `PickerAssignmentCompletionEffect`
+- `validateCustodyAggregate`, `evaluateCustodyTransition`,
+  `reassignmentSafetyFor`
+- `OrderState.aggregateShapeKnown`, and `in_delivery: {committed}` in
+  `canonicalAggregatePairs`
+- `AssignmentState.executableForRole`
+- `AssignmentEventType.pickerCompleted`, `LifecycleEventType.orderInDelivery`
+- an **optional** `role` parameter on `reachableSlotRevisionRange`
+
+**Additive, including the changed signature.** `reachableSlotRevisionRange`
+gained an optional named parameter that **defaults to the pre-0.6 answer**, so
+every existing call site compiles unchanged and returns exactly what it
+returned before — `completed → null` included. A test pins that.
+
+**Why minor, not major.** The major is unchanged and nothing defined at 0.5
+changed meaning. Two states became *reachable* — `OrderState.inDelivery` and
+picker `AssignmentState.completed` — but both were already declared, and
+neither is entered by any command a client may select. Rider `completed` and
+`customer` custody remain unreachable, with **no mutation cost or shape
+invented** for either.
+
+**What is *not* claimed.** 0.5 contained no custody types at all, so a 0.5
+build could not decode a 0.6 custody payload even if one existed. None does:
+`cp_contracts` still has no serialization.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
@@ -192,13 +226,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2, 0.3, 0.4 and 0.5 are purely additive, so no stored value changes shape
-  or meaning. The 0.5 move of `AssignmentDenial` and
+- 0.2, 0.3, 0.4, 0.5 and 0.6 are purely additive, so no stored value changes
+  shape or meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003B2B commit returns the contract to 0.4,
+**Rollback:** reverting the FND-003B3A commit returns the contract to 0.5,
+reverting the FND-003B2B chain to 0.4,
 reverting the FND-003B2A chain to 0.3,
 reverting the FND-003B1 chain to 0.2, and the FND-003A chain to 0.1 — all with
 no data implications, because no data was ever written under any of them.

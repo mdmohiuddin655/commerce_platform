@@ -36,7 +36,7 @@ re-offer advances both.
 | `declined` | yes | Terminal for this attempt |
 | `expired` | yes | Terminal — lapsed under its timeout policy |
 | `revoked` | yes | Terminal — withdrawn under controlled reassignment |
-| `completed` | **no** | Declared for enum/wire stability; depends on custody, owned by FND-003B3. No transition enters it, and a test proves none can. |
+| `completed` | **reachable since FND-003B3A, but not from any command** | Entered as a *consequence* of rider custody receipt, never selected by a client. No picker command may act from it either. Its shape and revision range are now defined for the picker role only — see [custody-lifecycle.md](custody-lifecycle.md) §8–9 and **B3-C1**. |
 
 `AssignmentRole.rider` **became executable at 0.5** (FND-003B2B). No *picker*
 command or event names a rider, and a test still pins that: the picker
@@ -302,8 +302,15 @@ Anything outside the range — **above the maximum as well as below the
 minimum** — is `aggregateInconsistent`. `completed` is not range-checked; this
 slice does not implement it, so its cost is unknown.
 
-`reachableSlotRevisionRange(generation, state)` is exported so a backend
-reconciliation job can apply the identical rule.
+`reachableSlotRevisionRange(generation, state, {role})` is exported so a
+backend reconciliation job can apply the identical rule.
+
+**FND-003B3A added the optional `role`, additively.** Omitting it preserves the
+pre-0.6 answer exactly, including `completed → null`. `role: picker` gives
+`completed` the same per-generation cost as `revoked` (offer + accept +
+completion = three mutations); `role: rider` stays null, because rider
+completion depends on delivery and no cost for it was invented (**B3-C2**).
+The five pre-custody ranges do not depend on `role` at all.
 
 **Since 0.5 it lives in `assignment_integrity.dart`, not
 `picker_assignment.dart`, and is shared with the rider lifecycle** — picker and
@@ -423,7 +430,9 @@ future change, not a blocker to FND-003B2A.
 Not defined, guessed or partially implemented here:
 
 - rider assignment lifecycle — delivered separately by FND-003B2B, not here;
-- physical custody, pickup and handoff;
+- physical custody, pickup and handoff — **shop→picker pickup and picker→rider
+  receipt are delivered by FND-003B3A**, not here; see
+  [custody-lifecycle.md](custody-lifecycle.md);
 - rider receipt;
 - delivery attempts;
 - returns;

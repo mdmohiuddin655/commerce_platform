@@ -45,6 +45,12 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   `AssignmentDenial` moved to a shared assignment file; both keep their
   ///   names, behaviour and export path.
   ///
+  /// - **0.6** (FND-003B3A) — additive: physical custody — the custody holder
+  ///   vocabulary and aggregate, shop→picker pickup and picker→rider receipt,
+  ///   the order `ready → in_delivery` dispatch boundary, picker assignment
+  ///   completion as a cross-aggregate consequence, and a role-aware
+  ///   `reachableSlotRevisionRange`. Rider `completed` remains unreachable.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -54,7 +60,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 5);
+  static const ContractVersion current = ContractVersion(0, 6);
 
   final int major;
   final int minor;

@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.5** (FND-003B2B).
+**Current contract version: 0.6** (FND-003B3A).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -40,6 +40,15 @@ dependency.
 **FND-003B2 (assignment) is complete**: picker by FND-003B2A, rider by
 FND-003B2B.
 
+## Delivered — FND-003B3A
+
+| Document | Covers |
+|---|---|
+| [custody-lifecycle.md](custody-lifecycle.md) | Physical custody: the shop/picker/rider/customer vocabulary, explicit shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, the role-aware revision model and B3-C1, custody-derived reassignment safety, and the CA1–CA18 backend checklist |
+
+**FND-003B3 is PARTIAL**: custody acquisition and the picker→rider handoff are
+done. Delivery attempts, refusal, returns and customer custody are not.
+
 ## Not yet defined — later FND-003 slices
 
 **No feature may guess any of these.** If it is not written down, the work is
@@ -47,7 +56,7 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle — custody, delivery, returns** (FND-003B3) | Custody handoffs, delivery attempts, return processing, delivery confirmation, and assignment `completed` for **both** roles | FND-003B2 (**done**) |
+| **Lifecycle — delivery, refusal, returns** (FND-003B3, remaining) | Delivery attempts, delivery confirmation, refusal/failure, return processing, customer custody, and rider assignment `completed` | FND-003B3A (**done**) |
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
@@ -94,6 +103,24 @@ From FND-003B2A:
 - No timeout duration exists; offers carry an immutable policy reference the
   backend resolves against server time.
 - Assignment transitions have inventory NONE, financial NONE and custody NONE.
+
+From FND-003B3A:
+
+- Custody is explicit: once an order has a custody aggregate there is exactly
+  one current custodian, and a **missing record is never read as "the shop
+  still has it"**.
+- A worker custodian is bound to an assignment **attempt** — principal id,
+  assignment id and generation — not to a projection of who is assigned now.
+- Pickup is physical acquisition, **not** dispatch: the order stays `ready`.
+- The order reaches `in_delivery` only when a rider records receipt, and that
+  one command also completes the picker assignment and removes its
+  `assignedResource`.
+- Picker completion is a **consequence**, never a client-selected target state.
+- Custody never touches stock: pickup, handoff and dispatch have inventory
+  NONE, and stock cannot become available again until the return lifecycle
+  proves shop receipt **and** inspection.
+- Unknown or corrupt custody is **unsafe** for reassignment. "The record does
+  not name this worker" is not proof they hold nothing.
 
 From FND-003B2B:
 

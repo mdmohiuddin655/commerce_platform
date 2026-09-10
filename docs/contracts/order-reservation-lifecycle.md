@@ -355,6 +355,35 @@ existing R33–R40 in `privacy-and-security-boundaries.md`.
       The backend must never intentionally persist `accepted + active`,
       `placed + committed` or any other non-canonical pair.
 
+## The dispatch boundary (FND-003B3A)
+
+`in_delivery` is **reachable since contract 0.6**, but not from this evaluator.
+It is produced by rider custody receipt — see
+[custody-lifecycle.md](custody-lifecycle.md) §7 — and this slice invents no
+delivery transition: every pre-dispatch command acting from `in_delivery` is
+refused `unknownTransition`, asserted by test.
+
+Two sets now exist, and the difference is the point:
+
+| Set | Means |
+|---|---|
+| `OrderState.executableInThisSlice` | states this evaluator may **act from**. Unchanged. |
+| `OrderState.aggregateShapeKnown` | states whose order/reservation pairing is **defined** — the six above **plus `in_delivery`**. |
+
+`canonicalAggregatePairs` gained `in_delivery: {committed}`, and
+`validateAggregate` now checks against `aggregateShapeKnown`. Previously it
+skipped any state the evaluator did not own, so an `in_delivery` order whose
+reservation was `released` or `expired` would have **passed**; it fails closed
+now. **Dispatch restores no stock** — the reservation stays `committed`, and
+stock cannot become available again until the return lifecycle proves shop
+receipt *and* inspection.
+
+`delivered` still has no defined pairing and did not acquire one.
+
+Cancellation policy is **unchanged**: cancellation from `ready` remains
+`policyDeferred`, and FND-003B3A decided nothing about who pays or whether
+post-pickup cancellation is allowed.
+
 ## Out of scope — next FND-003B slices
 
 None of the following is defined, guessed or partially implemented here:

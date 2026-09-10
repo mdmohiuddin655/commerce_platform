@@ -61,9 +61,36 @@ enum OrderState {
   };
 
   /// Declared for enum stability, owned by a later slice.
+  ///
+  /// `inDelivery` became **reachable** in FND-003B3A — caused by rider custody
+  /// receipt, never by a pre-dispatch command — so its aggregate shape is now
+  /// known even though this slice's evaluator still cannot act from it. See
+  /// [aggregateShapeKnown].
   static const Set<OrderState> notYetImplemented = <OrderState>{
     OrderState.inDelivery,
     OrderState.delivered,
+  };
+
+  /// States whose order/reservation pairing is **defined**.
+  ///
+  /// Deliberately wider than [executableInThisSlice], and the distinction is
+  /// the point: a state can have a known canonical shape long before the
+  /// pre-dispatch evaluator may execute a command from it.
+  ///
+  /// Without this split, a malformed `in_delivery` aggregate — an
+  /// `in_delivery` order whose reservation was `released` — would pass
+  /// validation simply because the pre-dispatch evaluator does not own the
+  /// state. It fails closed instead.
+  ///
+  /// `delivered` stays out: no slice defines it.
+  static const Set<OrderState> aggregateShapeKnown = <OrderState>{
+    OrderState.placed,
+    OrderState.accepted,
+    OrderState.preparing,
+    OrderState.ready,
+    OrderState.rejected,
+    OrderState.cancelled,
+    OrderState.inDelivery,
   };
 
   /// Terminal for the pre-dispatch lifecycle: nothing in this slice may leave

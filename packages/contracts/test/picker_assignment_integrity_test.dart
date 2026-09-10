@@ -436,16 +436,57 @@ void main() {
       expect(reachable.contains(AssignmentState.completed), isFalse);
     });
 
-    test('an attempt already in completed fails closed', () {
+    test('a CANONICAL completed attempt still fails closed for commands', () {
+      // FND-003B3A makes picker `completed` reachable, so its shape is now
+      // validated. It is still not a state any command may act FROM: no client
+      // may re-offer, accept or revoke finished work.
+      final PickerAssignmentFacts done = facts(
+        slotRevision: 3,
+        current: attempt(state: AssignmentState.completed, assignee: pickerA),
+      );
+      expect(validatePickerAssignmentAggregate(done), isNull,
+          reason: 'gen1 completed at rev3 is a real history');
+
+      for (final AssignmentCommand c
+          in AssignmentCommand.forRole(AssignmentRole.picker)) {
+        final PickerAssignmentOutcome o = run(
+          c,
+          on: done,
+          acting: agentId,
+          newAssignmentId: assignB,
+          target: eligible(pickerB),
+          expiryDue: true,
+          safety: ReassignmentSafety.provenNoCustody,
+        );
+        expect(o.denial, AssignmentDenial.unknownTransition, reason: c.commandType);
+        expect(o.transition, isNull, reason: c.commandType);
+      }
+    });
+
+    test('a MALFORMED completed attempt is corruption', () {
+      // Completion retains both identities. An attempt that lost its assignee
+      // is not a finished job, it is a damaged record.
       expect(
-        run(
-          AssignmentCommand.acceptPickerAssignment,
-          on: facts(
-            slotRevision: 2,
+        validatePickerAssignmentAggregate(
+          facts(
+            slotRevision: 3,
             current: attempt(state: AssignmentState.completed),
           ),
-        ).denial,
-        AssignmentDenial.unknownTransition,
+        ),
+        AssignmentDenial.aggregateInconsistent,
+      );
+      // ...and an unreachable revision for a completed generation.
+      expect(
+        validatePickerAssignmentAggregate(
+          facts(
+            slotRevision: 2,
+            current: attempt(
+              state: AssignmentState.completed,
+              assignee: pickerA,
+            ),
+          ),
+        ),
+        AssignmentDenial.aggregateInconsistent,
       );
     });
 
@@ -462,7 +503,7 @@ void main() {
       for (final String e in AssignmentEventType.picker) {
         expect(e, startsWith('picker.'));
       }
-      expect(AssignmentEventType.picker.length, 5);
+      expect(AssignmentEventType.picker.length, 6);
     });
 
     test('the picker evaluator refuses every rider command', () {

@@ -154,6 +154,10 @@ class AssignmentEventType {
   static const String pickerExpired = 'picker.assignment.expired';
   static const String pickerRevoked = 'picker.assignment.revoked';
 
+  /// FND-003B3A. Caused by rider custody receipt — the picker's work is done
+  /// once the goods are with the rider. Never a client-selected target state.
+  static const String pickerCompleted = 'picker.assignment.completed';
+
   static const String riderOffered = 'rider.assignment.offered';
   static const String riderAccepted = 'rider.assignment.accepted';
   static const String riderDeclined = 'rider.assignment.declined';
@@ -167,6 +171,7 @@ class AssignmentEventType {
     pickerDeclined,
     pickerExpired,
     pickerRevoked,
+    pickerCompleted,
   ];
 
   /// Rider-assignment events only.

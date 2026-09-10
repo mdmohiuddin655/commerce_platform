@@ -45,10 +45,24 @@ const List<LifecycleCommand> effectProducing = <LifecycleCommand>[
 
 void main() {
   group('canonical pairs are accepted', () {
-    test('the table covers every executable order state exactly', () {
+    test('the table covers every state with a known shape exactly', () {
+      // Since FND-003B3A this is `aggregateShapeKnown`, not
+      // `executableInThisSlice`: `in_delivery` has a canonical pairing that
+      // must be validated even though no pre-dispatch command may act from it.
       expect(
         canonicalAggregatePairs.keys.toSet(),
-        OrderState.executableInThisSlice,
+        OrderState.aggregateShapeKnown,
+      );
+      // Every executable state still has a pairing — none was dropped.
+      expect(
+        canonicalAggregatePairs.keys.toSet()
+            .containsAll(OrderState.executableInThisSlice),
+        isTrue,
+      );
+      // `delivered` has no defined pairing and must not have acquired one.
+      expect(
+        canonicalAggregatePairs.containsKey(OrderState.delivered),
+        isFalse,
       );
     });
 

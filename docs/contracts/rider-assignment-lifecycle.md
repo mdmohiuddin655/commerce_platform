@@ -121,6 +121,14 @@ What this does **not** change:
 - **fresh authorization on every request, including replays, remains FND-003A's
   and the backend's**, not something a value object can establish.
 
+> **Custody note (FND-003B3A).** An accepted rider still holds nothing.
+> Custody reaches the rider only when they record receipt from the picker —
+> see [custody-lifecycle.md](custody-lifecycle.md) §7 — and that receipt is
+> what moves the order to `in_delivery` and completes the picker assignment.
+> Until then a rider revoke may still proceed, because
+> `reassignmentSafetyFor(role: rider, custody: <with picker>)` is
+> `provenNoCustody`; every existing rider-authority precondition is unchanged.
+
 **Deliberately absent, and not invented:** workload limits, availability
 scores, ratings, route distance, vehicle type, shift schedules. Those are
 **dispatch policy**, not lifecycle.
@@ -497,12 +505,17 @@ separate from the RA/P backend series for that reason.
 > **B3-C1** *(picker, from FND-003B2A-FIX-002)* — unchanged, **NOT RUN /
 > FUTURE**.
 >
-> **B3-C2** — If rider `completed` becomes executable, FND-003B3 must update
-> the shared reachable slot-revision model if required, update its derivation
-> and range tests, and prove every newly successful rider transition closes
-> over `validateRiderAssignmentAggregate`.
+> **B3-C2** — If rider `completed` becomes executable, the implementing task
+> must update the reachable slot-revision model, its derivation and range
+> tests, and prove every newly successful rider transition closes over
+> `validateRiderAssignmentAggregate`.
 
-**B3-C2 status: NOT RUN / FUTURE.** FND-003B3 has not started.
+**B3-C2 status: NOT RUN / FUTURE.** FND-003B3A made *picker* completion
+reachable and satisfied **B3-C1** with contract tests, but **rider `completed`
+remains unreachable**: `AssignmentState.executableForRole(rider)` excludes it,
+`reachableSlotRevisionRange(g, completed, role: rider)` still returns null, and
+no mutation cost for it was invented. Rider completion depends on delivery,
+which no slice defines.
 
 ## 22. Out of scope
 

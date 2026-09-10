@@ -1080,8 +1080,10 @@ void main() {
       for (final String e in AssignmentEventType.rider) {
         expect(e, startsWith('rider.'));
       }
-      expect(AssignmentEventType.all.length, 10);
-      expect(AssignmentEventType.all.toSet().length, 10);
+      // 6 picker (picker.assignment.completed added by FND-003B3A) + 5 rider.
+      expect(AssignmentEventType.rider.length, 5);
+      expect(AssignmentEventType.all.length, 11);
+      expect(AssignmentEventType.all.toSet().length, 11);
     });
 
     test('the rider evaluator refuses every picker command', () {

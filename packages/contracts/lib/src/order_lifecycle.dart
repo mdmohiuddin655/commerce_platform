@@ -244,6 +244,11 @@ const Map<OrderState, Set<ReservationState>> canonicalAggregatePairs =
   OrderState.ready: <ReservationState>{ReservationState.committed},
   OrderState.rejected: <ReservationState>{ReservationState.released},
   OrderState.cancelled: <ReservationState>{ReservationState.released},
+  // FND-003B3A. Reached when a rider takes custody, not by any command this
+  // evaluator owns. The reservation stays committed: dispatch does not restore
+  // stock, and stock cannot become available again until the return lifecycle
+  // proves shop receipt AND inspection.
+  OrderState.inDelivery: <ReservationState>{ReservationState.committed},
 };
 
 /// Rejects trusted facts that cannot be a real aggregate, before any
@@ -270,9 +275,12 @@ LifecycleDenial? validateAggregate(OrderLifecycleFacts facts) {
 
   final OrderState state = facts.state!;
 
-  // States this slice does not own are reported as unknownTransition by the
-  // evaluator; validating their pairing would mean inventing one.
-  if (!OrderState.executableInThisSlice.contains(state)) {
+  // States with no defined pairing are reported as unknownTransition by the
+  // evaluator; validating their pairing would mean inventing one. Note this
+  // is `aggregateShapeKnown`, **not** `executableInThisSlice`: since
+  // FND-003B3A an `in_delivery` order has a canonical shape that must be
+  // validated, even though no command here may act from it.
+  if (!OrderState.aggregateShapeKnown.contains(state)) {
     return null;
   }
 

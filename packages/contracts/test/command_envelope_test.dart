@@ -35,7 +35,7 @@ void main() {
       expect(envelope.commandType, 'order.place');
       expect(envelope.expectedRevision, 0);
       expect(envelope.contractVersion, ContractVersion.current);
-      expect(ContractVersion.current.toString(), '0.5');
+      expect(ContractVersion.current.toString(), '0.6');
     });
 
     test('payload is unmodifiable once accepted', () {

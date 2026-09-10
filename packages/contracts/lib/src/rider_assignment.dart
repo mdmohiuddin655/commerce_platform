@@ -387,9 +387,12 @@ AssignmentDenial? validateRiderAssignmentAggregate(RiderAssignmentFacts facts) {
   if (facts.slotRevision < 1) {
     return AssignmentDenial.aggregateInconsistent;
   }
-  if (!AssignmentState.executableInThisSlice.contains(attempt.state)) {
-    // `completed` is declared but not implemented; validating its shape would
-    // mean inventing one. Reported as unknownTransition by the evaluator.
+  if (!AssignmentState.executableForRole(
+    AssignmentRole.rider,
+  ).contains(attempt.state)) {
+    // Rider `completed` is declared but not implemented; validating its shape
+    // would mean inventing a mutation cost for it (B3-C2). Reported as
+    // unknownTransition by the evaluator.
     return null;
   }
   if (!isValidOpaqueId(attempt.assignmentId)) {
@@ -404,6 +407,7 @@ AssignmentDenial? validateRiderAssignmentAggregate(RiderAssignmentFacts facts) {
   final ({int min, int max})? reachable = reachableSlotRevisionRange(
     attempt.generation,
     attempt.state,
+    role: AssignmentRole.rider,
   );
   if (reachable == null ||
       facts.slotRevision < reachable.min ||
