@@ -140,7 +140,7 @@ void main() {
     test('a torn ORDER aggregate keeps its own denial', () {
       expect(
         runRaise(
-          order: inDelivery(reservation: ReservationState.released),
+          order: orderRead(reservation: ReservationState.released),
         ).denial,
         DeliveryProofDisputeDenial.orderAggregateInconsistent,
         reason: 'in_delivery pairs only with committed — this is corruption',
@@ -171,13 +171,17 @@ void main() {
     });
 
     test('a dispute aggregate for another order is refused', () {
+      // *(Denial updated by FND-003D2B-FIX-003.)* The canonical resource is now
+      // the stored dispute's, and the grant must **cover** it — so presenting
+      // order B's dispute under order A's grant is caught at the authorization
+      // boundary rather than one step later. Earlier, not later, and generic.
       expect(
         runRaise(
           dispute: const DeliveryProofDisputeFacts.absent(
             resourceId: otherOrderId,
           ),
         ).denial,
-        DeliveryProofDisputeDenial.resourceBindingMismatch,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
     });
 
@@ -198,8 +202,86 @@ void main() {
       );
     });
 
-    test('two aggregates agreeing with each other is not enough', () {
-      // Both aggregates describe order B; the canonical context says order A.
+    test('an order read from another resource is refused — FIX-003', () {
+      // **The defect this closes.** `OrderLifecycleFacts` carries no resource
+      // id, so before FND-003D2B-FIX-003 an order-B read was indistinguishable
+      // from order A's own facts and a dispute could be recorded against A on
+      // the strength of B's lifecycle.
+      //
+      // Grant A + dispute A + assessment A + order read **B**, with B's
+      // lifecycle scalars **identical** to A's, so numeric equality cannot hide
+      // the missing binding.
+      final DeliveryProofDisputeOrderRead readOfA = orderRead(
+        resourceId: orderId,
+        revision: 5,
+      );
+      final DeliveryProofDisputeOrderRead readOfB = orderRead(
+        resourceId: otherOrderId,
+        revision: 5,
+      );
+      // The two reads differ in exactly one thing: which order they are for.
+      expect(readOfA.order.state, readOfB.order.state);
+      expect(readOfA.order.revision, readOfB.order.revision);
+      expect(readOfA.order.reservationState, readOfB.order.reservationState);
+      expect(readOfA.resourceId, isNot(readOfB.resourceId));
+
+      final DeliveryProofDisputeOutcome outcome = runRaise(order: readOfB);
+      expect(
+        outcome.denial,
+        DeliveryProofDisputeDenial.resourceBindingMismatch,
+      );
+      expect(
+        outcome.transition,
+        isNull,
+        reason: 'denied before any transition is constructed',
+      );
+
+      // ...and the otherwise identical read of A is allowed, so the refusal is
+      // the binding and not the facts.
+      expect(
+        allowedDispute(runRaise(order: readOfA)).record.resourceId,
+        orderId,
+      );
+    });
+
+    test('a malformed order-read resource fails closed', () {
+      for (final String bad in <String>['', 'short', '1234567890123456']) {
+        final DeliveryProofDisputeOutcome outcome = runRaise(
+          order: orderRead(resourceId: bad),
+        );
+        expect(
+          outcome.denial,
+          DeliveryProofDisputeDenial.resourceBindingMismatch,
+          reason: '"$bad" is not a canonical opaque id',
+        );
+        expect(outcome.transition, isNull);
+      }
+      // Two identically-malformed values must not match their way to a bind.
+      expect(
+        DeliveryProofDisputeOrderRead(
+          resourceId: '',
+          order: inDelivery(),
+        ).belongsToResource(''),
+        isFalse,
+      );
+    });
+
+    test('a wrong grant resource is not rescued by matching order scalars', () {
+      // Every scalar the order carries matches, and the dispute is canonical —
+      // but the actor was authorized for a different order.
+      expect(
+        runRaise(
+          grant: customerRaiseGrant(resourceId: otherOrderId),
+          order: orderRead(revision: 5),
+        ).denial,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
+      );
+    });
+
+    test('a whole read-set agreeing with itself is not enough', () {
+      // Dispute, assessment and order read all describe order B, and they are
+      // internally consistent. The **grant** is for order A, so the actor was
+      // never authorized to act on the order these facts are about.
       expect(
         evaluateRaiseDeliveryProofDispute(
           request: DeliveryProofDisputeRaiseRequest(
@@ -217,9 +299,9 @@ void main() {
           assessment: const DeliveryProofAssessmentFacts.absent(
             resourceId: otherOrderId,
           ),
-          order: inDelivery(),
+          order: orderRead(resourceId: otherOrderId),
         ).denial,
-        DeliveryProofDisputeDenial.resourceBindingMismatch,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
     });
   });
@@ -245,7 +327,7 @@ void main() {
           },
         );
         expect(
-          runRaise(order: facts).denial,
+          runRaise(order: orderRead(order: facts)).denial,
           DeliveryProofDisputeDenial.orderNotInDelivery,
           reason: 'no dispute may be raised from $s',
         );
@@ -254,7 +336,7 @@ void main() {
 
     test('an absent order is refused, never treated as dispatched', () {
       expect(
-        runRaise(order: const OrderLifecycleFacts.absent()).denial,
+        runRaise(order: orderRead(order: const OrderLifecycleFacts.absent())).denial,
         DeliveryProofDisputeDenial.orderNotInDelivery,
       );
     });
@@ -428,12 +510,12 @@ void main() {
       // because it neither reads nor changes the order.
       final DeliveryProofDisputeFacts open = validlyRaised();
       expect(
-        runRaise(order: inDelivery(revision: 99), expectedOrderRevision: 5)
+        runRaise(order: orderRead(revision: 99), expectedOrderRevision: 5)
             .denial,
         DeliveryProofDisputeDenial.orderRevisionConflict,
       );
       expect(
-        runRaise(order: const OrderLifecycleFacts.absent()).denial,
+        runRaise(order: orderRead(order: const OrderLifecycleFacts.absent())).denial,
         DeliveryProofDisputeDenial.orderNotInDelivery,
       );
       expect(allowedDispute(runReview(dispute: open)).resultingState,
@@ -502,7 +584,7 @@ void main() {
         DeliveryProofDisputeDenial.orderRevisionConflict,
       );
       expect(
-        runRaise(order: inDelivery(reservation: ReservationState.released))
+        runRaise(order: orderRead(reservation: ReservationState.released))
             .denial,
         DeliveryProofDisputeDenial.orderAggregateInconsistent,
       );
@@ -613,7 +695,7 @@ void main() {
             verdict: DeliveryProofAssessmentVerdict.satisfied,
           ),
         ),
-        runRaise(order: const OrderLifecycleFacts.absent()),
+        runRaise(order: orderRead(order: const OrderLifecycleFacts.absent())),
         runRaise(actor: worker()),
         runReview(dispute: noDispute, expectedDisputeRevision: 0),
         runResolve(),

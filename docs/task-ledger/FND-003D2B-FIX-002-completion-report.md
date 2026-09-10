@@ -332,3 +332,37 @@ policy remains undefined, so delivery confirmation may not be coded.
 ## Owner actions needed
 
 None new. **O6** and **O7** remain outstanding, unchanged.
+
+---
+
+# SUPERSEDED IN PART BY FND-003D2B-FIX-003
+
+**Appended by FND-003D2B-FIX-003 (2026-09-11). Nothing above is rewritten.**
+
+FND-003D2B-FINAL-REVIEW-003 found that **two claims in this report were
+incomplete**, so `f04d453` is also not acceptable on its own.
+
+1. **§3 "Corrected read-sets" — the raise read-set was not fully bound.** The
+   table lists `order` as part of the read-set, and the resource comparison
+   covered the grant, the dispute and the assessment — but **not** the order
+   facts, because the accepted `OrderLifecycleFacts` carries no resource id. An
+   order-B read with matching scalars was therefore indistinguishable from order
+   A's. FIX-003 adds `DeliveryProofDisputeOrderRead` and completes the binding.
+
+2. **§4 and §9 — the resource half of the grant check was tautological.** This
+   report's own §4 of the push verification noted that
+   `grant.covers(principalId: actor.id, resourceId: grant.resourceId)` passes
+   the grant's resource back to itself, so only the principal binding did work.
+   That observation was recorded but not acted on. FIX-003 gives
+   `checkDisputeAuthorization` an `expectedResourceId` taken from the read-set.
+
+**Documentation drift.** This report and the module barrel continued to describe
+a "server-resolved context" in the D2B facts file after
+`DeliveryProofDisputeContext` had been deleted. FIX-003 corrects the current API
+descriptions; historical descriptions remain where clearly marked as historical.
+
+Everything else in this report stands: the higher-revision id-reuse correction,
+the `AuthorizationGrant` requirement itself, the NOT RUN classifications and the
+git hygiene were all re-verified by FIX-003's negative controls.
+
+Full detail: [FND-003D2B-FIX-003 report](FND-003D2B-FIX-003-completion-report.md).

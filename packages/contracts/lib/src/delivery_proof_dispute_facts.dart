@@ -1,4 +1,6 @@
 import 'package:cp_contracts/src/delivery_proof_dispute_record.dart';
+import 'package:cp_contracts/src/ids.dart';
+import 'package:cp_contracts/src/order_lifecycle.dart';
 import 'package:meta/meta.dart';
 
 /// The fallback dispute aggregate for one order, as loaded from storage.
@@ -64,6 +66,75 @@ class DeliveryProofDisputeFacts {
 /// meant **two sources of canonical resource truth that could disagree**. The
 /// one bound to the authorization decision is the one that must win, so the
 /// other was deleted rather than left as a second shape to keep in step.
+
+/// One order lifecycle read, **bound to the resource it was read from**.
+///
+/// *(Added by FND-003D2B-FIX-003.)* The accepted `OrderLifecycleFacts` carries
+/// a state, a revision, a reservation state and a unit count — and **no
+/// resource id**. That is correct for the pre-dispatch evaluator, which is
+/// handed one order and asked about that order; it is not sufficient here,
+/// where a raise must prove that *four* independently supplied things describe
+/// the **same** delivery.
+///
+/// Without this binding, an order-B read whose scalars happen to match order A
+/// — `in_delivery`, revision 5, reservation `committed` — was
+/// **indistinguishable** from order A's own facts, so a dispute could be
+/// recorded against A on the strength of B's lifecycle. Numeric equality is not
+/// identity.
+///
+/// This is a **read**, not a second order aggregate: it adds no state, no
+/// transition, no revision arithmetic and no lifecycle rule. The accepted
+/// `OrderLifecycleFacts` contract is untouched and continues to be the single
+/// definition of what an order's lifecycle facts are — this only says *which
+/// order they were loaded for*.
+///
+/// > **Binding is not provenance.** Saying which resource a read claims to be
+/// > for does not prove the read came from trusted storage, was consistent with
+/// > the rest of the read-set, or was current. That the backend loads all
+/// > aggregates for one canonical resource in **one consistent transaction**
+/// > remains criterion **DPD3**, and revalidation inside the transaction
+/// > **DPD4** — both **NOT RUN**.
+@immutable
+class DeliveryProofDisputeOrderRead {
+  const DeliveryProofDisputeOrderRead({
+    required this.resourceId,
+    required this.order,
+  });
+
+  /// The order these facts were read for. Validated with the repository's
+  /// canonical opaque-id rule.
+  final String resourceId;
+
+  /// The accepted lifecycle facts, exactly as `OrderLifecycleFacts` defines
+  /// them. Nothing is copied out, reinterpreted or re-validated here.
+  final OrderLifecycleFacts order;
+
+  /// Structurally usable. Fails closed; repairs nothing.
+  bool get isWellFormed => isValidOpaqueId(resourceId);
+
+  /// Whether this read is **structurally valid and for** [resourceId].
+  ///
+  /// Both halves are required. Raw equality alone would fail open: two
+  /// identically-malformed values would match and certify a read that belongs
+  /// to no identifiable order — the same lesson `DeliveryEvidenceRef.belongsTo`
+  /// learned in FND-003D1.
+  bool belongsToResource(String resourceId) =>
+      isWellFormed &&
+      isValidOpaqueId(resourceId) &&
+      this.resourceId == resourceId;
+
+  /// A **debug representation, and never a validity claim.**
+  ///
+  /// A well-formed read renders a bounded canonical id and enum names; a
+  /// malformed one renders no field at all. It carries no actor, role,
+  /// permission, membership, reason, approval, money or proof material — there
+  /// is nothing else here to leak.
+  @override
+  String toString() => isWellFormed
+      ? 'DeliveryProofDisputeOrderRead($resourceId, '
+            '${order.state?.id ?? '-'}, rev=${order.revision})'
+      : 'DeliveryProofDisputeOrderRead(invalid)';
+}
 
 /// What a **raise** consumes, beyond the facts themselves.
 ///

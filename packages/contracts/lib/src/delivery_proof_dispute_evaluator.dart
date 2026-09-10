@@ -22,7 +22,7 @@
 ///
 /// | Operation | Reads |
 /// |---|---|
-/// | [evaluateRaiseDeliveryProofDispute] | **grant**, dispute, **assessment**, **order** |
+/// | [evaluateRaiseDeliveryProofDispute] | **grant**, dispute, **assessment**, **resource-bound order read** |
 /// | [evaluateRecordDeliveryProofDisputeReview] | **grant**, dispute |
 /// | [evaluateResolveDeliveryProofDispute] | **nothing at all** |
 ///
@@ -46,9 +46,14 @@
 /// `checkDisputeAuthorization`. **Freshness remains the backend's** (R33–R40,
 /// NOT RUN).
 ///
-/// The grant also carries the **canonical resource**, so there is no separate
-/// context parameter: two sources of resource truth could disagree, and the one
-/// tied to the authorization decision is the one that must win.
+/// The **canonical resource is the stored dispute aggregate's**, and every
+/// other member of the read-set — the grant, the assessment and the order read
+/// — must agree with it. There is no separate context parameter: a fifth
+/// resource value could only disagree with the four that already have to match.
+///
+/// *(FND-003D2B-FIX-003.)* The order read is part of that comparison because
+/// `OrderLifecycleFacts` carries no resource id of its own; see
+/// [DeliveryProofDisputeOrderRead].
 ///
 /// What these functions add beyond that is **fact integrity**: that the
 /// aggregates describe that same order, that they are current, and that the
@@ -106,21 +111,24 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   required AuthorizationGrant grant,
   required DeliveryProofDisputeFacts dispute,
   required DeliveryProofAssessmentFacts assessment,
-  required OrderLifecycleFacts order,
+  required DeliveryProofDisputeOrderRead order,
 }) {
-  // 1. Canonical authorization success, bound to this principal, this
-  //    permission and this resource. Nothing below runs without it.
+  // 1. The canonical resource is the one the **stored dispute aggregate** is
+  //    about — taken from the read-set, never from the grant, so the check
+  //    below is a real comparison rather than the grant agreeing with itself.
+  final String resourceId = dispute.resourceId;
+
+  // 2. Canonical authorization success, bound to this principal, this
+  //    permission and that resource. Nothing below runs without it.
   final DeliveryProofDisputeDenial? unauthorized = checkDisputeAuthorization(
     grant: grant,
     actor: actor,
     command: DeliveryProofDisputeCommand.raise,
+    expectedResourceId: resourceId,
   );
   if (unauthorized != null) {
     return DeliveryProofDisputeOutcome.deny(unauthorized);
   }
-  // The grant's resource is the canonical one, already validated as an opaque
-  // id by the check above.
-  final String resourceId = grant.resourceId;
 
   // 2. Aggregate integrity for every aggregate this operation reads, before
   //    anything can produce a record. Each validator is the canonical one for
@@ -139,7 +147,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
       DeliveryProofDisputeDenial.assessmentAggregateInconsistent,
     );
   }
-  if (validateAggregate(order) != null) {
+  if (validateAggregate(order.order) != null) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.orderAggregateInconsistent,
     );
@@ -149,7 +157,12 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   //    canonical one the backend resolved the request against. Two aggregates
   //    agreeing with each other is not the same as both being about the right
   //    order.
-  if (dispute.resourceId != resourceId || assessment.resourceId != resourceId) {
+  //    *(Completed by FND-003D2B-FIX-003.)* The order read is included. It
+  //    used to be a bare `OrderLifecycleFacts`, which carries **no resource
+  //    id**, so an order-B read whose scalars matched order A was
+  //    indistinguishable from A's own facts — numeric equality is not identity.
+  if (assessment.resourceId != resourceId ||
+      !order.belongsToResource(resourceId)) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.resourceBindingMismatch,
     );
@@ -172,7 +185,7 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
       DeliveryProofDisputeDenial.assessmentRevisionConflict,
     );
   }
-  if (request.expectedOrderRevision != order.revision) {
+  if (request.expectedOrderRevision != order.order.revision) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.orderRevisionConflict,
     );
@@ -190,12 +203,12 @@ DeliveryProofDisputeOutcome evaluateRaiseDeliveryProofDispute({
   // 6. The delivery whose proof is contested must actually be in flight. Any
   //    other order state is outside what any accepted slice defines, and
   //    guessing the answer would be inventing the lifecycle.
-  if (order.state != OrderState.inDelivery) {
+  if (order.order.state != OrderState.inDelivery) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.orderNotInDelivery,
     );
   }
-  if (order.reservationState != ReservationState.committed) {
+  if (order.order.reservationState != ReservationState.committed) {
     return const DeliveryProofDisputeOutcome.deny(
       DeliveryProofDisputeDenial.reservationNotCommitted,
     );
@@ -311,18 +324,21 @@ DeliveryProofDisputeOutcome evaluateRecordDeliveryProofDisputeReview({
   required AuthorizationGrant grant,
   required DeliveryProofDisputeFacts dispute,
 }) {
-  // 1. Canonical authorization success for `admin.dispute.administer`, bound to
-  //    this principal and this resource. A customer-only principal cannot
+  // 1. The canonical resource is the stored dispute's, taken from the read-set.
+  final String resourceId = dispute.resourceId;
+
+  // 2. Canonical authorization success for `admin.dispute.administer`, bound to
+  //    this principal and that resource. A customer-only principal cannot
   //    obtain this grant, and therefore cannot reach the transition.
   final DeliveryProofDisputeDenial? unauthorized = checkDisputeAuthorization(
     grant: grant,
     actor: actor,
     command: DeliveryProofDisputeCommand.recordReviewStarted,
+    expectedResourceId: resourceId,
   );
   if (unauthorized != null) {
     return DeliveryProofDisputeOutcome.deny(unauthorized);
   }
-  final String resourceId = grant.resourceId;
 
   // 2. The dispute aggregate must be canonical before anything reads it.
   final DeliveryProofDisputeDenial? disputeCorruption =
@@ -331,12 +347,10 @@ DeliveryProofDisputeOutcome evaluateRecordDeliveryProofDisputeReview({
     return DeliveryProofDisputeOutcome.deny(disputeCorruption);
   }
 
-  // 3. ...and it must be about the canonical order.
-  if (dispute.resourceId != resourceId) {
-    return const DeliveryProofDisputeOutcome.deny(
-      DeliveryProofDisputeDenial.resourceBindingMismatch,
-    );
-  }
+  //    The resource binding for review is `grant.covers` above: the stored
+  //    dispute supplies the resource and the grant must cover exactly it, so
+  //    there is no second comparison to make here — and no second source of
+  //    resource truth that could disagree.
 
   // 4. Compare-and-set on the one aggregate this operation writes.
   if (request.expectedDisputeRevision != dispute.disputeRevision) {

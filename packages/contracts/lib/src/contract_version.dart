@@ -78,7 +78,8 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   `resolveDeliveryProofDisputeBasisStanding`,
   ///   `DeliveryProofDisputeCommand` (two executable operations plus a
   ///   deliberately non-executable `resolve`), `DeliveryProofDisputeEventType`
-  ///   (two ids), the record, aggregate, context, request, transition, outcome
+  ///   (two ids), the record, aggregate, per-operation requests, the
+  ///   resource-bound `DeliveryProofDisputeOrderRead`, transition, outcome
   ///   and denial vocabulary, `validateDeliveryProofDisputeAggregate`,
   ///   `canonicalState` / `canonicalBasis`, and one evaluator per operation:
   ///   `evaluateRaiseDeliveryProofDispute`,

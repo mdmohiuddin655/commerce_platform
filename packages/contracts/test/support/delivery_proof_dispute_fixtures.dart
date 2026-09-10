@@ -234,6 +234,21 @@ DeliveryProofDisputeFacts reviewedDispute({
 
 // ----------------------------------------------------------------- evaluation
 
+/// A resource-bound order read for a healthy dispatched delivery.
+///
+/// *(Added by FND-003D2B-FIX-003.)* `resourceId` defaults to the same order
+/// every other fixture uses, so a test that wants the cross-resource case has
+/// to say so explicitly.
+DeliveryProofDisputeOrderRead orderRead({
+  String resourceId = orderId,
+  OrderLifecycleFacts? order,
+  int revision = 5,
+  ReservationState reservation = ReservationState.committed,
+}) => DeliveryProofDisputeOrderRead(
+  resourceId: resourceId,
+  order: order ?? inDelivery(revision: revision, reservation: reservation),
+);
+
 /// Raise a dispute, defaulting every fact to a healthy dispatched delivery with
 /// no assessment, so each test changes exactly one thing.
 DeliveryProofDisputeOutcome runRaise({
@@ -243,14 +258,14 @@ DeliveryProofDisputeOutcome runRaise({
   DateTime? at,
   DeliveryProofDisputeFacts? dispute,
   DeliveryProofAssessmentFacts? assessment,
-  OrderLifecycleFacts? order,
+  DeliveryProofDisputeOrderRead? order,
   int? expectedDisputeRevision,
   int? expectedAssessmentRevision,
   int? expectedOrderRevision,
 }) {
   final DeliveryProofDisputeFacts d = dispute ?? noDispute;
   final DeliveryProofAssessmentFacts a = assessment ?? absentAssessment;
-  final OrderLifecycleFacts o = order ?? inDelivery();
+  final DeliveryProofDisputeOrderRead o = order ?? orderRead();
   return evaluateRaiseDeliveryProofDispute(
     request: DeliveryProofDisputeRaiseRequest(
       disputeId: disputeId,
@@ -258,7 +273,7 @@ DeliveryProofDisputeOutcome runRaise({
       expectedDisputeRevision: expectedDisputeRevision ?? d.disputeRevision,
       expectedAssessmentRevision:
           expectedAssessmentRevision ?? a.assessmentRevision,
-      expectedOrderRevision: expectedOrderRevision ?? o.revision,
+      expectedOrderRevision: expectedOrderRevision ?? o.order.revision,
     ),
     actor: actor ?? customer(),
     grant: grant ?? customerRaiseGrant(),

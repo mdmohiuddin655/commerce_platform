@@ -203,7 +203,7 @@ void main() {
     test('the order revision is neither read into nor written by a dispute',
         () {
       final DeliveryProofDisputeTransition t = allowedDispute(
-        runRaise(order: inDelivery(revision: 42), expectedOrderRevision: 42),
+        runRaise(order: orderRead(revision: 42), expectedOrderRevision: 42),
       );
       expect(t.resultingDisputeRevision, 1);
       expect(t.changesOrderState, isFalse);

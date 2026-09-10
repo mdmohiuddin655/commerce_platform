@@ -1,7 +1,8 @@
 # Fallback delivery-proof dispute
 
 **Contract version 0.9** (FND-003D2B, corrected in place by
-**FND-003D2B-FIX-001** and **FND-003D2B-FIX-002**). Source of truth: the module behind the stable barrel
+**FND-003D2B-FIX-001**, **FND-003D2B-FIX-002** and
+**FND-003D2B-FIX-003**). Source of truth: the module behind the stable barrel
 `packages/contracts/lib/src/delivery_proof_dispute.dart`.
 
 FND-003D1 gave the platform a way to *refer to* a proof policy and to protected
@@ -149,6 +150,7 @@ would be deciding the outcome.
 | `DeliveryProofDisputeEventType` | two event ids |
 | `DeliveryProofDisputeRecord` | one dispute as currently recorded |
 | `DeliveryProofDisputeFacts` | the aggregate: current record + its own revision |
+| `DeliveryProofDisputeOrderRead` | order lifecycle facts **bound to the order they were read from** |
 | `DeliveryProofDisputeRaiseRequest` | what a raise pins: dispute, assessment and order revisions |
 | `DeliveryProofDisputeReviewRequest` | what review pins: **the dispute revision, and nothing else** |
 | `DeliveryProofDisputeTransition` | the record to store, and every effect as NONE |
@@ -170,7 +172,7 @@ precondition.**
 
 | Operation | Reads |
 |---|---|
-| `evaluateRaiseDeliveryProofDispute` | **grant**, dispute, **assessment**, **order** |
+| `evaluateRaiseDeliveryProofDispute` | **grant**, dispute, **assessment**, **resource-bound order read** |
 | `evaluateRecordDeliveryProofDisputeReview` | **grant**, dispute |
 | `evaluateResolveDeliveryProofDispute` | **nothing at all** |
 
@@ -190,7 +192,7 @@ every consumer keep one import path:
 | `…_command.dart` | named operations, their permissions, and the events |
 | `…_denial.dart` | refusal vocabulary |
 | `…_record.dart` | one dispute as currently recorded |
-| `…_facts.dart` | the aggregate, the server-resolved context and the per-operation requests |
+| `…_facts.dart` | the aggregate, the per-operation requests and the resource-bound order read |
 | `…_validation.dart` | canonical aggregate shape and trusted access |
 | `…_transition.dart` | the permitted operation and its all-NONE effects |
 | `…_evaluator.dart` | one pure evaluator per operation, each with its own read-set |
@@ -257,11 +259,11 @@ closed.
 
 | # | Check | Denial |
 |---|---|---|
-| 1 | canonical authorization grant for `customer.dispute.raise`, this principal, this resource | `authorizationGrantMismatch` |
+| 1 | canonical authorization grant for `customer.dispute.raise`, this principal, **the stored dispute's resource** | `authorizationGrantMismatch` |
 | 2 | the **dispute** aggregate validates | `disputeAggregateInconsistent` |
 | 2 | the **assessment** aggregate validates | `assessmentAggregateInconsistent` |
 | 2 | the **order** aggregate validates | `orderAggregateInconsistent` |
-| 3 | both aggregates name the canonical order | `resourceBindingMismatch` |
+| 3 | the assessment **and the order read** name the canonical order | `resourceBindingMismatch` |
 | 4 | dispute revision compare-and-set | `disputeRevisionConflict` |
 | 4 | assessment revision compare-and-set | `assessmentRevisionConflict` |
 | 4 | order revision compare-and-set | `orderRevisionConflict` |
@@ -337,6 +339,44 @@ about that principal's membership, not about the dispute.
 **The grant carries the canonical resource**, so `DeliveryProofDisputeContext`
 was removed: two sources of resource truth could disagree, and the one bound to
 the authorization decision must win.
+
+### Every member of the raise read-set names one order
+
+*(Completed by FND-003D2B-FIX-003.)* The accepted `OrderLifecycleFacts` carries
+a state, a revision, a reservation state and a unit count — and **no resource
+id**. That is right for the pre-dispatch evaluator, which is handed one order
+and asked about that order. It is not enough here, where a raise must prove that
+four independently supplied things describe the **same** delivery.
+
+Until this correction an order-B read whose scalars matched order A —
+`in_delivery`, revision 5, reservation `committed` — was **indistinguishable**
+from A's own facts, so a dispute could be recorded against A on the strength of
+B's lifecycle. **Numeric equality is not identity.**
+
+`DeliveryProofDisputeOrderRead` binds the facts to the order they were read for,
+and the raise now requires:
+
+```text
+dispute.resourceId            <- the canonical anchor, from the read-set
+  == grant                    (grant.covers, checked first)
+  == assessment.resourceId
+  == orderRead.resourceId
+```
+
+The anchor is the **stored dispute aggregate's** resource, never the grant's:
+comparing the grant against a value the grant itself supplied would be a
+tautology, which is exactly the self-referential call FIX-003 also removed from
+`checkDisputeAuthorization`. That helper now takes an `expectedResourceId` from
+the read-set.
+
+`DeliveryProofDisputeOrderRead` is a **read, not a second order aggregate**: no
+state, no transition, no revision arithmetic, no lifecycle rule, and the
+accepted `OrderLifecycleFacts` contract is untouched. It says only *which order
+these facts were loaded for*.
+
+> **Binding is not provenance.** That the backend loads every aggregate for one
+> canonical resource in a single consistent transaction remains **DPD3**, and
+> revalidation inside it **DPD4** — both **NOT RUN**.
 
 ### Why review does not check the assessment or the order
 

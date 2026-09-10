@@ -393,13 +393,13 @@ void main() {
         ).denial,
         DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
-      // Wrong resource: a valid raise grant for another order. The grant is
-      // the canonical resource, so the dispute aggregate no longer matches it.
+      // Wrong resource: a valid raise grant for another order. The canonical
+      // resource is the stored dispute's, and this grant does not cover it.
       expect(
         runRaise(
           grant: customerRaiseGrant(resourceId: otherOrderId),
         ).denial,
-        DeliveryProofDisputeDenial.resourceBindingMismatch,
+        DeliveryProofDisputeDenial.authorizationGrantMismatch,
       );
       // The same three bindings, on review.
       expect(

@@ -32,16 +32,30 @@ import 'package:cp_contracts/src/principal.dart';
 /// grant**:
 ///
 /// ```text
-/// grant.permission  == the operation's requiredPermission
-/// grant.principalId == the acting principal
-/// grant.resourceId  == the canonical resource, and a valid opaque id
+/// expectedResourceId is a valid opaque id
+/// grant.permission   == the operation's requiredPermission
+/// grant.covers(principalId: actor.id, resourceId: expectedResourceId)
 /// ```
 ///
-/// Without the first, a grant for `customer.order.view_own` would authorize a
-/// dispute. Without the second, one principal's grant would authorize another's
-/// command. Without the third, a grant for order X would authorize acting on
-/// order Y — the same three bindings `ApprovalEvidence` needs, for the same
-/// reason.
+/// Without the first, a broken identity could not be compared at all. Without
+/// the second, a grant for `customer.order.view_own` would authorize a dispute.
+/// Without the third, one principal's grant would authorize another's command,
+/// or a grant for order X would authorize acting on order Y — the same three
+/// bindings `ApprovalEvidence` needs, for the same reason.
+///
+/// ## [expectedResourceId] must come from the read-set, never from the grant
+///
+/// *(Corrected by FND-003D2B-FIX-003.)* This previously called
+/// `grant.covers(principalId: actor.id, resourceId: grant.resourceId)`. The
+/// resource half of that is **tautological** — the grant's own resource handed
+/// back to itself always matches — so the call proved only the principal
+/// binding while being documented as proving the resource binding too.
+///
+/// The caller now supplies the resource **independently**, from the stored
+/// aggregate the operation is actually acting on, and every other member of the
+/// read-set is compared against that same anchor by the operation evaluator.
+/// Passing `grant.resourceId` here would restore the tautology and is exactly
+/// what this parameter exists to prevent.
 ///
 /// > **Freshness is still the backend's.** FND-003A-FIX-003 requires fresh
 /// > authorization on **every** request including replays, and forbids caching
@@ -57,20 +71,22 @@ DeliveryProofDisputeDenial? checkDisputeAuthorization({
   required AuthorizationGrant grant,
   required Principal actor,
   required DeliveryProofDisputeCommand command,
+  required String expectedResourceId,
 }) {
-  // The resource the grant was issued for is the canonical resource this
-  // operation acts on, so it has to be usable in its own right.
-  if (!isValidOpaqueId(grant.resourceId)) {
+  // The resource this operation acts on, taken from the read-set rather than
+  // from the grant, has to be usable before anything can be compared to it.
+  if (!isValidOpaqueId(expectedResourceId)) {
     return DeliveryProofDisputeDenial.authorizationGrantMismatch;
   }
   if (grant.permission != command.requiredPermission) {
     return DeliveryProofDisputeDenial.authorizationGrantMismatch;
   }
   // `covers` is FND-003A's own binding check — principal and resource together
-  // — reused rather than reimplemented.
+  // — reused rather than reimplemented, and now given a resource it did not
+  // supply itself.
   if (!grant.covers(
     principalId: actor.id,
-    resourceId: grant.resourceId,
+    resourceId: expectedResourceId,
   )) {
     return DeliveryProofDisputeDenial.authorizationGrantMismatch;
   }

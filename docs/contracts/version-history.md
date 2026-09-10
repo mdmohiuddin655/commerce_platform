@@ -421,6 +421,31 @@ accepted rules and `approvalRequired: false`; no separation-of-duties rule
 returned. Each correction carries a negative control, and the read-set
 independence remains enforced by the **type system**.
 
+**Corrected a third time by FND-003D2B-FIX-003 — still 0.9.**
+FND-003D2B-FINAL-REVIEW-003 found one material defect, plus documentation drift
+left by FIX-002. Both are corrected in one follow-up commit.
+
+| Defect | Correction |
+|---|---|
+| `evaluateRaiseDeliveryProofDispute` could not structurally prove its `OrderLifecycleFacts` belonged to the same order as the grant, the dispute and the assessment — that accepted type carries **no resource id**, so an order-B read whose scalars matched order A was indistinguishable from A's own facts | a small D2B-scoped `DeliveryProofDisputeOrderRead` binds lifecycle facts to the order they were read for, and the raise requires **grant == dispute == assessment == order read**. The accepted `OrderLifecycleFacts` API is **unchanged** |
+| `checkDisputeAuthorization` called `grant.covers(…, resourceId: grant.resourceId)` — the resource half tautological, while documented as proving the resource binding | the helper now takes an `expectedResourceId` supplied from the read-set. The canonical anchor is the **stored dispute aggregate's** resource, and the grant must cover exactly it |
+
+Stale post-FIX-002 wording that still described a "server-resolved context" in
+the D2B module — after `DeliveryProofDisputeContext` was deleted — was corrected
+in the module barrel, the contract document and the 0.9 source history.
+Historical descriptions elsewhere remain, clearly marked as historical.
+
+`DeliveryProofDisputeOrderRead` is a **read, not a second order aggregate**: no
+state, no transition, no revision arithmetic, no lifecycle rule, no actor, role,
+permission, reason, money or proof material. Binding is not provenance — **DPD3**
+and **DPD4** remain **NOT RUN**.
+
+Everything else is unchanged: `Permission.values` **38**, review still reads only
+the grant and the dispute, resolve still takes **zero arguments**, every effect
+still NONE, and `delivered`, customer custody and rider `completed` still
+unreachable. **NC6** proves the new binding can fail, and NC1–NC5 were
+re-verified.
+
 The single `evaluateDeliveryProofDispute` and the multi-constructor
 `DeliveryProofDisputeRequest` were **replaced**, not deprecated:
 `DeliveryProofDisputeRaiseRequest` pins the dispute, assessment and order

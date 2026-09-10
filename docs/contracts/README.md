@@ -96,6 +96,12 @@ call can no longer bypass the canonical authorization decision. **The corrected
 three-commit candidate is not accepted for merge** — it awaits another separate
 read-only final review.
 
+Corrected a third time by **FND-003D2B-FIX-003**: the raise read-set now binds
+its **order lifecycle read to a resource** — the accepted `OrderLifecycleFacts`
+carries no resource id, so an order-B read with matching scalars was previously
+indistinguishable from order A's — and the grant-binding helper no longer
+compares the grant's resource against itself.
+
 **Successful delivery is still NOT executable, and no dispute resolves.**
 FND-003D2B records *that* the proof situation is contested and *that* review
 started. It decides **no outcome, fault, fee, refund, compensation, liability,
@@ -227,6 +233,9 @@ From FND-003D2B:
   assessment id, the revision **and the verdict** all still agree — and an
   assessment id is **never reusable at another revision**, so a later revision
   carrying the basis's id is impossible history, not a supersession.
+- **Numeric equality is not identity.** Every member of a raise read-set —
+  grant, dispute, assessment and order read — must name the same order, and the
+  order read carries its own resource id because `OrderLifecycleFacts` does not.
 - **An executable dispute operation requires canonical authorization success.**
   Both take FND-003A's unforgeable `AuthorizationGrant`, bound to the acting
   principal, the operation's permission and the resource. The permission matrix

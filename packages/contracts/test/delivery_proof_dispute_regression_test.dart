@@ -457,6 +457,7 @@ class Sample {
           grant: customerRaiseGrant(),
           actor: customer(),
           command: DeliveryProofDisputeCommand.raise,
+          expectedResourceId: orderId,
         ),
         isNull,
       );

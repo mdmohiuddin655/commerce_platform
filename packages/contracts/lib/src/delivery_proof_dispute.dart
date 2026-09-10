@@ -22,7 +22,9 @@
 ///
 /// ## What it does
 ///
-/// - One customer-raised dispute per order, bound to the canonical resource.
+/// - One customer-raised dispute per order, bound to the canonical resource —
+///   which every member of the raise read-set must agree on, including the
+///   order read, since `OrderLifecycleFacts` carries no resource id of its own.
 /// - An **immutable basis** recording which proof situation was contested —
 ///   canonical absence, or the exact assessment id and revision that concluded
 ///   `notSatisfied` — pinned when the dispute is raised and never rewritten.
@@ -63,7 +65,7 @@
 /// | `…_command.dart` | named operations, their permissions, and the events |
 /// | `…_denial.dart` | refusal vocabulary (internal, never returned verbatim) |
 /// | `…_record.dart` | one dispute as currently recorded |
-/// | `…_facts.dart` | the aggregate, the server-resolved context and the per-operation requests |
+/// | `…_facts.dart` | the aggregate, the per-operation requests and the resource-bound order read |
 /// | `…_validation.dart` | canonical aggregate shape and trusted access |
 /// | `…_transition.dart` | the permitted operation and its all-NONE effects |
 /// | `…_evaluator.dart` | one pure evaluator per operation, each with its own read-set |
