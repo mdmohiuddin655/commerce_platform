@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 const String orderA = 'ord_Xa91ZZ0plQ7rTt4B';
 const String orderB = 'ord_Zz42QQ8mmW1xVv7C';
 const String evidenceA = 'evd_Aa11Bb22Cc33Dd44';
+const String evidenceB = 'evd_Bb22Cc33Dd44Ee55';
 
 const List<String> malformedIds = <String>[
   '',
@@ -62,12 +63,127 @@ void main() {
       }
     });
 
+    test('the bound is 64 — accepted at the limit, denied one past it', () {
+      expect(maxDeliveryProofPolicyRefLength, 64);
+      // Aligned with the repository's existing wire-string ceilings.
+      expect(maxDeliveryProofPolicyRefLength, maxIdLength);
+
+      final String atLimit = 'p' * 64;
+      final String overLimit = 'p' * 65;
+      expect(atLimit.length, 64);
+      expect(overLimit.length, 65);
+
+      expect(
+        validateDeliveryProofPolicyRef(DeliveryProofPolicyRef(atLimit)),
+        isNull,
+        reason: 'exactly 64 must be accepted',
+      );
+      expect(DeliveryProofPolicyRef(atLimit).isWellFormed, isTrue);
+
+      expect(
+        validateDeliveryProofPolicyRef(DeliveryProofPolicyRef(overLimit)),
+        DeliveryProofDenial.policyRefTooLong,
+        reason: '65 must deny deterministically',
+      );
+      expect(DeliveryProofPolicyRef(overLimit).isWellFormed, isFalse);
+    });
+
+    test('a single character is enough', () {
+      expect(
+        validateDeliveryProofPolicyRef(const DeliveryProofPolicyRef('a')),
+        isNull,
+      );
+    });
+
+    test('the bound constrains size, never shape', () {
+      // Every mechanism-neutral shape that fits still passes; the ceiling
+      // introduces no prefix, suffix, URI or vocabulary requirement.
+      for (final String shape in <String>[
+        'policy/delivery_proof@v1',
+        'dp-2026-01',
+        'urn:example:policy:7',
+        'A_B.C~D',
+        '123456',
+      ]) {
+        expect(
+          validateDeliveryProofPolicyRef(DeliveryProofPolicyRef(shape)),
+          isNull,
+          reason: 'shape "\$shape" must not be rejected by the size bound',
+        );
+      }
+    });
+
+    test('blank still denies blank, not too-long', () {
+      // Precedence: a blank value is reported as blank even at 65 characters.
+      expect(
+        validateDeliveryProofPolicyRef(DeliveryProofPolicyRef(' ' * 65)),
+        DeliveryProofDenial.policyRefBlank,
+      );
+    });
+
+    test('toString does not reproduce the raw value', () {
+      // The reference has no character grammar, so echoing it would make any
+      // print, crash report or error message a content-leak surface.
+      const String secretish = 'policy/DO-NOT-ECHO-THIS-VALUE@v9';
+      const DeliveryProofPolicyRef ref = DeliveryProofPolicyRef(secretish);
+
+      expect(ref.toString(), isNot(contains(secretish)));
+      expect(ref.toString(), isNot(contains('DO-NOT-ECHO')));
+      expect(ref.toString(), 'DeliveryProofPolicyRef(length=32)');
+      expect(ref.value, secretish, reason: 'the stored value is untouched');
+    });
+
+    test('control characters are not reproduced by toString', () {
+      const DeliveryProofPolicyRef ref = DeliveryProofPolicyRef(
+        'a\nFAKE LOG LINE\tb\r',
+      );
+      final String rendered = ref.toString();
+      expect(rendered, isNot(contains('FAKE LOG LINE')));
+      expect(rendered, isNot(contains('\n')));
+      expect(rendered, isNot(contains('\t')));
+      expect(rendered, isNot(contains('\r')));
+      expect(rendered.split('\n').length, 1, reason: 'single line');
+    });
+
+    test('a maximum-length value cannot produce an oversized toString', () {
+      final String atLimit = 'x' * maxDeliveryProofPolicyRefLength;
+      final String rendered = DeliveryProofPolicyRef(atLimit).toString();
+      expect(rendered, isNot(contains(atLimit)));
+      expect(rendered.length, lessThan(64));
+    });
+
+    test('equality and hashCode stay exact-value based', () {
+      const DeliveryProofPolicyRef a = DeliveryProofPolicyRef('policy/x@v1');
+      const DeliveryProofPolicyRef b = DeliveryProofPolicyRef('policy/x@v1');
+      const DeliveryProofPolicyRef padded =
+          DeliveryProofPolicyRef(' policy/x@v1 ');
+      const DeliveryProofPolicyRef cased = DeliveryProofPolicyRef('POLICY/X@V1');
+
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+      expect(a, isNot(padded), reason: 'not trimmed into equality');
+      expect(a, isNot(cased), reason: 'not case-folded into equality');
+      // The safe toString is lossy by design: two DIFFERENT values of the same
+      // length render identically. That is exactly why equality must not — and
+      // does not — go through toString.
+      const DeliveryProofPolicyRef sameLength =
+          DeliveryProofPolicyRef('policy/y@v2');
+      expect(sameLength.value.length, a.value.length);
+      expect(sameLength.toString(), a.toString(),
+          reason: 'lossy rendering collapses distinct values');
+      expect(sameLength, isNot(a),
+          reason: 'equality uses the exact value, never the rendering');
+      expect(sameLength.hashCode, isNot(a.hashCode));
+    });
+
     test('there is no satisfaction, status or success concept', () {
       // A reference says WHICH policy applies, never that it was met.
       expect(DeliveryProofDenial.values, <DeliveryProofDenial>[
         DeliveryProofDenial.policyRefBlank,
+        DeliveryProofDenial.policyRefTooLong,
         DeliveryProofDenial.evidenceResourceIdInvalid,
         DeliveryProofDenial.evidenceIdInvalid,
+        DeliveryProofDenial.expectedResourceIdInvalid,
         DeliveryProofDenial.evidenceResourceMismatch,
       ]);
       for (final DeliveryProofDenial d in DeliveryProofDenial.values) {
@@ -143,6 +259,134 @@ void main() {
         DeliveryProofDenial.evidenceResourceIdInvalid,
         reason: 'a padded id is not silently repaired into a valid one',
       );
+    });
+
+    test('belongsTo cannot certify a malformed reference (FIX-001)', () {
+      // Raw equality would have matched two identically-malformed values and
+      // returned a misleading true through the public convenience API.
+      const DeliveryEvidenceRef bothEmpty = DeliveryEvidenceRef(
+        resourceId: '',
+        evidenceId: '',
+      );
+      expect(bothEmpty.belongsTo(''), isFalse,
+          reason: 'empty == empty must not certify');
+
+      const DeliveryEvidenceRef badResource = DeliveryEvidenceRef(
+        resourceId: 'ord_short',
+        evidenceId: evidenceA,
+      );
+      expect(badResource.belongsTo('ord_short'), isFalse);
+
+      const DeliveryEvidenceRef badEvidence = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: 'evd_short',
+      );
+      expect(badEvidence.belongsTo(orderA), isFalse,
+          reason: 'an invalid evidenceId makes the whole ref uncertifiable');
+    });
+
+    test('belongsTo rejects a malformed target resource (FIX-001)', () {
+      for (final String badTarget in malformedIds) {
+        expect(
+          ref.belongsTo(badTarget),
+          isFalse,
+          reason: 'target "\$badTarget"',
+        );
+      }
+      expect(ref.belongsTo(' \$orderA '), isFalse, reason: 'padded target');
+    });
+
+    test('belongsTo still returns true for the valid exact case', () {
+      expect(ref.belongsTo(orderA), isTrue);
+      expect(ref.belongsTo(orderB), isFalse, reason: 'valid but different');
+    });
+
+    test('a malformed target resource has its own denial (FIX-001)', () {
+      for (final String badTarget in malformedIds) {
+        expect(
+          validateDeliveryEvidenceRef(ref, resourceId: badTarget),
+          DeliveryProofDenial.expectedResourceIdInvalid,
+          reason: 'target "\$badTarget"',
+        );
+      }
+    });
+
+    test('denial precedence keeps the three failures distinguishable', () {
+      // 1. stored resource invalid wins over everything, so a malformed stored
+      //    reference is never masked by a later check.
+      expect(
+        validateDeliveryEvidenceRef(
+          const DeliveryEvidenceRef(
+            resourceId: 'ord_short',
+            evidenceId: 'evd_short',
+          ),
+          resourceId: 'also_bad',
+        ),
+        DeliveryProofDenial.evidenceResourceIdInvalid,
+      );
+      // 2. then the evidence id.
+      expect(
+        validateDeliveryEvidenceRef(
+          const DeliveryEvidenceRef(
+            resourceId: orderA,
+            evidenceId: 'evd_short',
+          ),
+          resourceId: 'also_bad',
+        ),
+        DeliveryProofDenial.evidenceIdInvalid,
+      );
+      // 3. then the target resource.
+      expect(
+        validateDeliveryEvidenceRef(ref, resourceId: 'also_bad'),
+        DeliveryProofDenial.expectedResourceIdInvalid,
+      );
+      // 4. and only then a genuine mismatch, with both sides valid.
+      expect(
+        validateDeliveryEvidenceRef(ref, resourceId: orderB),
+        DeliveryProofDenial.evidenceResourceMismatch,
+      );
+      // 5. otherwise null.
+      expect(validateDeliveryEvidenceRef(ref, resourceId: orderA), isNull);
+    });
+
+    test('equality and hashCode include BOTH identities', () {
+      const DeliveryEvidenceRef a = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: evidenceA,
+      );
+      const DeliveryEvidenceRef same = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: evidenceA,
+      );
+      const DeliveryEvidenceRef otherResource = DeliveryEvidenceRef(
+        resourceId: orderB,
+        evidenceId: evidenceA,
+      );
+      const DeliveryEvidenceRef otherEvidence = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: evidenceB,
+      );
+
+      expect(a, same);
+      expect(a.hashCode, same.hashCode);
+      expect(a, isNot(otherResource),
+          reason: 'same evidence on a different order is a different ref');
+      expect(a, isNot(otherEvidence),
+          reason: 'different evidence on the same order is a different ref');
+    });
+
+    test('toString exposes only the bounded opaque identifiers', () {
+      const DeliveryEvidenceRef a = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: evidenceA,
+      );
+      final String rendered = a.toString();
+      expect(rendered, contains(orderA));
+      expect(rendered, contains(evidenceA));
+      // Both are opaque ids, so both are already bounded at 64.
+      expect(orderA.length, lessThanOrEqualTo(maxIdLength));
+      expect(evidenceA.length, lessThanOrEqualTo(maxIdLength));
+      expect(rendered.length, lessThan(2 * maxIdLength + 40));
     });
 
     test('the validator repairs nothing', () {

@@ -227,7 +227,19 @@ the policy reference, because the repository has none to reuse.
 
 **What is *not* claimed.** 0.6 contained no delivery-proof types, so a 0.6 build
 could not decode a 0.7 reference even if one were serialized. None is:
-`cp_contracts` still has no serialization.
+`cp_contracts` still has no serialization, and **no payload or unknown-field
+compatibility is claimed at any version**.
+
+**Corrected in place by FND-003D1-FIX-001**, while 0.7 is still an unmerged,
+unreleased candidate — `origin/main` is `e8dacfc`, which predates it. The
+corrections add `maxDeliveryProofPolicyRefLength` (64) and two denial values
+(`policyRefTooLong`, `expectedResourceIdInvalid`); stop
+`DeliveryProofPolicyRef.toString` reproducing the raw value; make
+`DeliveryEvidenceRef.belongsTo` fail closed on malformed references and targets;
+and correct the `cp_contracts.dart` header from 0.6 to 0.7. **No version bump** —
+these are edits to an unreleased definition, and a review finding is not a
+release event. See
+[ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md).
 
 ## Behaviour across versions
 

@@ -32,13 +32,32 @@ has been satisfied, and it does not say how proof would be captured.
 
 - **No grammar is imposed.** The repository has no delivery-proof policy
   vocabulary to reuse, and inventing a prefix, version suffix or namespace would
-  be inventing a contract rather than referring to one. A test asserts four
+  be inventing a contract rather than referring to one. A test asserts several
   quite different shapes are all accepted.
-- **Blank and whitespace-only values fail closed.** `trim()` is used *only* to
-  reject them; the stored value is untouched.
+- **Bounded at 64 characters** *(FIX-001)* —
+  `maxDeliveryProofPolicyRefLength`, denying `policyRefTooLong`. "No grammar"
+  must not mean "no bound": this is a wire-facing value that travels through
+  commands, events, audit records and logs, and an unbounded string on such a
+  value is an amplification surface. 64 is the repository's **existing** ceiling
+  for bounded wire strings — `maxIdLength` and `CommandEnvelope.commandType` —
+  reused rather than a second number invented. **It constrains how much, never
+  what**, and the opaque-id rules are deliberately *not* applied: no minimum
+  length, no alphabet, no sequential-looking rejection. See
+  [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md).
+- **Blank and whitespace-only values fail closed**, and take precedence: a
+  65-character run of spaces reports `policyRefBlank`, not `policyRefTooLong`.
+  `trim()` is used *only* to reject them; the stored value is untouched.
 - **The exact value is preserved.** `' p/x@v1 '` and `'p/x@v1'` are different
-  references. Equating them silently would let a corrupt stored value pass as a
-  good one.
+  references, and `'POLICY/X@V1'` is a third. Equating any of them silently
+  would let a corrupt stored value pass as a good one. Equality and `hashCode`
+  use the exact underlying string.
+- **`toString` does not reproduce the value** *(FIX-001)*. It renders
+  `DeliveryProofPolicyRef(length=N)`. The reference has no character grammar by
+  design, so its content is arbitrary — a `toString` that echoed it would make
+  every `print`, crash report and error message a log-injection and content-leak
+  route. The rendering is deliberately **lossy**: two different values of the
+  same length render identically, which is exactly why equality does not go
+  through it. The length is **not** a hash and derives no new identifier.
 - **Not client authority.** A caller does not choose the governing policy by
   sending one. The backend resolves it from trusted order and policy state.
 
@@ -47,15 +66,44 @@ has been satisfied, and it does not say how proof would be captured.
 Points at protected evidence held for **one** order: a `resourceId` and an
 `evidenceId`, both validated with the repository's canonical opaque-id rule.
 
-- **Bound to its resource.** `belongsTo` compares **exactly**, so evidence from
-  one order cannot be presented against another —
-  `evidenceResourceMismatch`. The resource travels *with* the id rather than
-  being supplied beside it, where the two could drift apart.
+- **Bound to its resource, and fail-closed** *(FIX-001)*. `belongsTo` returns
+  true only when **all three** hold: this reference is well formed, the supplied
+  target is itself a valid opaque id, and the two compare **exactly**. Raw
+  equality alone failed open — two identically-malformed values, an empty stored
+  resource against an empty target say, would have matched and the public
+  convenience method would have certified a broken reference. It cannot now.
+  The resource travels *with* the id rather than being supplied beside it,
+  where the two could drift apart.
 - **`evidenceId` is not a storage path, URL or signed URL**, and is deliberately
   not shaped like one: a locator would imply a retrieval and access design that
   no slice has made.
 - **Identifier-only `toString`**, so a log line or crash report cannot become an
   evidence leak.
+
+## 2a. Structural validation and denial precedence
+
+| Condition | Denial |
+|---|---|
+| blank / whitespace-only policy ref | `policyRefBlank` |
+| policy ref longer than 64 | `policyRefTooLong` *(FIX-001)* |
+| non-opaque **stored** `resourceId` | `evidenceResourceIdInvalid` |
+| non-opaque `evidenceId` | `evidenceIdInvalid` |
+| non-opaque **target** resource | `expectedResourceIdInvalid` *(FIX-001)* |
+| both valid, but different orders | `evidenceResourceMismatch` |
+
+**Deterministic precedence** for `validateDeliveryEvidenceRef`: stored
+resource → evidence id → **target resource** → mismatch → null. The stored side
+is inspected first because that is the corruption a caller cannot see, so a
+malformed stored reference is never masked by a later check.
+
+`expectedResourceIdInvalid` exists so three failures stay distinguishable:
+*"the stored evidence names a broken resource"*, *"the caller asked about a
+broken resource"*, and *"both are fine and they simply differ"*. Collapsing them
+would hide which side is corrupt. `evidenceResourceMismatch` is therefore
+reached **only** when both resources are valid opaque ids.
+
+Everything here is **structural**. There is no denial meaning "the proof was not
+satisfied", because no slice defines satisfaction.
 
 ## 3. What a reference cannot do
 

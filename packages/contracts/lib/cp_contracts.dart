@@ -1,7 +1,7 @@
 /// Shared wire contract: identity, authorization, and the order, assignment
 /// and custody lifecycles.
 ///
-/// **Contract version 0.6.** What this package defines today:
+/// **Contract version 0.7.** What this package defines today:
 ///
 /// - [CommandEnvelope] — the one shape every trusted command arrives in, with
 ///   no actor field by design.

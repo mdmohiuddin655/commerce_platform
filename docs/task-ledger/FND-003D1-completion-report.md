@@ -8,7 +8,10 @@
 - **Branch:** `fnd/FND-003D1-delivery-proof-reference-boundary`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.6 → **0.7**
-- **Status:** **DONE**
+- **Status:** **DONE** — as corrected by **FND-003D1-FIX-001** (2026-09-10).
+  See [§22 Recheck](#22-recheck-final-review-001). `913b1ac` alone is **not**
+  the accepted D1 candidate, and the slice still requires read-only acceptance
+  before merge.
 
 ## 1. Baseline
 
@@ -274,3 +277,36 @@ serialized. Rollback is the ordinary Git revert of this commit before any merge.
 Contract and tests only. No backend handler, no Firestore rule, no index, no
 application feature, no platform dependency. Nothing merged, pushed,
 force-pushed or deployed; no PR created. **No other task was started.**
+
+## 22. Recheck (FINAL-REVIEW-001, 2026-09-10)
+
+**The D1 boundary in this report is accepted and unchanged**: references only,
+no proof mechanism, no satisfaction rule, no command, state, event or
+permission, successful delivery still non-executable, and `delivered`,
+customer custody and rider completion all still unreachable.
+
+Strict final review found **three concrete defects**, all closed by
+FND-003D1-FIX-001:
+
+1. **`DeliveryProofPolicyRef` accepted an unbounded string, and its
+   `toString()` emitted the raw value.** "No proof-mechanism grammar" had
+   quietly become "no bound at all". On a wire-facing value that travels through
+   commands, events, audit records and logs, that is an amplification surface —
+   and echoing arbitrary content from `toString` made every `print`, crash
+   report and error message a log-injection and content-leak route.
+
+2. **`belongsTo` failed open for malformed instances.** It compared resources by
+   raw equality with no validation of either side, so two identically-malformed
+   values — an empty stored resource against an empty target, say — matched, and
+   the public convenience API returned a misleading `true` certifying a broken
+   reference.
+
+3. **`cp_contracts.dart` still declared "Contract version 0.6"** while
+   `ContractVersion.current` and the D1 surface were 0.7. §18 of this report
+   listed that file as carrying the library doc, but the header line itself was
+   not corrected when the version was bumped.
+
+The validation counts recorded in §17 (25 / 657 / 698) were real at the time and
+are **not** restated as current; FND-003D1-FIX-001 re-ran everything and records
+its own. Full detail:
+[FND-003D1-FIX-001 report](FND-003D1-FIX-001-completion-report.md).

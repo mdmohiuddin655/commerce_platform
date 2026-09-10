@@ -202,4 +202,6 @@ check, and — if it changes tooling strategy — an ADR.
 
 `docs/decisions/` — ADR-0001 modular monorepo · ADR-0002 pub workspaces without
 Melos · ADR-0003 `cp_` package prefix · ADR-0004 strict analysis and guard
-rails. Read the relevant ADR before changing what it decided.
+rails · ADR-0005 notification stack decision required · ADR-0006 / ADR-0007
+admin assignment override governance · ADR-0008 bounded delivery-proof policy
+reference. Read the relevant ADR before changing what it decided.
