@@ -92,8 +92,13 @@ enum CustodyClassification {
 /// silently reassigning goods somebody is already carrying is how inventory and
 /// accountability are lost.
 ///
-/// FND-003B2A does not implement custody, so nothing here computes this — the
-/// backend supplies it, and FND-003B3 will map real custody state onto it.
+/// FND-003B2A did not implement custody, so nothing in that slice computed this.
+/// **FND-003B3A now does**: `reassignmentSafetyFor(role:, custody:)` maps a real
+/// custody aggregate onto this vocabulary without weakening it — missing or
+/// corrupt custody stays `blockedOrUnknown`, because "the record does not name
+/// this worker" is not proof they hold nothing. The backend still supplies the
+/// value on the request, and serialising the two writes remains backend
+/// criterion CA23.
 enum ReassignmentSafety {
   /// The backend established, from trusted custody facts, that this worker
   /// holds nothing.

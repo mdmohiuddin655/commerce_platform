@@ -17,8 +17,8 @@ outcome that reaches them. **It stops before dispatch.**
 | `ready` | yes | Goods assembled, awaiting collection |
 | `rejected` | yes | **Terminal.** Agent refused |
 | `cancelled` | yes | **Terminal.** Cancelled before dispatch |
-| `in_delivery` | **no** | Declared for enum stability; owned by a later slice |
-| `delivered` | **no** | Declared for enum stability; owned by a later slice |
+| `in_delivery` | **not from this evaluator** | **Reachable since FND-003B3A** — produced only by rider custody receipt. No pre-dispatch command enters or acts from it. |
+| `delivered` | **no** | Declared for enum stability; unimplemented by every slice |
 
 The last two exist in `OrderState` so that adding them later is not a breaking
 enum change. **No transition into or out of them is enumerated**, and a test
@@ -76,6 +76,15 @@ trusted facts loaded
 | `ready` | `committed` |
 | `rejected` | `released` |
 | `cancelled` | `released` |
+| `in_delivery` | `committed` |
+
+`in_delivery ↔ committed` was added by **FND-003B3A** and is produced by the
+**custody slice**, not by this evaluator: rider receipt moves the order there,
+and the reservation stays `committed` because dispatch restores no stock. It is
+listed here because `validateAggregate` must reject a malformed `in_delivery`
+aggregate — an `in_delivery` order whose reservation was `released` or
+`expired` fails closed rather than passing merely because this evaluator does
+not own the state. `delivered` has no defined pairing.
 
 Two entries deserve comment:
 
@@ -286,6 +295,12 @@ untrusted caller, for the same reason `DenyReason` is not.
 `order.placed` · `order.accepted` · `order.rejected` · `order.preparing` ·
 `order.ready` · `order.cancelled` · `reservation.expired`
 
+`LifecycleEventType` also carries **`order.in_delivery`** since FND-003B3A. It
+is **not emitted by `evaluateOrderTransition`** — no command here produces it —
+but by rider custody receipt, as one of the three facts that receipt causes. It
+is listed in `LifecycleEventType.all`, so a reader of that constant is not
+misled into thinking the order event vocabulary stops at the pre-dispatch set.
+
 Emitted through `EventEnvelope`: server-assigned `eventId`, `resourceId`,
 resulting `resourceRevision`, `causedByCommandId` where command-driven (**null
 for worker-driven expiry**), and server UTC time.
@@ -408,5 +423,9 @@ None of the following is defined, guessed or partially implemented here:
 - commissions;
 - settlement and the cash journal.
 
-`in_delivery` and `delivered` are declared but unreachable. No feature may
-guess an edge into them.
+`delivered` is declared but unreachable, and no feature may guess an edge into
+it.
+
+`in_delivery` **is** reachable since FND-003B3A — through rider custody receipt
+only. No pre-dispatch command may enter it or act from it, and none was
+invented here; see [custody-lifecycle.md](custody-lifecycle.md).

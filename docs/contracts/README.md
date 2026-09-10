@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -44,10 +44,15 @@ FND-003B2B.
 
 | Document | Covers |
 |---|---|
-| [custody-lifecycle.md](custody-lifecycle.md) | Physical custody: the shop/picker/rider/customer vocabulary, explicit shop initialisation, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, the role-aware revision model and B3-C1, custody-derived reassignment safety, and the CA1–CA18 backend checklist |
+| [custody-lifecycle.md](custody-lifecycle.md) | Physical custody: the shop/picker/rider/customer vocabulary, create-once shop initialisation, canonical resource/shop binding, `shop→picker` pickup, `picker→rider` receipt as the dispatch boundary, picker assignment completion, the role-aware revision model discharging B3-C1, compare-and-set across all four aggregate revisions, custody-derived reassignment safety, and the **CA1–CA23** backend checklist |
 
 **FND-003B3 is PARTIAL**: custody acquisition and the picker→rider handoff are
 done. Delivery attempts, refusal, returns and customer custody are not.
+
+Corrected in place by **FND-003B3A-FIX-001** (canonical resource/shop binding,
+picker and rider slot-revision compare-and-set, create-once initialisation,
+honest state metadata) and **FND-003B3A-FIX-002** (contract-status
+reconciliation). The slice is a **candidate**, not yet accepted for merge.
 
 ## Not yet defined — later FND-003 slices
 

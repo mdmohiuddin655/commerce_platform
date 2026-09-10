@@ -26,12 +26,21 @@ enum OrderState {
   /// reopening or reactivation, and none was invented.
   cancelled,
 
-  /// **NOT EXECUTABLE IN FND-003B1.** Reached once a rider holds custody.
-  /// Declared for enum stability only; no transition into it exists yet.
-  /// Owned by a later FND-003B slice.
+  /// Reached once a rider holds custody.
+  ///
+  /// **Not executable by the FND-003B1 pre-dispatch evaluator** — no command
+  /// here enters it or acts from it, and none was invented. It is nonetheless
+  /// **reachable since FND-003B3A**, produced by rider custody receipt, and its
+  /// aggregate shape is known: `in_delivery` pairs with a `committed`
+  /// reservation, because dispatch restores no stock.
+  ///
+  /// See [outsideThisSliceEvaluator] and [aggregateShapeKnown] — those two
+  /// claims are different, and this state is the reason they had to be split.
   inDelivery,
 
-  /// **NOT EXECUTABLE IN FND-003B1.** Owned by a later FND-003B slice.
+  /// **NOT EXECUTABLE, and unimplemented by every slice.** Reaching it depends
+  /// on delivery confirmation and proof, which no slice defines. Declared for
+  /// enum stability only.
   delivered;
 
   /// Stable wire identifier. Never serialize `Enum.index` — reordering this

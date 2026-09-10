@@ -9,7 +9,10 @@
 - **Reviewed base main:** `bfec4bea5dbfbc7316d10db9a898673111a4db68`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** **0.6 candidate, corrected in place** (no bump)
-- **Status:** **DONE**
+- **Status:** **DONE** — its functional corrections stand. **FINAL-REVIEW-002**
+  subsequently found documentation and source-comment drift left behind by this
+  and the original B3A commit; closed by **FND-003B3A-FIX-002**. See
+  [§15 Recheck](#15-recheck-final-review-002).
 
 `c29df0f` was not amended. One new commit on the same branch. The tree was
 clean, so **no `git reset --hard` was used**, and no history was rewritten.
@@ -285,3 +288,35 @@ Firebase resource created, no live operation performed.
 
 Contract and tests only. Nothing merged, pushed, force-pushed or deployed; no PR
 created. **FND-003B3B not started.**
+
+## 15. Recheck (FINAL-REVIEW-002, 2026-09-10)
+
+**Every functional correction in this report is accepted and unchanged.** The
+required `CustodyResourceContext`, exact non-normalised shop comparison, picker
+and rider slot-revision compare-and-set, create-once initialisation, and the
+role-aware state metadata all stand, and FND-003B3A-FIX-002 changed **no
+executable Dart at all**.
+
+What the review found was **status drift**: the prose had not kept up with what
+the code now does. Specifically —
+
+- the **picker** contract still said `completed` was "not range-checked" with
+  an unknown cost, still carried an unqualified "no mutation cost is invented
+  for `completed`", still listed **B3-C1 as NOT RUN / FUTURE** with "FND-003B3
+  has not started", and still said `inDelivery` was "not implemented anywhere";
+- the **rider** contract said in one place that B3-C1 was NOT RUN and in
+  another that FND-003B3A had satisfied it, and still used "once FND-003B3
+  exists" for custody facts that now exist;
+- the **order** contract still listed `in_delivery` as a mere enum placeholder,
+  omitted `in_delivery ↔ committed` from its canonical pair table, and
+  presented the event list without `order.in_delivery`;
+- `cp_contracts.dart` still announced **"Contract version 0.2"** and said the
+  order, assignment and custody lifecycles were undefined;
+- `README.md` still said the custody checklist was **CA1–CA18** (it is CA1–CA23
+  after this report) and that the version history reached only 0.3;
+- source comments on `OrderState.inDelivery`, `AssignmentState.completed`,
+  `assignmentEligibleOrderStates` and `ReassignmentSafety` still described a
+  pre-B3A world.
+
+None of that changed behaviour, and none of it is erased here. Full detail:
+[FND-003B3A-FIX-002 report](FND-003B3A-FIX-002-completion-report.md).

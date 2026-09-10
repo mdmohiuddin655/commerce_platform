@@ -161,9 +161,12 @@ class PickerAssignmentFacts {
 
 /// Order states that may carry picker assignment work.
 ///
-/// Offering before acceptance would assign work the shop has not agreed to do.
-/// `placed`, `rejected` and `cancelled` are excluded, and `inDelivery` /
-/// `delivered` are not implemented anywhere yet.
+/// Offering before acceptance would assign work the shop has not agreed to do,
+/// so `placed`, `rejected` and `cancelled` are excluded. `inDelivery` is
+/// excluded for a different reason since FND-003B3A — it **is** reachable, via
+/// rider custody receipt, but an order already out for delivery is past the
+/// point where assignment work may be offered. `delivered` remains
+/// unimplemented by every slice.
 const Set<OrderState> assignmentEligibleOrderStates = <OrderState>{
   OrderState.accepted,
   OrderState.preparing,

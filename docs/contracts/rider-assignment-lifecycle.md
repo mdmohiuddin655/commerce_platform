@@ -233,7 +233,11 @@ assignee overwrite.
 **The no-custody gate.** Revocation requires
 `ReassignmentSafety.provenNoCustody`. `blockedOrUnknown` — the **default** —
 denies with `reassignmentUnsafe`. **Unknown is not safe.** No custody state is
-implemented here; FND-003B3 will map real facts onto it.
+implemented here. **FND-003B3A now supplies those facts**:
+`reassignmentSafetyFor(role:, custody:)` maps a real custody aggregate onto this
+vocabulary — with the picker still holding the goods a rider revoke stays
+possible, after rider receipt it does not, and missing or corrupt custody is
+unsafe for both roles. Backend serialisation remains **CA23**, NOT RUN.
 
 **Current-terminal id reuse is denied** (`assignmentIdReuse`), tested for
 `declined`, `expired` and `revoked`. Uniqueness against **archived** attempts
@@ -402,14 +406,16 @@ order state and refuses ineligible ones.
 
 The backend must resolve, from **one consistent transaction/read-set**, before
 any mutation: the current order state, the current picker assignment, the
-current rider assignment, and — once FND-003B3 exists — custody facts. This
+current rider assignment, and — since FND-003B3A — **current custody facts**,
+which now exist. This
 covers cancellation versus rider offer, versus accept, versus revoke, and
 versus expiry.
 
 - If **cancellation wins**, a stale rider operation must not revive or continue
   a cancelled order.
 - If the **rider operation wins**, a later cancellation evaluates against the
-  resulting assignment state and, once FND-003B3 exists, custody.
+  resulting assignment state and, since FND-003B3A, current custody. Custody
+  *after* dispatch — delivery, refusal and return — remains future.
 
 Recorded as **RA16**. Cancellation fees and post-custody cancellation policy
 are **not guessed** — they need O6 and FND-003C.
@@ -502,20 +508,27 @@ contract task, and none is marked PASS.
 Checked by whoever **changes the contract**, not by a deployment — kept
 separate from the RA/P backend series for that reason.
 
-> **B3-C1** *(picker, from FND-003B2A-FIX-002)* — unchanged, **NOT RUN /
-> FUTURE**.
+> **B3-C1** *(picker, raised by FND-003B2A-FIX-002)* — **SATISFIED BY
+> FND-003B3A CONTRACT TESTS.** Picker completion became reachable through rider
+> custody receipt, and FND-003B3A discharged the criterion: role-aware revision
+> model, derivation, range tests, and closure proven across generations 1–3
+> from real evaluator-produced histories.
 >
-> **B3-C2** — If rider `completed` becomes executable, the implementing task
-> must update the reachable slot-revision model, its derivation and range
-> tests, and prove every newly successful rider transition closes over
-> `validateRiderAssignmentAggregate`.
+> **B3-C2** *(rider)* — If rider `completed` becomes executable, the
+> implementing task must update the reachable slot-revision model, its
+> derivation and range tests, and prove every newly successful rider transition
+> closes over `validateRiderAssignmentAggregate`.
 
-**B3-C2 status: NOT RUN / FUTURE.** FND-003B3A made *picker* completion
-reachable and satisfied **B3-C1** with contract tests, but **rider `completed`
-remains unreachable** — `AssignmentState.notYetImplementedForRole(rider)` still
-reports it as future *(FIX-001)*: `AssignmentState.executableForRole(rider)` excludes it,
+The two are deliberately separate, and only one is discharged.
+
+**B3-C1 status: SATISFIED BY CONTRACT TESTS — picker completion only.** That is
+**not** backend persistence evidence; the atomic commit is **CA9**, NOT RUN.
+
+**B3-C2 status: NOT RUN / FUTURE.** **Rider `completed` remains unreachable**:
+`AssignmentState.notYetImplementedForRole(rider)` still reports it as future
+*(FIX-001)*, `AssignmentState.executableForRole(rider)` excludes it,
 `reachableSlotRevisionRange(g, completed, role: rider)` still returns null, and
-no mutation cost for it was invented. Rider completion depends on delivery,
+**no mutation cost for it was invented**. Rider completion depends on delivery,
 which no slice defines.
 
 ## 22. Out of scope

@@ -86,8 +86,11 @@ assignment history; it is rebuilt from the record.
 
 Assignment work may exist only while the order is `accepted`, `preparing` or
 `ready`. Offering before the shop accepted would assign work nobody agreed to
-do. `placed`, `rejected` and `cancelled` are excluded; `inDelivery` and
-`delivered` are not implemented anywhere.
+do. `placed`, `rejected` and `cancelled` are excluded. `inDelivery` is excluded
+too, but for a different reason since FND-003B3A: it **is** reachable — rider
+custody receipt produces it — and an order already out for delivery is simply
+past the point where picker work may be assigned. `delivered` remains
+unimplemented by any slice.
 
 **The order state is re-read for every command**, including acceptance of an
 older offer — a stale offer must not be accepted after the order became
@@ -193,7 +196,11 @@ Revocation is permitted only when `ReassignmentSafety.provenNoCustody`.
 somebody is already carrying is how inventory and accountability are lost.
 
 FND-003B2A implements **no custody state at all**. The backend supplies this
-determination, and FND-003B3 will map real custody facts onto it.
+determination. **FND-003B3A now supplies those facts**:
+`reassignmentSafetyFor(role:, custody:)` maps a real custody aggregate onto this
+same vocabulary without weakening it — with the picker holding the goods, picker
+revocation is `blockedOrUnknown`, and missing or corrupt custody stays unsafe.
+Backend serialisation of the two writes remains **CA23**, NOT RUN.
 
 ## Exactly-one invariants
 
@@ -299,8 +306,11 @@ revoked → rev 3. Gen 2 offered → rev 3 (previous attempt declined or expired
 or rev 4 (previous attempt revoked). Gen 2 revoked → rev 5 or 6.
 
 Anything outside the range — **above the maximum as well as below the
-minimum** — is `aggregateInconsistent`. `completed` is not range-checked; this
-slice does not implement it, so its cost is unknown.
+minimum** — is `aggregateInconsistent`.
+
+`completed` **is** range-checked since FND-003B3A, but only for the picker, and
+only through the role-aware form below. The default, role-less call still
+returns null for it.
 
 `reachableSlotRevisionRange(generation, state, {role})` is exported so a
 backend reconciliation job can apply the identical rule.
@@ -367,10 +377,14 @@ Two tests enforce this coupling rather than leaving it to memory:
 
 Both were verified by deliberately breaking the model and confirming they fail.
 
-**No mutation cost is invented for `completed`.** Its relationship to custody
-and handoff is FND-003B3's to define; guessing one now would corrupt the model
-in a way that only shows up as spurious corruption denials later. See
-criterion **B3-C1**.
+**Mutation cost for `completed` is role-specific, and only half of it is
+defined.** FND-003B3A defined the **picker** cost — offer + accept + completion,
+three mutations, the same per-generation cost as the accept-then-revoke path —
+because rider custody receipt makes picker completion reachable. **No cost for
+*rider* completion was invented**: rider completion depends on delivery, which
+no slice defines, and guessing one would corrupt the model in a way that only
+shows up as spurious corruption denials later. That remains criterion
+**B3-C2**. See **B3-C1** below for the picker half.
 
 Anything else denies with `aggregateInconsistent`, producing no lifecycle
 effect, no projection change and no event.
@@ -424,22 +438,35 @@ Distinct from the backend P-series above: these are **contract evolution**
 requirements, checked by whoever changes the contract, not by a deployment
 test.
 
-- [ ] **B3-C1** — If picker `completed` becomes executable, the implementing
+- [x] **B3-C1** — If picker `completed` becomes executable, the implementing
       task updates the reachable slot-revision model, its derivation and range
       tests, and proves every newly successful transition closes over
       `validatePickerAssignmentAggregate`.
 
-**Status: NOT RUN / FUTURE** — FND-003B3 has not started. This is a guard on a
-future change, not a blocker to FND-003B2A.
+**Status: SATISFIED BY FND-003B3A CONTRACT TESTS.** Picker completion became
+reachable in FND-003B3A, and that task discharged this criterion: it added the
+role-aware `reachableSlotRevisionRange(..., role: picker)`, its derivation and
+range tests, and proved closure across generations 1–3 (revisions 3, 6, 9) from
+**real evaluator-produced histories** — the picker evaluator producing
+offer → accept, the custody evaluator producing pickup and receipt.
+
+> **Contract-test evidence only.** It is *not* backend persistence evidence:
+> the custody record, order, picker slot, projections and outbox must commit in
+> one transaction, which is **CA9**, and that remains NOT RUN.
+
+**B3-C2** — the rider equivalent — remains **NOT RUN / FUTURE**. See
+[rider-assignment-lifecycle.md](rider-assignment-lifecycle.md) §21.
 
 ## Out of scope
 
 Not defined, guessed or partially implemented here:
 
 - rider assignment lifecycle — delivered separately by FND-003B2B, not here;
-- physical custody, pickup and handoff — **shop→picker pickup and picker→rider
-  receipt are delivered by FND-003B3A**, not here; see
-  [custody-lifecycle.md](custody-lifecycle.md);
+- physical custody, pickup and handoff — not implemented by *this* evaluator.
+  **shop→picker pickup and picker→rider receipt are delivered by FND-003B3A**;
+  see [custody-lifecycle.md](custody-lifecycle.md). FND-003B3 is **PARTIAL**:
+  custody acquisition and handoff are done, delivery, refusal and returns are
+  not;
 - rider receipt;
 - delivery attempts;
 - returns;

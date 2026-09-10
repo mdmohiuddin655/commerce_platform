@@ -27,11 +27,24 @@ enum AssignmentState {
   /// **Terminal** for this attempt; the historical assignee is retained.
   revoked,
 
-  /// **NOT EXECUTABLE — neither picker nor rider.** An accepted assignment
-  /// finished its work. Declared for enum and wire stability only: completion
-  /// depends on custody and handoff, which FND-003B3 owns. No transition in
-  /// either assignment lifecycle enters it, and no mutation cost for it was
-  /// guessed. See contract criteria B3-C1 and B3-C2.
+  /// An accepted assignment finished its work.
+  ///
+  /// **No assignment command transitions into it, for either role**, and none
+  /// was invented — that is why [executableInThisSlice] excludes it and both
+  /// evaluators fail closed on an attempt already in it.
+  ///
+  /// The two roles differ in whether it is *reachable at all*:
+  ///
+  /// - **picker — reachable since FND-003B3A.** Rider custody receipt completes
+  ///   the picker assignment as a cross-aggregate consequence. Its shape is
+  ///   validated and its revision cost is defined: offer + accept + completion,
+  ///   the same per-generation cost as accept-then-revoke. Contract criterion
+  ///   **B3-C1** is discharged by FND-003B3A's contract tests.
+  /// - **rider — still future.** Completion depends on delivery, which no slice
+  ///   defines, and **no mutation cost for it was guessed**. Criterion
+  ///   **B3-C2**, NOT RUN.
+  ///
+  /// Ask [notYetImplementedForRole] rather than assuming either answer.
   completed;
 
   /// Stable wire identifier. Never serialize `Enum.index`.

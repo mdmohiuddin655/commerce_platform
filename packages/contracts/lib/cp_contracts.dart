@@ -1,7 +1,7 @@
-/// Shared wire contract: command and event envelopes, identity and
-/// authorization vocabulary.
+/// Shared wire contract: identity, authorization, and the order, assignment
+/// and custody lifecycles.
 ///
-/// **Contract version 0.2** (FND-003A). What this package now defines:
+/// **Contract version 0.6.** What this package defines today:
 ///
 /// - [CommandEnvelope] — the one shape every trusted command arrives in, with
 ///   no actor field by design.
@@ -12,15 +12,36 @@
 ///   kept separate from standing, role and scope.
 /// - [Permission], [permissionMatrix], [evaluateAuthorization] — one canonical
 ///   least-privilege matrix and a pure decision function.
+/// - [evaluateOrderTransition] — the pre-dispatch order and reservation
+///   lifecycle, with typed [InventoryEffect] and [FinancialClassification].
+/// - [evaluatePickerAssignment], [evaluateRiderAssignment] — the picker and
+///   rider assignment lifecycles, sharing one revision model
+///   ([reachableSlotRevisionRange]) and one denial vocabulary.
+/// - [evaluateCustodyTransition], [initialiseCustodyAtShop] — physical custody:
+///   shop initialisation, `shop → picker` pickup, and `picker → rider` receipt,
+///   which is the dispatch boundary that moves an order to `in_delivery` and
+///   completes the picker assignment.
 ///
-/// What it deliberately does **not** define yet — later FND-003 slices own
-/// these, and no feature may guess them:
+/// What it deliberately does **not** define yet — later slices own these, and
+/// no feature may guess them:
 ///
-/// - order, assignment, custody, delivery-attempt and return lifecycles;
-/// - inventory effects;
+/// - delivery attempts, customer delivery and delivery confirmation;
+/// - refusal and failure handling;
+/// - the return lifecycle and post-dispatch inventory restoration — stock
+///   cannot become available again until shop receipt **and** inspection;
+/// - customer custody and rider assignment completion;
+/// - direct shop-to-rider pickup;
+/// - a handoff-proof protocol — rider receipt is an *authorized assertion*,
+///   not independent proof, and no OTP, QR, signature or photo mechanism
+///   exists;
 /// - payment and COD lifecycles;
 /// - the cash journal, fees, refusal policy, commissions and settlement
-///   (blocked on owner decision O6).
+///   (blocked on owner decision O6);
+/// - proof and dispute workflows.
+///
+/// **There is no serialization in this package.** No type has a
+/// `toJson`/`fromJson`, so no build can decode another's payload and no
+/// payload-compatibility claim is made at any version.
 library;
 
 export 'package:cp_contracts/src/assignment_command.dart';
