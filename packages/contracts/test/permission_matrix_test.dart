@@ -269,4 +269,41 @@ void main() {
       expect(covered, CommerceRole.values.toSet());
     });
   });
+
+  group('assignment revocation governance (ADR-0006)', () {
+    test('agent.assignment.revoke_picker is agent-only', () {
+      final PermissionRule rule =
+          permissionMatrix[Permission.agentRevokePickerAssignment]!;
+
+      expect(rule.eligibleRoles, <CommerceRole>{CommerceRole.agent});
+      expect(
+        rule.eligibleRoles.contains(CommerceRole.admin),
+        isFalse,
+        reason: 'ADR-0006: admin intervention is a separate audited override, '
+            'never a widening of the shop-scoped agent permission',
+      );
+    });
+
+    test('it stays shop-scoped, reason-bearing and controlled', () {
+      final PermissionRule rule =
+          permissionMatrix[Permission.agentRevokePickerAssignment]!;
+
+      expect(rule.scopes, <ScopeRequirement>{ScopeRequirement.ownShop});
+      expect(rule.reasonRequired, isTrue);
+      expect(rule.acceptableStatuses, <MembershipStatus>{
+        MembershipStatus.active,
+      });
+      expect(rule.restriction, contains('custody'));
+    });
+
+    test('the reserved admin override permission is NOT implemented', () {
+      // ADR-0006 reserves the identifier to prevent the shortcut. It must not
+      // exist in the vocabulary until a bounded governance task builds it with
+      // reason, scope, approval and audit.
+      expect(Permission.byId('admin.assignment.override_picker'), isNull);
+      for (final Permission p in Permission.values) {
+        expect(p.id, isNot(contains('override')));
+      }
+    });
+  });
 }

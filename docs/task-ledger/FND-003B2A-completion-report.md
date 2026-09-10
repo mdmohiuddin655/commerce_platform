@@ -7,7 +7,9 @@
 - **Branch:** `fnd/FND-003B2A-picker-assignment-lifecycle`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** 0.3 → **0.4**
-- **Status:** **DONE**
+- **Status:** **DONE** — as corrected by **FND-003B2A-FIX-001** (2026-09-10).
+  See [§20 Recheck](#20-recheck-fnd-003b2a-fix-001). `355aaa7` alone is not the
+  accepted state.
 
 ## 1. Baseline
 
@@ -228,3 +230,34 @@ timeout duration invented.
 Contract and tests only. No backend handler, no Firestore rule, no application
 feature, no platform dependency. Nothing merged to `main`, pushed or deployed.
 **FND-003B2B and FND-003B3 not started.**
+
+## 20. Recheck (FND-003B2A-FIX-001, 2026-09-10)
+
+The picker lifecycle **behaviour** described in this report is accepted and
+unchanged: recipient-vs-assignee separation, the accept-vs-expiry race, the
+exactly-one invariants, custody fail-closed, the timeout policy boundary and
+the P15 boundary all stand.
+
+Two integrity gaps were found, and one governance decision needed recording.
+
+**1. Immediate `assignmentId` reuse was not denied.** §9 said reassignment uses
+"a new opaque `assignmentId`", but nothing enforced it. Reproduced against
+`355aaa7`: re-offering after a declined or expired attempt with that attempt's
+**own** id was **allowed**, producing generation 2 carrying generation 1's
+identifier. Two attempts would have been indistinguishable in events and audit.
+
+**2. "Slot-revision coherence" was overclaimed.** §11 of this report listed
+"slot-revision coherence" among the validated invariants. The code checked only
+`generation >= 1` and `slotRevision >= 1`. Reproduced: generation 2 at
+revision 1, generation 2 at revision 2, and generation 1 at revision 99 all
+**validated**, despite being histories this state machine cannot produce.
+
+**3. Governance.** The owner approved keeping
+`agent.assignment.revoke_picker` agent-only, with admin intervention as a
+separate audited override. That decision existed only in conversation. It is now
+[ADR-0006](../decisions/ADR-0006-admin-picker-assignment-override.md), with a
+test asserting the permission stays agent-only and the reserved override
+identifier stays unimplemented.
+
+Full detail:
+[FND-003B2A-FIX-001 report](FND-003B2A-FIX-001-completion-report.md).

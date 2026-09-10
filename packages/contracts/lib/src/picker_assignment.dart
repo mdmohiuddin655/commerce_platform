@@ -64,6 +64,16 @@ enum AssignmentDenial {
   /// A supplied assignment identifier is not a valid opaque id.
   assignmentIdInvalid,
 
+  /// A new offer tried to reuse the current terminal attempt's own
+  /// `assignmentId`.
+  ///
+  /// A new attempt is a **new fact**, not a resurrection of the old one.
+  /// Reusing the identifier would collapse two attempts into one in every
+  /// audit trail, event stream and stored record — a later generation would be
+  /// indistinguishable from the earlier one that failed. Advancing the
+  /// generation is not a substitute for a distinct identity.
+  assignmentIdReuse,
+
   /// The stored aggregate is a combination this lifecycle can never produce.
   /// **Corruption, not a race** — see `validatePickerAssignmentAggregate`.
   aggregateInconsistent,
@@ -355,6 +365,54 @@ class PickerAssignmentOutcome {
       allowed ? 'Allow(${transition!})' : 'Deny(${denial!.name})';
 }
 
+/// The `slotRevision` values a `(generation, state)` pair can actually have been
+/// reached by, given the transitions this slice implements.
+///
+/// Every attempt costs at least two mutations — the offer and one terminal
+/// outcome (decline or expiry) — and at most three, when it was accepted and
+/// then revoked. So the `generation - 1` attempts before the current one
+/// consumed between `2(g-1)` and `3(g-1)` revisions, and the current attempt
+/// adds one, two or three depending on how far it has got.
+///
+/// | State | Reachable revisions |
+/// |---|---|
+/// | `offered` | `2g-1` … `3g-2` |
+/// | `accepted` / `declined` / `expired` | `2g` … `3g-1` |
+/// | `revoked` | `2g+1` … `3g` |
+///
+/// A stored pair outside its range describes a history this state machine
+/// cannot produce — generation 2 at revision 1, say, or generation 1 at
+/// revision 99. Checking only `slotRevision >= 1` would accept both.
+///
+/// Returns null when no range can be stated: a non-positive generation, or
+/// `completed`, which this slice does not implement and whose cost is
+/// therefore unknown.
+({int min, int max})? reachableSlotRevisionRange(
+  int generation,
+  AssignmentState state,
+) {
+  if (generation < 1) {
+    return null;
+  }
+  final int priorMinimum = 2 * (generation - 1);
+  final int priorMaximum = 3 * (generation - 1);
+
+  return switch (state) {
+    // offer
+    AssignmentState.offered =>
+      (min: priorMinimum + 1, max: priorMaximum + 1),
+    // offer + outcome
+    AssignmentState.accepted ||
+    AssignmentState.declined ||
+    AssignmentState.expired =>
+      (min: priorMinimum + 2, max: priorMaximum + 2),
+    // offer + accept + revoke
+    AssignmentState.revoked =>
+      (min: priorMinimum + 3, max: priorMaximum + 3),
+    AssignmentState.completed => null,
+  };
+}
+
 /// Canonical assignment-state → aggregate shape.
 ///
 /// Learned from FND-003B1: the transition graph never *creates* an impossible
@@ -393,6 +451,17 @@ AssignmentDenial? validatePickerAssignmentAggregate(
     return AssignmentDenial.aggregateInconsistent;
   }
   if (attempt.generation < 1) {
+    return AssignmentDenial.aggregateInconsistent;
+  }
+  // The generation and the slot revision must describe a history this
+  // lifecycle could actually have produced — not merely two positive numbers.
+  final ({int min, int max})? reachable = reachableSlotRevisionRange(
+    attempt.generation,
+    attempt.state,
+  );
+  if (reachable == null ||
+      facts.slotRevision < reachable.min ||
+      facts.slotRevision > reachable.max) {
     return AssignmentDenial.aggregateInconsistent;
   }
   if (attempt.offerRecipientPrincipalId.isEmpty) {
@@ -499,6 +568,19 @@ PickerAssignmentOutcome _evaluateOffer(
   if (newId == null || !isValidOpaqueId(newId)) {
     return const PickerAssignmentOutcome.deny(
       AssignmentDenial.assignmentIdInvalid,
+    );
+  }
+  // A new attempt needs a new identity. Advancing the generation is not
+  // enough: reusing the terminal attempt's id would make the two attempts
+  // indistinguishable in events, audit and storage.
+  //
+  // The evaluator sees only the attempt currently in the slot, so it cannot
+  // prove the id was never used by an older archived attempt. That is a
+  // storage guarantee — server-generated ids and create-if-absent attempt
+  // records — recorded as backend criterion P17.
+  if (current != null && newId == current.assignmentId) {
+    return const PickerAssignmentOutcome.deny(
+      AssignmentDenial.assignmentIdReuse,
     );
   }
   final String policyRef = request.timeoutPolicyRef?.trim() ?? '';

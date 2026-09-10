@@ -144,6 +144,15 @@ accepted --revoke--> revoked      (old attempt, history retained)
 scope, **reason required**. It is not a generic assignment mutation, not a
 status overwrite, and not an assignee-replacement.
 
+**It stays agent-only.** Administrative intervention is a *separate* audited
+override workflow — its own permission family, scoped admin authority, reason,
+approval/dual control, and an audit record — and it may not bypass custody
+safety. Adding `admin` to this permission as a shortcut is explicitly ruled out
+by [ADR-0006](../decisions/ADR-0006-admin-picker-assignment-override.md).
+`admin.assignment.override_picker` is **RESERVED / PROPOSED only**: it is
+deliberately absent from `Permission.values` and `permissionMatrix`, and a test
+asserts it stays absent.
+
 ### The no-custody safety gate
 
 Revocation is permitted only when `ReassignmentSafety.provenNoCustody`.
@@ -170,6 +179,28 @@ dispatch can never exist. Supporting concurrent offers later would need an
 explicit ADR plus lifecycle semantics for losing/superseded offers —
 `expired` and `declined` must **not** be repurposed to simulate it, because
 they mean different things.
+
+## A new attempt needs a new identity
+
+Re-offering after a terminal attempt requires an `assignmentId` **different from
+the terminal attempt's own**. Denied with `assignmentIdReuse`.
+
+Advancing the generation is **not** a substitute. Reusing the identifier would
+make two attempts indistinguishable in every event stream, audit record and
+stored document — a later generation would look like the earlier one that
+failed.
+
+### Historical uniqueness is a storage guarantee
+
+The evaluator sees only the attempt **currently in the slot**, so it cannot
+prove a proposed id was never used by an older archived attempt. That boundary
+is stated rather than papered over: proving it in pure Dart would mean carrying
+every historical id in the order aggregate, which is exactly the unbounded array
+the storage note below warns against.
+
+The backend must therefore generate attempt ids **server-side**, create attempt
+records **create-if-absent**, reject reuse of **any** prior id, and never
+overwrite history — criterion **P17**.
 
 ## Stale, duplicate and reordered commands
 
@@ -205,8 +236,36 @@ effect**.
 | `revoked` | recipient set; historical assignee set and equal to recipient |
 
 Also required for any attempt: opaque `assignmentId`, `generation >= 1`,
-non-blank `timeoutPolicyRef`, non-empty recipient, `slotRevision >= 1`. A slot
-with no attempt must have `slotRevision == 0`.
+non-blank `timeoutPolicyRef`, non-empty recipient. A slot with no attempt must
+have `slotRevision == 0`.
+
+### Generation and revision must describe a reachable history
+
+`slotRevision >= 1` is not enough — it accepts histories this state machine
+cannot produce, such as generation 2 at revision 1, or generation 1 at
+revision 99.
+
+Every attempt costs **at least two** mutations (offer + decline/expiry) and **at
+most three** (offer + accept + revoke). So the `g-1` attempts before the current
+one consumed between `2(g-1)` and `3(g-1)` revisions, and the current attempt
+adds one, two or three depending on how far it has got:
+
+| Current state | Reachable `slotRevision` |
+|---|---|
+| `offered` | `2g-1` … `3g-2` |
+| `accepted` / `declined` / `expired` | `2g` … `3g-1` |
+| `revoked` | `2g+1` … `3g` |
+
+Worked: gen 1 offered → rev 1; gen 1 accepted/declined/expired → rev 2; gen 1
+revoked → rev 3. Gen 2 offered → rev 3 (previous attempt declined or expired)
+or rev 4 (previous attempt revoked). Gen 2 revoked → rev 5 or 6.
+
+Anything outside the range — **above the maximum as well as below the
+minimum** — is `aggregateInconsistent`. `completed` is not range-checked; this
+slice does not implement it, so its cost is unknown.
+
+`reachableSlotRevisionRange(generation, state)` is exported so a backend
+reconciliation job can apply the identical rule.
 
 Anything else denies with `aggregateInconsistent`, producing no lifecycle
 effect, no projection change and no event.
@@ -249,6 +308,7 @@ R33–R40 and L1–L13, which are likewise unchanged and NOT RUN.
 - [ ] P14 — Persisted assignment aggregate inconsistencies never drive a mutation and are surfaced for reconciliation.
 - [ ] P15 — Order cancellation and assignment accept/revoke are serialized against current order/custody facts before the backend ships.
 - [ ] P16 — Exactly one active accepted picker exists per order under concurrent commands.
+- [ ] P17 — A newly generated `assignmentId` must not collide with or reuse **any** historical assignment attempt id; attempt creation is create-if-absent and never overwrites history.
 
 Storage note for P14/P16: assignment attempts should be a bounded or paginated
 indexed collection, **not** an unbounded array inside the order document.
