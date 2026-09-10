@@ -25,14 +25,14 @@ Legend: `DONE` · `IN PROGRESS` · `BLOCKED` · `TODO` · `PARTIAL`
 | FND-003A-FIX-003 | ADMIN | Require fresh authorization before replay; separate type/trust/request-lifetime boundaries; command-router and stale-grant backend tests (R33–R40) | FND-003A-FIX-002 | **DONE** | [FND-003A-FIX-003 report](FND-003A-FIX-003-completion-report.md) |
 | FND-003A-FIX-002 | ADMIN | Make successful authorization unforgeable and request-bound before idempotency replay | FND-003A-FIX-001 | **DONE** | [FND-003A-FIX-002 report](FND-003A-FIX-002-completion-report.md) |
 | FND-003A-FIX-001 | ADMIN | Fix offer-vs-assignment scope, approval binding, idempotency principal isolation, version-compatibility semantics | FND-003A | **DONE** | [FND-003A-FIX-001 report](FND-003A-FIX-001-completion-report.md) |
-| FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle delivered by FND-003B1. Assignment, custody, delivery and return lifecycles outstanding |
+| FND-003B | ADMIN | Lifecycle slice: order, assignment, custody, attempt and return transitions with inventory effects | FND-003A | **PARTIAL** | parent task; pre-dispatch order/reservation lifecycle (FND-003B1) and the full assignment lifecycle (FND-003B2) delivered. **Custody, delivery-attempt and return lifecycles outstanding — FND-003B3** |
 | FND-003B1 | ADMIN | Pre-dispatch order + reservation lifecycle: placement, acceptance/rejection, preparing/ready, cancellation, expiry and inventory race invariants | FND-003A | **DONE** (as corrected) | Accepted state = **`697d170` + the FND-003B1-FIX-001 commit**. Reports: [FND-003B1](FND-003B1-completion-report.md) + [FIX-001](FND-003B1-FIX-001-completion-report.md) · contract **0.3**. `697d170` alone is **not** the accepted contract |
 | FND-003B1-FIX-001 | ADMIN | Validate canonical order/reservation aggregate before any lifecycle effect; pair-specific release paths | FND-003B1 | **DONE** | [FND-003B1-FIX-001 report](FND-003B1-FIX-001-completion-report.md) |
-| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **PARTIAL** | parent; picker lifecycle delivered by FND-003B2A. Rider lifecycle outstanding |
+| FND-003B2 | ADMIN | Assignment lifecycle: picker and rider offer/accept/decline/expire edges | FND-003B1 | **DONE** | both sub-slices complete: picker by FND-003B2A, rider by FND-003B2B. Custody, delivery and returns are **not** part of this task — they are FND-003B3 |
 | FND-003B2A | ADMIN | Picker assignment offer/accept/decline/expiry/revoke and controlled reassignment lifecycle | FND-003B1 | **DONE** (as corrected) | Accepted state = **`355aaa7` + `ce44b29` + the FND-003B2A-FIX-002 commit**. Reports: [FND-003B2A](FND-003B2A-completion-report.md) + [FIX-001](FND-003B2A-FIX-001-completion-report.md) + [FIX-002](FND-003B2A-FIX-002-completion-report.md) · contract **0.4**. **No earlier commit alone is the accepted contract** |
 | FND-003B2A-FIX-001 | ADMIN | Deny assignment-id reuse; enforce reachable generation/revision coherence; record ADR-0006 admin-override governance | FND-003B2A | **DONE** | [FND-003B2A-FIX-001 report](FND-003B2A-FIX-001-completion-report.md) |
 | FND-003B2A-FIX-002 | ADMIN | Pin transition-closure over the aggregate validator; couple executable states to the revision model; record B3-C1 | FND-003B2A-FIX-001 | **DONE** | [FND-003B2A-FIX-002 report](FND-003B2A-FIX-002-completion-report.md) |
-| FND-003B2B | ADMIN | Rider assignment lifecycle | FND-003B2A | **TODO — NOT STARTED** | — |
+| FND-003B2B | ADMIN | Picker-originated rider assignment: offer/accept/decline/expiry/controlled-revoke, source-picker binding, shared revision model | FND-003B2A | **DONE** | [FND-003B2B report](FND-003B2B-completion-report.md) · [ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) · contract **0.5**. Adds backend criteria **RA1–RA18** and contract criterion **B3-C2**, all **NOT RUN** |
 | FND-003B3 | ADMIN | Custody, delivery-attempt and return lifecycle, including post-dispatch inventory restoration | FND-003B2 | **TODO — NOT STARTED** | — |
 | FND-003C | ADMIN | Money slice: payment/COD, cash journal, fees, refusal policy, commissions, settlement | FND-003A, FND-003B | **BLOCKED** | needs owner decision **O6** |
 | FND-003D | ADMIN | Proof and dispute slice: customer OTP/proof format and fallback workflow | FND-003B | **TODO** | required before delivery confirmation is coded |
@@ -123,11 +123,52 @@ count produced a stock-*destroying* mutation. An aggregate-integrity boundary
 now runs before any effect, and release paths are pair-specific. **Cite both
 commits.**
 
+**FND-003B2B — DONE (2026-09-10).** Picker-originated rider assignment: the
+order's **current accepted picker** offers delivery work to one rider, with
+accept, decline, worker-driven expiry and controlled revoke. Contract
+**0.4 → 0.5** (additive).
+
+The distinctive risk in this slice is **cross-aggregate**, and it is the first
+time a lifecycle has had one. A rider attempt is meaningless except relative to
+the picker assignment that created it, so each attempt stores an immutable
+`SourcePickerBinding` (picker principal + picker assignment id + picker
+generation). Acceptance re-checks that the binding is still the order's current
+accepted picker assignment, which closes this hole:
+
+```text
+picker A offers rider R -> A is revoked -> picker B becomes accepted
+                        -> R's stale offer accepted as though B created it
+```
+
+That is denied `sourcePickerAssignmentMismatch`. Revoke deliberately does
+**not** require the *original* picker — only the current one — so a
+replacement picker can resolve a rider slot that would otherwise be
+permanently orphaned; the binding is still never rewritten.
+
+Shared, not copied: `AssignmentState`, `AssignmentRole`,
+`ScopeProjectionEffect`, `CustodyClassification`, `ReassignmentSafety`,
+`assignmentEligibleOrderStates`, and the role-neutral `AssignmentDenial` and
+`reachableSlotRevisionRange`, which moved into `assignment_integrity.dart`
+unchanged. A negative control proved the sharing is real: breaking the helper
+fails the picker **and** rider closure suites.
+
+`agent.assignment.offer_rider` was **not** used, deleted or renamed. It stays
+reserved for a future direct shop-to-rider pickup — a different custody source
+— and a test asserts no command maps to it.
+[ADR-0007](../decisions/ADR-0007-admin-rider-assignment-override.md) records
+that admin rider intervention must be a separate audited override;
+`admin.assignment.override_rider` is RESERVED and absent from
+`Permission.values`, `permissionMatrix` and `AssignmentCommand`.
+
+New backend criteria **RA1–RA18** and contract criterion **B3-C2** — all
+**NOT RUN**. **FND-003B2 is now DONE**; FND-003B stays **PARTIAL** because
+custody, delivery and returns (FND-003B3) are outstanding.
+
 **Remaining slices:**
 
 | Slice | Owns | Status |
 |---|---|---|
-| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1 and B2A done; B2B/B3 not started |
+| FND-003B lifecycle | Order, assignment, custody, attempt, return transitions; inventory effects per edge | **PARTIAL** — B1 and **all of B2** done; **B3 not started** |
 | FND-003C money | Payment/COD, cash journal, fees, refusal policy, commissions, settlement | **BLOCKED on O6** |
 | FND-003D proof/dispute | Customer OTP/proof format and fallback workflow | **TODO** — needed before delivery confirmation is coded |
 
@@ -165,7 +206,7 @@ shared contracts. None may begin before FND-003 lands.
 
 | Contract | Version | Owner task | Notes |
 |---|---|---|---|
-| Wire contract (`cp_contracts`) | **0.4** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. All additive, so minor only. No rider, custody, delivery, return or money rules yet. See [version history](../contracts/version-history.md). |
+| Wire contract (`cp_contracts`) | **0.5** | FND-003 | Baseline **SHARED-BASELINE-v1.0**. 0.2 (FND-003A) added command/event envelopes, identity, membership, scope, 35 permissions and the authorization model. 0.3 (FND-003B1) adds the pre-dispatch order and reservation lifecycle with typed inventory effects. 0.4 (FND-003B2A) adds the picker assignment lifecycle and the `agent.assignment.revoke_picker` permission. 0.5 (FND-003B2B) adds the picker-originated rider assignment lifecycle, the source-picker binding, the `picker.assignment.offer_rider` and `picker.assignment.revoke_rider` permissions, and moves the role-neutral `AssignmentDenial` and `reachableSlotRevisionRange` into a shared `assignment_integrity.dart` with no name, value or behaviour change. All additive, so minor only. **No custody, delivery, return, direct agent-to-rider pickup or money rules yet.** See [version history](../contracts/version-history.md). |
 
 Bump the minor version for additive, backward-readable changes; bump the major
 version for a breaking one and update every Project before any app ships

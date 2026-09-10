@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.4** (FND-003B2A).
+**Current contract version: 0.5** (FND-003B2B).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -31,6 +31,15 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 Implemented in `packages/contracts`, pure Dart, no Flutter or Firebase
 dependency.
 
+## Delivered — FND-003B2B
+
+| Document | Covers |
+|---|---|
+| [rider-assignment-lifecycle.md](rider-assignment-lifecycle.md) | Picker-originated rider assignment: the source-picker binding, picker-authority prerequisite, rider eligibility, offer/accept/decline/expiry/controlled-revoke matrix, exactly-one invariants, accept-vs-expiry race, aggregate integrity, the shared revision model and transition closure, the cancellation and picker-reassignment cross-aggregate requirements, the deferred direct agent→rider boundary, and the RA1–RA18 backend checklist |
+
+**FND-003B2 (assignment) is complete**: picker by FND-003B2A, rider by
+FND-003B2B.
+
 ## Not yet defined — later FND-003 slices
 
 **No feature may guess any of these.** If it is not written down, the work is
@@ -38,8 +47,8 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle — rider assignment** (FND-003B2B) | Rider assignment offer/accept/decline/expire/revoke edges. Picker assignment is **done** (FND-003B2A). | FND-003B2A |
-| **Lifecycle — custody, delivery, returns** (FND-003B3) | Custody handoffs, delivery attempts, return processing and delivery confirmation | FND-003B2 |
+| **Lifecycle — custody, delivery, returns** (FND-003B3) | Custody handoffs, delivery attempts, return processing, delivery confirmation, and assignment `completed` for **both** roles | FND-003B2 (**done**) |
+| **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
 | **Proof and dispute** | Customer OTP/proof format and the fallback dispute workflow — required **before** delivery confirmation is coded. | Lifecycle slice |
@@ -85,3 +94,15 @@ From FND-003B2A:
 - No timeout duration exists; offers carry an immutable policy reference the
   backend resolves against server time.
 - Assignment transitions have inventory NONE, financial NONE and custody NONE.
+
+From FND-003B2B:
+
+- Rider work is offered by the order's **current accepted picker**, never by
+  role or region alone, and never from a client-supplied picker id.
+- A rider attempt records the picker assignment that created it, as immutable
+  history. A replaced picker cannot inherit another picker's live offer.
+- Accepting a rider offer is **not** custody, dispatch, or COD liability.
+- `agent.assignment.offer_rider` is reserved for a future direct shop-to-rider
+  pickup and is **not executable**; no command maps to it.
+- The reachable slot-revision model is **one shared helper** used by both
+  assignment roles, not two formulas that can disagree.

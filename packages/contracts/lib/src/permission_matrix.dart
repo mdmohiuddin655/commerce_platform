@@ -136,7 +136,13 @@ const Map<Permission, PermissionRule> permissionMatrix =
     permission: Permission.agentOfferRiderAssignment,
     eligibleRoles: <CommerceRole>{CommerceRole.agent},
     scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
-    restriction: 'Offers work only, within the agent\'s own shops.',
+    restriction: 'Offers work only, within the agent\'s own shops. RESERVED '
+        'FOR A FUTURE DIRECT SHOP-TO-RIDER PICKUP FLOW and NOT executable: no '
+        'implemented command maps to it. The rider lifecycle in FND-003B2B is '
+        'picker-originated and uses picker.assignment.offer_rider instead, '
+        'because a direct shop pickup takes custody from the shop rather than '
+        'from a picker and needs its own lifecycle, order-stage prerequisites '
+        'and handoff design.',
   ),
 
   // -------------------------------------------------------------------- picker
@@ -168,6 +174,34 @@ const Map<Permission, PermissionRule> permissionMatrix =
     },
     restriction: 'Same target isolation as accepting: only the picker the '
         'offer was addressed to may decline it.',
+  ),
+  Permission.pickerOfferRiderAssignment: PermissionRule(
+    permission: Permission.pickerOfferRiderAssignment,
+    eligibleRoles: <CommerceRole>{CommerceRole.picker},
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.assignedResource,
+      ScopeRequirement.ownRegion,
+    },
+    restriction: 'Only the picker currently holding the accepted picker '
+        'assignment for this exact order may offer its delivery work, and '
+        'only within their own region. Offers work: an offer is not rider '
+        'acceptance and never implies custody. It is not a general worker '
+        'assignment capability, and it is distinct from the future direct '
+        'agent-to-rider shop pickup.',
+  ),
+  Permission.pickerRevokeRiderAssignment: PermissionRule(
+    permission: Permission.pickerRevokeRiderAssignment,
+    eligibleRoles: <CommerceRole>{CommerceRole.picker},
+    scopes: <ScopeRequirement>{
+      ScopeRequirement.assignedResource,
+      ScopeRequirement.ownRegion,
+    },
+    reasonRequired: true,
+    restriction: 'Controlled reassignment only: withdraws one accepted rider '
+        'assignment so the delivery work can be re-offered as a NEW attempt. '
+        'It cannot replace an assignee, cannot overwrite assignment state, '
+        'and cannot override custody safety — revocation is refused unless '
+        'the backend proves the rider never took custody.',
   ),
   Permission.pickerRecordShopPickup: PermissionRule(
     permission: Permission.pickerRecordShopPickup,

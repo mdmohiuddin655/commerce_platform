@@ -51,7 +51,11 @@ void main() {
     test('expiry is worker-driven and borrows no human permission', () {
       expect(AssignmentCommand.expirePickerOffer.isWorkerDriven, isTrue);
       expect(AssignmentCommand.expirePickerOffer.requiredPermission, isNull);
-      for (final AssignmentCommand c in AssignmentCommand.values) {
+      // Every other PICKER command carries a permission. Scoped to the picker
+      // role: the rider lifecycle has its own worker-driven expiry, and its
+      // own suite asserts the same property for rider commands.
+      for (final AssignmentCommand c
+          in AssignmentCommand.forRole(AssignmentRole.picker)) {
         if (c != AssignmentCommand.expirePickerOffer) {
           expect(c.requiredPermission, isNotNull, reason: c.commandType);
         }

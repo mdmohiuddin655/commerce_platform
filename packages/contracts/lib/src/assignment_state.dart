@@ -1,7 +1,9 @@
 /// Lifecycle of one **assignment attempt**.
 ///
-/// Shared by picker and rider assignment so the vocabulary does not fork, but
-/// FND-003B2A implements the **picker** lifecycle only.
+/// Shared by picker (FND-003B2A) and rider (FND-003B2B) assignment so the
+/// vocabulary does not fork. Both run the same pre-custody attempt
+/// transitions, which is why one revision model serves both — see
+/// `reachableSlotRevisionRange`.
 enum AssignmentState {
   /// Work has been offered to one worker who has not yet answered. The offer
   /// is live and expirable.
@@ -25,10 +27,11 @@ enum AssignmentState {
   /// **Terminal** for this attempt; the historical assignee is retained.
   revoked,
 
-  /// **NOT EXECUTABLE IN FND-003B2A.** An accepted assignment finished its
-  /// work. Declared for enum and wire stability only: completion depends on
-  /// custody and handoff, which FND-003B3 owns. No transition enters it here,
-  /// and none was guessed.
+  /// **NOT EXECUTABLE — neither picker nor rider.** An accepted assignment
+  /// finished its work. Declared for enum and wire stability only: completion
+  /// depends on custody and handoff, which FND-003B3 owns. No transition in
+  /// either assignment lifecycle enters it, and no mutation cost for it was
+  /// guessed. See contract criteria B3-C1 and B3-C2.
   completed;
 
   /// Stable wire identifier. Never serialize `Enum.index`.
@@ -41,7 +44,12 @@ enum AssignmentState {
     AssignmentState.completed => 'completed',
   };
 
-  /// States this slice's evaluator may read or produce.
+  /// States the **pre-custody assignment evaluators** may read or produce.
+  ///
+  /// Role-neutral: the picker and rider evaluators produce exactly this set,
+  /// which is what makes one shared `reachableSlotRevisionRange` correct for
+  /// both. A state added here without a mutation cost would make every
+  /// aggregate in that state fail closed.
   static const Set<AssignmentState> executableInThisSlice = <AssignmentState>{
     AssignmentState.offered,
     AssignmentState.accepted,
@@ -50,7 +58,7 @@ enum AssignmentState {
     AssignmentState.revoked,
   };
 
-  /// Declared for stability, owned by a later slice.
+  /// Declared for stability, owned by FND-003B3 (custody and handoff).
   static const Set<AssignmentState> notYetImplemented = <AssignmentState>{
     AssignmentState.completed,
   };
@@ -80,9 +88,11 @@ enum AssignmentState {
 
 /// Which kind of field work an assignment is for.
 ///
-/// `rider` is declared so the enum and its wire values are stable when
-/// FND-003B2B lands. **No rider command or transition is executable here**, and
-/// none was guessed.
+/// Both roles are now implemented: picker assignment by FND-003B2A, rider
+/// assignment by FND-003B2B. They share the state vocabulary and the revision
+/// model but keep separate evaluators, because their **authority** differs — a
+/// picker offer comes from the shop's agent, a rider offer from the order's
+/// current accepted picker.
 enum AssignmentRole {
   picker,
   rider;
@@ -92,9 +102,14 @@ enum AssignmentRole {
     AssignmentRole.rider => 'rider',
   };
 
-  /// Only picker assignment is implemented in FND-003B2A.
+  /// Assignment roles with an implemented lifecycle.
+  ///
+  /// Both, as of FND-003B2B. This says the role has an evaluator, named
+  /// commands and events — **not** that custody, handoff or delivery exist for
+  /// it. Those remain FND-003B3's.
   static const Set<AssignmentRole> executableInThisSlice = <AssignmentRole>{
     AssignmentRole.picker,
+    AssignmentRole.rider,
   };
 
   static AssignmentRole? byId(String id) {

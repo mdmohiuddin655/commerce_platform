@@ -118,6 +118,43 @@ but unreachable, so later slices can implement them without an enum break.
 build could not decode a 0.4 assignment payload even if one existed. None does:
 `cp_contracts` still has no serialization.
 
+### 0.5 — FND-003B2B (2026-09-10) — additive
+
+Added the rider assignment lifecycle:
+
+- `SourcePickerBinding`, `RiderAssignmentAttempt`, `RiderEligibility`,
+  `RiderAssignmentFacts`, `RiderAssignmentRequest`,
+  `RiderAssignmentTransition`, `RiderAssignmentOutcome`
+- `evaluateRiderAssignment`, `validateRiderAssignmentAggregate`
+- five rider commands on the existing `AssignmentCommand` enum, plus an
+  `AssignmentCommand.role` field and `AssignmentCommand.forRole`
+- five rider ids on `AssignmentEventType`, plus `picker` / `rider` lists
+- four cross-aggregate values on `AssignmentDenial`:
+  `noAcceptedPickerAssignment`, `notCurrentAcceptedPicker`,
+  `sourcePickerAssignmentMismatch`, `pickerAuthorityInconsistent`
+- two new permissions: `picker.assignment.offer_rider`,
+  `picker.assignment.revoke_rider`
+- `AssignmentRole.executableInThisSlice` now holds **both** roles
+
+**Moved, not changed.** `AssignmentDenial` and `reachableSlotRevisionRange`
+moved from `picker_assignment.dart` to the new
+`assignment_integrity.dart`, so one canonical revision model serves both
+evaluators instead of two formulas that can disagree. **Same names, same
+values, same behaviour, same export path** — `cp_contracts.dart` re-exports
+the new file, so no consumer import changes. A negative control confirmed the
+sharing is real: breaking the helper fails the picker *and* rider closure
+suites.
+
+**Why minor, not major.** Additive at the version-policy level: the major is
+unchanged, nothing defined at 0.4 changed meaning, and every addition is new
+surface. `AssignmentState.completed` remains declared but unreachable for both
+roles.
+
+**What is *not* claimed.** 0.4 contained no rider assignment types at all, so a
+0.4 build could not decode a 0.5 rider payload even if one existed. None does:
+`cp_contracts` still has no serialization, so the file move is a statement
+about source organisation and **not** payload evidence.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |
@@ -155,10 +192,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2, 0.3 and 0.4 are purely additive, so no stored value changes shape or
-  meaning.
+- 0.2, 0.3, 0.4 and 0.5 are purely additive, so no stored value changes shape
+  or meaning. The 0.5 move of `AssignmentDenial` and
+  `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
+  name, no value and no behaviour, and neither has a wire form — but that is
+  offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003B2A commit returns the contract to 0.3,
+**Rollback:** reverting the FND-003B2B commit returns the contract to 0.4,
+reverting the FND-003B2A chain to 0.3,
 reverting the FND-003B1 chain to 0.2, and the FND-003A chain to 0.1 — all with
 no data implications, because no data was ever written under any of them.
 

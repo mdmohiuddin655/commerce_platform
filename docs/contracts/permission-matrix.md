@@ -1,6 +1,9 @@
 # Permission matrix
 
-**Contract version 0.2** (FND-003A). This table is **generated from
+**Contract version 0.5.** Introduced by FND-003A (0.2) and extended by
+FND-003B2A (`agent.assignment.revoke_picker`) and FND-003B2B
+(`picker.assignment.offer_rider`, `picker.assignment.revoke_rider`). This
+table is **generated from
 `packages/contracts/lib/src/permission_matrix.dart`** — the single source of
 truth that all five apps and the backend consume. Regenerate with:
 
@@ -36,11 +39,13 @@ across five apps drift apart, a permission vocabulary does not.
 | `agent.order.reject` | agent | active | `ownShop` | **yes** | no | — |
 | `agent.fulfillment.record_progress` | agent | active | `ownShop` | no | no | Records shop-side progress. Never writes trusted stock, order status or cash fields directly. |
 | `agent.assignment.offer_picker` | agent | active | `ownShop` | no | no | Offers work. An offer is not an assignment and never implies custody. |
-| `agent.assignment.offer_rider` | agent | active | `ownShop` | no | no | Offers work only, within the agent's own shops. |
+| `agent.assignment.offer_rider` | agent | active | `ownShop` | no | no | Offers work only, within the agent's own shops. RESERVED FOR A FUTURE DIRECT SHOP-TO-RIDER PICKUP FLOW and NOT executable: no implemented command maps to it. The rider lifecycle in FND-003B2B is picker-originated and uses picker.assignment.offer_rider instead, because a direct shop pickup takes custody from the shop rather than from a picker and needs its own lifecycle, order-stage prerequisites and handoff design. |
 | `agent.assignment.revoke_picker` | agent | active | `ownShop` | **yes** | no | Controlled reassignment only: withdraws one accepted picker assignment so the work can be re-offered as a NEW attempt. It cannot replace an assignee, cannot overwrite assignment state, and cannot override custody safety — revocation is refused unless the backend proves the worker never took custody. |
 | `picker.assignment.view_assigned` | picker | active | `assignedResource` | no | no | Only what the active assignment needs. Not a customer directory and not a browsable order list. |
 | `picker.assignment.accept` | picker | active | `ownRegion` + `offeredResource` | no | no | The offer must have been addressed to this picker: a same-region picker cannot accept another picker's offer. Does NOT require an already accepted assignment. Whether the offer is still live is lifecycle state (FND-003B), not authorization. |
 | `picker.assignment.decline` | picker | active | `ownRegion` + `offeredResource` | no | no | Same target isolation as accepting: only the picker the offer was addressed to may decline it. |
+| `picker.assignment.offer_rider` | picker | active | `ownRegion` + `assignedResource` | no | no | Only the picker currently holding the accepted picker assignment for this exact order may offer its delivery work, and only within their own region. Offers work: an offer is not rider acceptance and never implies custody. It is not a general worker assignment capability, and it is distinct from the future direct agent-to-rider shop pickup. |
+| `picker.assignment.revoke_rider` | picker | active | `ownRegion` + `assignedResource` | **yes** | no | Controlled reassignment only: withdraws one accepted rider assignment so the delivery work can be re-offered as a NEW attempt. It cannot replace an assignee, cannot overwrite assignment state, and cannot override custody safety — revocation is refused unless the backend proves the rider never took custody. |
 | `picker.custody.record_pickup` | picker | active | `assignedResource` | no | no | — |
 | `picker.custody.record_handoff` | picker | active | `assignedResource` | no | no | Records a custody handoff. Custody changes only on a proven handoff, never on a notification or an elapsed timer. |
 | `rider.assignment.view_assigned` | rider | active | `assignedResource` | no | no | Only what the active assignment needs, including the delivery address for that assignment alone. |
@@ -78,6 +83,13 @@ opposite directions.
   `offeredResource + ownRegion`, never `assignedResource`.
 - An offer must **not** open post-acceptance work. A picker who was merely
   offered a job cannot record a pickup.
+- `assignedResource` is also how the rider lifecycle expresses **picker
+  authority**: `picker.assignment.offer_rider` and
+  `picker.assignment.revoke_rider` require the acting picker to hold the
+  accepted assignment on that very order. The authorization layer checks the
+  scope relationship; the rider evaluator separately re-checks the canonical
+  picker assignment itself, because a projection says who is assigned *now*
+  and cannot say which picker assignment created a given offer.
 - Region alone is **not** sufficient for accept/decline. Before FND-003A-FIX-001
   it was, which let any active worker in the same region accept someone else's
   offer.
@@ -85,6 +97,15 @@ opposite directions.
 Authorization establishes *"this offer belongs to this actor and is inside
 allowed scope"*. Whether the offer is **still live** — not expired, declined or
 superseded — is assignment lifecycle state owned by **FND-003B**.
+
+### `agent.assignment.offer_rider` is reserved, not executable
+
+The permission exists and keeps its id, but **no implemented command maps to
+it**, and a test asserts that. It is reserved for a future *direct shop-to-rider
+pickup*, where custody passes from the shop rather than from a picker. The
+rider lifecycle delivered by FND-003B2B is picker-originated and routes through
+`picker.assignment.offer_rider` instead. See
+[rider-assignment-lifecycle.md](rider-assignment-lifecycle.md).
 
 ## Capabilities that must never exist
 

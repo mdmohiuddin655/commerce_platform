@@ -26,6 +26,8 @@ enum Permission {
   pickerViewAssignedWork('picker.assignment.view_assigned'),
   pickerAcceptAssignment('picker.assignment.accept'),
   pickerDeclineAssignment('picker.assignment.decline'),
+  pickerOfferRiderAssignment('picker.assignment.offer_rider'),
+  pickerRevokeRiderAssignment('picker.assignment.revoke_rider'),
   pickerRecordShopPickup('picker.custody.record_pickup'),
   pickerRecordHandoffToRider('picker.custody.record_handoff'),
 

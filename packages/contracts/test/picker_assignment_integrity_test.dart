@@ -386,21 +386,49 @@ void main() {
       );
     });
 
-    test('rider role is declared but not executable in this slice', () {
-      expect(AssignmentRole.executableInThisSlice, <AssignmentRole>{
-        AssignmentRole.picker,
-      });
-      expect(
-        AssignmentRole.executableInThisSlice.contains(AssignmentRole.rider),
-        isFalse,
-      );
-      // No command in this slice names a rider.
-      for (final AssignmentCommand c in AssignmentCommand.values) {
+    test('the picker command and event surface stays picker-only', () {
+      // FND-003B2B made AssignmentRole.rider executable and added rider
+      // commands to the shared enum. That must not leak into the picker
+      // surface: every picker-role command still names a picker, and every
+      // picker event id still starts `picker.`.
+      for (final AssignmentCommand c
+          in AssignmentCommand.forRole(AssignmentRole.picker)) {
+        expect(c.commandType, contains('picker'));
         expect(c.commandType, isNot(contains('rider')));
       }
-      for (final String e in AssignmentEventType.all) {
+      for (final String e in AssignmentEventType.picker) {
         expect(e, startsWith('picker.'));
       }
+      expect(AssignmentEventType.picker.length, 5);
+    });
+
+    test('the picker evaluator refuses every rider command', () {
+      // Routing a rider command into this evaluator would apply picker rules
+      // to a rider slot and skip the rider lifecycle's picker-authority
+      // prerequisite entirely. It fails closed instead.
+      for (final AssignmentCommand c
+          in AssignmentCommand.forRole(AssignmentRole.rider)) {
+        expect(
+          run(
+            c,
+            on: facts(slotRevision: 1, current: attempt()),
+            acting: pickerA,
+            newAssignmentId: assignB,
+            target: eligible(pickerB),
+            expiryDue: true,
+            safety: ReassignmentSafety.provenNoCustody,
+          ).denial,
+          AssignmentDenial.unknownTransition,
+          reason: '${c.commandType} must not be evaluated as picker work',
+        );
+      }
+    });
+
+    test('both assignment roles are now implemented', () {
+      expect(AssignmentRole.executableInThisSlice, <AssignmentRole>{
+        AssignmentRole.picker,
+        AssignmentRole.rider,
+      });
     });
   });
 
@@ -950,15 +978,23 @@ void main() {
       expect(f.slotRevision, 5, reason: '2 + 2 + 1 mutations — the minimum');
     });
 
-    test('every executable transition kind is represented above', () {
-      // Guards against a future command being added without closure coverage.
-      expect(AssignmentCommand.values.toSet(), <AssignmentCommand>{
-        AssignmentCommand.offerPickerAssignment,
-        AssignmentCommand.acceptPickerAssignment,
-        AssignmentCommand.declinePickerAssignment,
-        AssignmentCommand.expirePickerOffer,
-        AssignmentCommand.revokePickerAssignment,
-      }, reason: 'a new command needs a transition-closure case here');
+    test('every executable PICKER transition kind is represented above', () {
+      // Guards against a future picker command being added without closure
+      // coverage. Scoped to the picker role rather than the whole enum, so
+      // that adding a rider command cannot be absorbed here and escape the
+      // rider suite's own coverage guard — and so that adding a picker
+      // command still fails here until it is covered.
+      expect(
+        AssignmentCommand.forRole(AssignmentRole.picker),
+        <AssignmentCommand>{
+          AssignmentCommand.offerPickerAssignment,
+          AssignmentCommand.acceptPickerAssignment,
+          AssignmentCommand.declinePickerAssignment,
+          AssignmentCommand.expirePickerOffer,
+          AssignmentCommand.revokePickerAssignment,
+        },
+        reason: 'a new picker command needs a transition-closure case here',
+      );
     });
   });
 

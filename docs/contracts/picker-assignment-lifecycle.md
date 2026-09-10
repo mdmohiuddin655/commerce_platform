@@ -1,11 +1,15 @@
 # Picker assignment lifecycle
 
-**Contract version 0.4** (FND-003B2A). Pure Dart in `packages/contracts` — no
-Flutter, no Firebase, no new dependency.
+**Introduced at contract version 0.4** (FND-003B2A). Pure Dart in
+`packages/contracts` — no Flutter, no Firebase, no new dependency.
 
-This slice owns the **picker** assignment lifecycle only. Rider assignment is
-FND-003B2B; custody, pickup, handoff, delivery attempts and returns are
-FND-003B3. None of them is defined, guessed or partially implemented here.
+This document owns the **picker** assignment lifecycle only. Rider assignment
+landed separately at 0.5 —
+[rider-assignment-lifecycle.md](rider-assignment-lifecycle.md) — and reuses
+this slice's state vocabulary and revision model without changing any picker
+semantics. Custody, pickup, handoff, delivery attempts and returns remain
+FND-003B3, and none of them is defined, guessed or partially implemented in
+either slice.
 
 ## Concepts
 
@@ -34,8 +38,11 @@ re-offer advances both.
 | `revoked` | yes | Terminal — withdrawn under controlled reassignment |
 | `completed` | **no** | Declared for enum/wire stability; depends on custody, owned by FND-003B3. No transition enters it, and a test proves none can. |
 
-`AssignmentRole.rider` is likewise **declared but not executable**: no command
-or event in this slice names a rider.
+`AssignmentRole.rider` **became executable at 0.5** (FND-003B2B). No *picker*
+command or event names a rider, and a test still pins that: the picker
+evaluator refuses every rider command with `unknownTransition`, and the rider
+evaluator refuses every picker command the same way. `completed` remains
+non-executable for **both** roles.
 
 ## Transition matrix
 
@@ -267,6 +274,14 @@ slice does not implement it, so its cost is unknown.
 `reachableSlotRevisionRange(generation, state)` is exported so a backend
 reconciliation job can apply the identical rule.
 
+**Since 0.5 it lives in `assignment_integrity.dart`, not
+`picker_assignment.dart`, and is shared with the rider lifecycle** — picker and
+rider run the same pre-custody transitions with the same mutation costs, so one
+canonical helper serves both rather than two formulas that can disagree. The
+move changed no name, value or behaviour, and `cp_contracts.dart` re-exports
+it, so nothing that used it needed to change. `AssignmentDenial` moved to the
+same file for the same reason.
+
 ### Maintenance invariant — this model is coupled to the transitions
 
 **`reachableSlotRevisionRange` is derived from the mutation cost of every
@@ -282,14 +297,17 @@ Any future change that:
 - adds or removes a transition, changing per-generation mutation cost;
 - changes whether an existing transition increments `slotRevision`;
 
-**MUST, in the same change:**
+**MUST, in the same change** — and, since 0.5, for **both** assignment roles,
+because the helper is shared:
 
 1. update `reachableSlotRevisionRange`;
 2. update the derivation and the table above;
 3. update the canonical and impossible range tests;
 4. update the transition-closure regression test;
 5. prove every newly successful transition still produces an aggregate that
-   `validatePickerAssignmentAggregate` accepts.
+   `validatePickerAssignmentAggregate` — and, for a rider change,
+   `validateRiderAssignmentAggregate` — accepts. See **B3-C1** below and
+   **B3-C2** in the rider document.
 
 Two tests enforce this coupling rather than leaving it to memory:
 
@@ -373,7 +391,7 @@ future change, not a blocker to FND-003B2A.
 
 Not defined, guessed or partially implemented here:
 
-- rider assignment lifecycle (FND-003B2B);
+- rider assignment lifecycle — delivered separately by FND-003B2B, not here;
 - physical custody, pickup and handoff;
 - rider receipt;
 - delivery attempts;
