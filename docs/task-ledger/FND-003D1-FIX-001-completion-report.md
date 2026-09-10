@@ -9,7 +9,9 @@
 - **Reviewed base main:** `e8dacfce96b3bf2c52c6cc7b3c826bd674a365f9`
 - **Contract baseline:** SHARED-BASELINE-v1.0 — unchanged
 - **Contract version:** **0.7 candidate, corrected in place** (no bump)
-- **Status:** **DONE**
+- **Status:** **DONE** — its corrections stand. **FINAL-REVIEW-002** found two
+  further acceptance defects, closed by **FND-003D1-FIX-002**. See
+  [§17 Recheck](#17-recheck-final-review-002).
 
 `913b1ac` was not amended and its parent chain is intact (`913b1ac^ =
 e8dacfce…`). One new commit on the same branch. The tree was clean, so **no
@@ -297,3 +299,36 @@ PARTIAL · FND-003B PARTIAL · FND-003B3B NOT STARTED · FND-003C BLOCKED on O6.
 Contract, tests, one ADR and documentation only. Nothing pushed, merged,
 rebased, amended, force-pushed or deployed; no PR created; no Firebase or live
 data touched. **FND-003D2, FND-003B3B and FND-003C not started.**
+
+## 17. Recheck (FINAL-REVIEW-002, 2026-09-10)
+
+**Every correction in this report stands**: the 64-character bound, the
+non-echoing policy `toString`, the fail-closed `belongsTo`, the explicit
+target-resource validation and its precedence, and the corrected package version
+header. FND-003D1-FIX-002 changed none of that behaviour.
+
+Two further defects were found, both in *how* this report's fixes were
+implemented rather than in what they decided:
+
+1. **The bound repeated the literal instead of aliasing the canonical
+   constant.** §2 above says 64 is "reused, not invented" and cites
+   `maxIdLength` — but the declaration was written
+   `const int maxDeliveryProofPolicyRefLength = 64;`, a **second numeric source
+   of truth** free to drift from the first. The runtime assertion
+   `maxDeliveryProofPolicyRefLength == maxIdLength` could not detect that,
+   because `= 64` and `= maxIdLength` are numerically identical. The declaration
+   now aliases `maxIdLength`, and a narrow source-shape regression pins it.
+
+2. **`DeliveryEvidenceRef.toString` was safe only for *valid* instances.** §6
+   above describes it as "identifier-only and bounded", which is true of a
+   well-formed reference — both fields are canonical opaque ids. But the
+   constructor is public and `const`, and malformed instances are deliberately
+   representable so the validator can be tested. For those, `toString` echoed
+   the raw fields, which is an amplification and log-injection surface reachable
+   **before** validation. A malformed instance now renders
+   `DeliveryEvidenceRef(invalid)` and echoes neither field.
+
+The validation counts recorded in §13 (40 / 672 / 713) were real at the time and
+are **not** restated as current; FND-003D1-FIX-002 re-ran everything and records
+its own. Full detail:
+[FND-003D1-FIX-002 report](FND-003D1-FIX-002-completion-report.md).

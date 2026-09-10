@@ -10,13 +10,23 @@ import 'package:meta/meta.dart';
 /// records, and every one of those multiplies whatever a caller or a corrupt
 /// stored value put in it.
 ///
-/// 64 is the repository's existing ceiling for bounded wire strings —
-/// `maxIdLength` for every opaque id, and the same limit on
-/// `CommandEnvelope.commandType`. Reusing it keeps one number to reason about
-/// rather than introducing a second, differently-justified bound.
+/// **It aliases [maxIdLength]** — the repository's canonical ceiling for bounded
+/// wire strings — rather than repeating its value. Writing `64` here again
+/// would create a second numeric source of truth that could silently drift from
+/// the first; the whole point of reusing the ceiling is that there is only one
+/// number to reason about. `CommandEnvelope.commandType` sharing the same limit
+/// is *supporting precedent*, not a second source.
+///
+/// The alias is a **numeric** coupling only. A policy reference does **not**
+/// adopt opaque-id grammar: no minimum length, no alphabet, no prefix,
+/// namespace or URI requirement, and no sequential-looking rejection.
+///
+/// Making this ceiling diverge from [maxIdLength] would mean revisiting
+/// ADR-0008 and replacing the alias with a separately justified bound — not
+/// quietly editing a literal.
 ///
 /// See `docs/decisions/ADR-0008-bounded-delivery-proof-policy-reference.md`.
-const int maxDeliveryProofPolicyRefLength = 64;
+const int maxDeliveryProofPolicyRefLength = maxIdLength;
 
 /// Why a delivery-proof reference was rejected.
 ///
@@ -195,11 +205,27 @@ class DeliveryEvidenceRef {
   @override
   int get hashCode => Object.hash(resourceId, evidenceId);
 
-  /// Deliberately identifier-only, so a log line or a crash report cannot
-  /// become an evidence leak.
+  /// A **debug representation, and never a validity claim.**
+  ///
+  /// A well-formed reference renders its two identifiers, which are canonical
+  /// opaque ids and therefore already bounded at [maxIdLength] and drawn from a
+  /// restricted alphabet.
+  ///
+  /// A **malformed** one renders neither field. The constructor is public and
+  /// `const`, so malformed instances are deliberately representable — that is
+  /// what lets the validator be tested at all — and until
+  /// `validateDeliveryEvidenceRef` has passed, these fields are just untrusted
+  /// strings. Echoing them would make any `print`, crash report or error
+  /// message an amplification and log-injection surface reachable *before*
+  /// validation, which is precisely the window that matters.
+  ///
+  /// Nothing is thrown, trimmed, hashed or repaired: this method reports, it
+  /// does not fix. `validateDeliveryEvidenceRef` remains the authoritative
+  /// structural check, and a rendering is never a substitute for it.
   @override
-  String toString() =>
-      'DeliveryEvidenceRef($evidenceId for $resourceId)';
+  String toString() => isWellFormed
+      ? 'DeliveryEvidenceRef($evidenceId for $resourceId)'
+      : 'DeliveryEvidenceRef(invalid)';
 }
 
 /// Structural validation for a policy reference. Returns null when usable.

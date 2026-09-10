@@ -67,6 +67,9 @@ void main() {
       expect(maxDeliveryProofPolicyRefLength, 64);
       // Aligned with the repository's existing wire-string ceilings.
       expect(maxDeliveryProofPolicyRefLength, maxIdLength);
+      // The declaration *aliases* maxIdLength rather than repeating 64; the
+      // source-shape guard below is what actually protects that coupling,
+      // because runtime equality cannot tell `= 64` from `= maxIdLength`.
 
       final String atLimit = 'p' * 64;
       final String overLimit = 'p' * 65;
@@ -389,6 +392,87 @@ void main() {
       expect(rendered.length, lessThan(2 * maxIdLength + 40));
     });
 
+    test('a valid reference renders both bounded identifiers (FIX-002)', () {
+      final String rendered = ref.toString();
+      expect(rendered, contains(orderA));
+      expect(rendered, contains(evidenceA));
+      expect(rendered.length, lessThan(2 * maxIdLength + 40));
+      expect(rendered.split('\n').length, 1);
+    });
+
+    test('a malformed stored resource is never echoed (FIX-002)', () {
+      // Synthetic hostile content, confined to this test.
+      const String hostile =
+          'https://evil.example/a/b?x=1\nFAKE LOG LINE\tPADDING'
+          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      final DeliveryEvidenceRef bad = DeliveryEvidenceRef(
+        resourceId: hostile,
+        evidenceId: evidenceA,
+      );
+
+      expect(bad.isWellFormed, isFalse);
+      final String rendered = bad.toString();
+      expect(rendered, 'DeliveryEvidenceRef(invalid)');
+      expect(rendered, isNot(contains('evil.example')));
+      expect(rendered, isNot(contains('FAKE LOG LINE')));
+      expect(rendered, isNot(contains('PADDING')));
+      expect(rendered, isNot(contains('\n')));
+      expect(rendered, isNot(contains('\t')));
+      expect(rendered.split('\n').length, 1, reason: 'single line');
+      expect(rendered.length, lessThan(64), reason: 'bounded');
+      // The fields themselves are untouched — rendering is not repair.
+      expect(bad.resourceId, hostile);
+    });
+
+    test('a malformed evidence id is never echoed (FIX-002)', () {
+      const String hostile = 'file:///etc/passwd\rSECRET-EVIDENCE-BLOB';
+      final DeliveryEvidenceRef bad = DeliveryEvidenceRef(
+        resourceId: orderA,
+        evidenceId: hostile,
+      );
+
+      expect(bad.isWellFormed, isFalse);
+      final String rendered = bad.toString();
+      expect(rendered, 'DeliveryEvidenceRef(invalid)');
+      expect(rendered, isNot(contains('passwd')));
+      expect(rendered, isNot(contains('SECRET-EVIDENCE-BLOB')));
+      expect(rendered, isNot(contains(orderA)),
+          reason: 'a malformed instance reveals nothing, valid field or not');
+      expect(rendered.length, lessThan(64));
+      expect(bad.evidenceId, hostile);
+    });
+
+    test('both fields malformed are never echoed (FIX-002)', () {
+      final DeliveryEvidenceRef bad = DeliveryEvidenceRef(
+        resourceId: 'x' * 200,
+        evidenceId: 'y' * 200,
+      );
+      expect(bad.isWellFormed, isFalse);
+      final String rendered = bad.toString();
+      expect(rendered, 'DeliveryEvidenceRef(invalid)');
+      expect(rendered, isNot(contains('xxx')));
+      expect(rendered, isNot(contains('yyy')));
+      expect(rendered.length, lessThan(64));
+    });
+
+    test('a safe rendering does not certify the instance (FIX-002)', () {
+      // toString reports; it never validates, repairs or promotes.
+      const DeliveryEvidenceRef bad = DeliveryEvidenceRef(
+        resourceId: 'ord_short',
+        evidenceId: 'evd_short',
+      );
+      expect(bad.toString(), 'DeliveryEvidenceRef(invalid)');
+      expect(bad.isWellFormed, isFalse, reason: 'still malformed');
+      expect(bad.belongsTo(orderA), isFalse);
+      expect(
+        validateDeliveryEvidenceRef(bad, resourceId: orderA),
+        DeliveryProofDenial.evidenceResourceIdInvalid,
+        reason: 'the validator remains authoritative',
+      );
+      expect(bad.resourceId, 'ord_short', reason: 'unchanged');
+      expect(bad.evidenceId, 'evd_short', reason: 'unchanged');
+    });
+
     test('the validator repairs nothing', () {
       const DeliveryEvidenceRef bad = DeliveryEvidenceRef(
         resourceId: orderA,
@@ -446,6 +530,35 @@ void main() {
           reason: '"$mechanism" must not be declared by this contract',
         );
       }
+    });
+
+    test('the policy bound aliases maxIdLength in source (FIX-002)', () {
+      // Deliberately a source-shape assertion, and deliberately narrow.
+      //
+      // The property being protected here IS source coupling, not runtime
+      // arithmetic: `= 64` and `= maxIdLength` are numerically identical today,
+      // so no runtime test can distinguish them, and a second numeric literal
+      // could drift from the canonical ceiling without any behavioural test
+      // noticing. That is the one situation where reading the declaration is
+      // the right instrument — it is supplementary everywhere else.
+      final RegExp decl = RegExp(
+        r'const\s+int\s+maxDeliveryProofPolicyRefLength\s*=\s*([^;]+);',
+      );
+      final RegExpMatch? m = decl.firstMatch(source);
+      expect(m, isNotNull, reason: 'the constant declaration must be findable');
+
+      final String rhs = m!.group(1)!.trim();
+      expect(
+        rhs,
+        'maxIdLength',
+        reason: 'the proof-policy ceiling must alias the canonical constant, '
+            'not repeat its literal — see ADR-0008',
+      );
+      expect(
+        rhs,
+        isNot(contains('64')),
+        reason: 'no duplicate numeric source of truth',
+      );
     });
 
     test('no evidence material or storage locator is declared', () {

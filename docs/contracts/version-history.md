@@ -241,6 +241,11 @@ these are edits to an unreleased definition, and a review finding is not a
 release event. See
 [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md).
 
+**Corrected again by FND-003D1-FIX-002**, still in place and still 0.7: the
+policy-reference ceiling now **aliases `maxIdLength`** instead of repeating its
+literal, and `DeliveryEvidenceRef.toString` no longer echoes the fields of a
+**malformed** instance. Both are hardening of the same unreleased candidate.
+
 ## Behaviour across versions
 
 | Situation | Version policy | Payload compatibility |

@@ -38,11 +38,17 @@ has been satisfied, and it does not say how proof would be captured.
   `maxDeliveryProofPolicyRefLength`, denying `policyRefTooLong`. "No grammar"
   must not mean "no bound": this is a wire-facing value that travels through
   commands, events, audit records and logs, and an unbounded string on such a
-  value is an amplification surface. 64 is the repository's **existing** ceiling
-  for bounded wire strings — `maxIdLength` and `CommandEnvelope.commandType` —
-  reused rather than a second number invented. **It constrains how much, never
-  what**, and the opaque-id rules are deliberately *not* applied: no minimum
-  length, no alphabet, no sequential-looking rejection. See
+  value is an amplification surface.
+- **The constant aliases `maxIdLength`** *(FIX-002)* —
+  `const int maxDeliveryProofPolicyRefLength = maxIdLength;`. There is **no
+  separate numeric source** for this bound: writing `64` again would create a
+  second constant free to drift from the canonical one, which no runtime test
+  could detect. `CommandEnvelope.commandType` sharing the ceiling is supporting
+  precedent, not a second source. A narrow source-shape regression pins the
+  alias. **The coupling is numeric only** — a policy reference does *not* adopt
+  opaque-id grammar: no minimum length, no alphabet, no prefix, namespace or URI
+  requirement, no sequential-looking rejection. **It constrains how much, never
+  what.** See
   [ADR-0008](../decisions/ADR-0008-bounded-delivery-proof-policy-reference.md).
 - **Blank and whitespace-only values fail closed**, and take precedence: a
   65-character run of spaces reports `policyRefBlank`, not `policyRefTooLong`.
@@ -77,8 +83,21 @@ Points at protected evidence held for **one** order: a `resourceId` and an
 - **`evidenceId` is not a storage path, URL or signed URL**, and is deliberately
   not shaped like one: a locator would imply a retrieval and access design that
   no slice has made.
-- **Identifier-only `toString`**, so a log line or crash report cannot become an
-  evidence leak.
+- **`toString` is fail-safe** *(FIX-002)*. A **well-formed** reference renders
+  its two identifiers, which are canonical opaque ids and so already bounded and
+  alphabet-restricted. A **malformed** one renders `DeliveryEvidenceRef(invalid)`
+  and echoes **neither** field.
+
+  The constructor is public and `const`, so malformed instances are deliberately
+  representable — that is what makes the validator testable. Until
+  `validateDeliveryEvidenceRef` has passed, those fields are just untrusted
+  strings, and echoing them would make any `print`, crash report or error
+  message an amplification and log-injection surface **before** validation,
+  which is exactly the window that matters.
+
+  Nothing is thrown, trimmed, hashed or repaired. **A rendering is a debug
+  representation, never a validity claim** — `validateDeliveryEvidenceRef`
+  remains the authoritative structural check.
 
 ## 2a. Structural validation and denial precedence
 
