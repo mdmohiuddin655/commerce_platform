@@ -1,17 +1,46 @@
 /// Lifecycle of the stock reserved for one order.
 ///
 /// Modelled explicitly rather than as a boolean, because "is this stock
-/// reserved?" cannot distinguish the four situations that matter for
+/// reserved?" cannot distinguish the **five** situations that matter for
 /// inventory correctness — and conflating them is how units get restored
 /// twice or never.
 ///
 /// ## The invariant this enum exists to protect
 ///
-/// **The same reserved units may be restored to available stock at most
-/// once.** Restoration happens exactly on the transition *into* [released] or
-/// [expired], both of which are terminal. There is no path out of them, so a
-/// repeated release, a retried expiry worker, or a duplicate cancellation
-/// cannot restore a second time.
+/// **The same reserved units may become available stock again at most once.**
+///
+/// ## Where restoration can happen — all three sites
+///
+/// *(Corrected by FND-003B3B-FIX-001. Before FND-003B3B there were four states
+/// and two restoration sites, and this block still said so — a completeness
+/// claim the return lifecycle had already falsified.)*
+///
+/// ```text
+/// -> released   pre-dispatch: rejected or cancelled     stock IS restored
+/// -> expired    pre-dispatch: the expiry worker acted   stock IS restored
+/// -> returned   post-dispatch: the goods came back and were inspected
+///                              stock is restored ONLY for a restockable
+///                              disposition; damaged and quarantined restore
+///                              NOTHING
+/// ```
+///
+/// All three are **terminal**, and there is no path out of any of them, so a
+/// repeated release, a retried expiry worker, a duplicate cancellation or a
+/// replayed inspection cannot restore a second time.
+///
+/// ## Terminal is not the same claim as restored
+///
+/// [released] and [expired] each carry both facts: the reservation ended **and**
+/// the units went back on the shelf. [returned] carries only the first. Whether
+/// the units became available again depends on the inspection's
+/// `ReturnDisposition`, which is recorded on the return aggregate and travels
+/// separately in the transition's `InventoryEffect`.
+///
+/// **So "this reservation is final" must never be read as "available stock
+/// increased".** For a damaged or quarantined return those are opposite
+/// answers, and reading a state name instead of the effect is how breakage
+/// becomes sellable stock. See
+/// `docs/contracts/delivery-attempt-return-lifecycle.md`.
 enum ReservationState {
   /// Units are held for a `placed` order and the reservation is still
   /// **expirable**. Available stock has already been decremented.

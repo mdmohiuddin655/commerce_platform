@@ -140,6 +140,46 @@ inventory-identical, because *"we know it is unsellable"* and *"we are not yet
 willing to say it is sellable"* are different claims reviewed by different
 people, and merging them loses that permanently.
 
+## Decision 4 — the return is whole-order; partial returns are not modelled
+
+*(Recorded by FND-003B3B-FIX-001, which found the limit real but undocumented.)*
+
+One `ReturnDisposition` applies to the **entire committed reservation**. There
+is no per-line, per-item or per-quantity model, and no request in the slice
+carries a caller-supplied quantity: a `restockable` inspection restores exactly
+the canonical `order.reservedUnits`, and `damaged` / `quarantined` restore zero.
+
+### Why not model partial returns now
+
+The tempting reading is that `ReturnDisposition` describes *goods*, so a mixed
+return — some items sellable, some broken — ought to be expressible. It is not,
+and making it look expressible would be worse than the limit.
+
+With a single disposition per reservation, a mixed return has exactly two
+representable answers, and **both are wrong**:
+
+```text
+restockable  -> over-restocks the whole order, putting broken goods back on sale
+damaged      -> writes off items that were perfectly sellable
+```
+
+The first is the precise failure the restock invariant exists to prevent.
+Refusing to represent the case is therefore safer than representing it badly:
+an unrepresentable case fails visibly at design time, whereas a
+silently-wrong one fails as bad stock.
+
+Quantity is also deliberately **not** caller-supplied. It comes from the
+validated order aggregate, which already rejects `reservedUnits <= 0`, so a
+caller can neither inflate a return nor return more than was reserved.
+
+### Expansion path
+
+Partial returns need their **own additive contract** carrying explicit per-line
+or per-quantity semantics, and must **not** overload `ReturnDisposition` to mean
+"the disposition of some unspecified subset". Existing whole-order returns keep
+their meaning unchanged under such an extension, and `InventoryEffect.restore`
+on this path must keep meaning the whole canonical reserved quantity.
+
 ## Consequences
 
 - The refused-order path is executable end to end: `required → in_transit →
@@ -166,3 +206,5 @@ people, and merging them loses that permanently.
 | Let inspection record fault or a fee | Liability is FND-003C's and is blocked on **O6**; a guess would be stored as a finding |
 | Reuse `agent.fulfillment.record_progress` for receipt | Its rule says it never writes trusted stock or status; receipt is the fact the restock invariant hangs from |
 | Restore stock at shop receipt | Cannot distinguish a sellable item from a broken one; this is the invariant the slice exists to protect |
+| Squeeze mixed returns into one disposition | The only two representable answers both corrupt stock — over-restock or over-write-off |
+| Accept a caller-supplied returned quantity | A caller could inflate a return or restore more than was reserved; canonical `reservedUnits` is the only safe source |

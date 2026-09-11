@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cp_contracts/cp_contracts.dart';
 import 'package:test/test.dart';
 
@@ -324,6 +326,191 @@ void main() {
         }
       }
       expect(reached, isNot(contains(ReservationState.returned)));
+    });
+  });
+
+  group('RET — the return is WHOLE-ORDER only (FND-003B3B-FIX-001)', () {
+    test('restockable restores exactly the canonical reservedUnits', () {
+      // The quantity must come from the validated order aggregate and nowhere
+      // else. Swept across several values so a hardcoded constant that happened
+      // to match one fixture cannot pass.
+      for (final int n in <int>[1, 3, 7, 42]) {
+        final ReturnTransition t = evaluateRecordReturnInspection(
+          request: ReturnInspectionRequest(
+            expectedReturnRevision: 4,
+            expectedOrderRevision: 7,
+            disposition: ReturnDisposition.restockable,
+            recordedAtUtc: utcNow,
+          ),
+          grant: adminReturnGrant(),
+          actor: user(adminId),
+          resource: resourceContext(),
+          returnRecord: returnRecord(revision: 4, state: ReturnState.received),
+          orderRead: orderRead(units: n),
+          custody: shopCustody(),
+        ).transition!;
+
+        expect(t.inventoryEffect.units, n, reason: 'reservedUnits=$n');
+        expect(
+          t.inventoryEffect.availableStockDelta,
+          n,
+          reason: 'reservedUnits=$n',
+        );
+        expect(t.reservationEffect!.units, n, reason: 'reservedUnits=$n');
+      }
+    });
+
+    test(
+      'damaged and quarantined restore zero whatever the reserved count',
+      () {
+        for (final int n in <int>[1, 7, 42]) {
+          for (final ReturnDisposition d in <ReturnDisposition>[
+            ReturnDisposition.damaged,
+            ReturnDisposition.quarantined,
+          ]) {
+            final ReturnTransition t = evaluateRecordReturnInspection(
+              request: ReturnInspectionRequest(
+                expectedReturnRevision: 4,
+                expectedOrderRevision: 7,
+                disposition: d,
+                recordedAtUtc: utcNow,
+              ),
+              grant: adminReturnGrant(),
+              actor: user(adminId),
+              resource: resourceContext(),
+              returnRecord: returnRecord(
+                revision: 4,
+                state: ReturnState.received,
+              ),
+              orderRead: orderRead(units: n),
+              custody: shopCustody(),
+            ).transition!;
+
+            expect(
+              t.inventoryEffect.availableStockDelta,
+              0,
+              reason: '${d.id} with reservedUnits=$n',
+            );
+            // The reservation still ends, and still records the full count it
+            // held — the goods are not coming back to this order either way.
+            expect(t.reservationEffect!.units, n, reason: d.id);
+            expect(t.reservationEffect!.restoresAvailableStock, isFalse);
+          }
+        }
+      },
+    );
+
+    test('no public request type carries a caller-controlled quantity', () {
+      // A STATIC TYPE assertion, not a string match: the constructor tear-off
+      // must remain assignable to exactly this signature. Adding a required
+      // `units`/`quantity` parameter, or changing any existing parameter's
+      // type, stops this compiling.
+      //
+      // (`dart:mirrors` would have enumerated the declared fields directly and
+      // was tried first — it runs on the VM but the analyzer rejects the import
+      // in this package, which would have failed the clean-analyze gate. The
+      // type pin below plus the field-declaration scan are the analyzer-clean
+      // equivalent.)
+      const ReturnInspectionRequest Function({
+        required int expectedReturnRevision,
+        required int expectedOrderRevision,
+        required ReturnDisposition disposition,
+        required DateTime recordedAtUtc,
+      })
+      inspectionCtor = ReturnInspectionRequest.new;
+      expect(inspectionCtor, isNotNull);
+
+      const ReturnShopReceiptRequest Function({
+        required int expectedReturnRevision,
+        required int expectedOrderRevision,
+        required int expectedCustodyRevision,
+        required int expectedRiderSlotRevision,
+        required DateTime recordedAtUtc,
+      })
+      receiptCtor = ReturnShopReceiptRequest.new;
+      expect(receiptCtor, isNotNull);
+
+      // And a structural scan of the DECLARED FIELDS only — the `final X y;`
+      // lines of the request source — so prose in a doc comment can neither
+      // trigger nor mask this. An added optional field is caught here even
+      // though function subtyping would let it past the tear-off pins above.
+      final List<String> declaredFields =
+          File('lib/src/delivery_attempt_return_request.dart')
+              .readAsLinesSync()
+              .map((String l) => l.trim())
+              .where((String l) => l.startsWith('final ') && l.endsWith(';'))
+              .map((String l) => l.substring(6, l.length - 1).trim())
+              .map((String d) => d.split(RegExp(r'\s+')).last)
+              .toList();
+
+      expect(
+        declaredFields,
+        isNotEmpty,
+        reason: 'the probe found no fields — check the extraction',
+      );
+      for (final String f in declaredFields) {
+        final String lower = f.toLowerCase();
+        for (final String bad in <String>[
+          'units',
+          'quantity',
+          'qty',
+          'count',
+          'amount',
+          'items',
+          'lines',
+        ]) {
+          expect(
+            lower,
+            isNot(contains(bad)),
+            reason: 'request field "$f" looks caller-controlled',
+          );
+        }
+      }
+    });
+
+    test('exactly one disposition covers the whole reservation', () {
+      // Mixed outcomes ("three fine, two broken") are NOT representable, by
+      // design. This pins the shape rather than inventing a partial-return type
+      // in order to assert its absence.
+      //
+      // The inspection request takes a single non-null `ReturnDisposition`,
+      // pinned statically by the tear-off above; the stored return aggregate
+      // holds a single nullable one, never a collection.
+      final List<String> returnFactsFields =
+          File('lib/src/delivery_attempt_return_facts.dart')
+              .readAsLinesSync()
+              .map((String l) => l.trim())
+              .where((String l) => l.startsWith('final ') && l.endsWith(';'))
+              .toList();
+
+      final Iterable<String> dispositionFields = returnFactsFields.where(
+        (String l) => l.toLowerCase().contains('disposition'),
+      );
+      expect(dispositionFields, <String>[
+        'final ReturnDisposition? disposition;',
+      ], reason: 'one nullable disposition per return, never a collection');
+
+      // A single value reaches the effect, and it covers the whole reservation.
+      final ReturnTransition t = evaluateRecordReturnInspection(
+        request: ReturnInspectionRequest(
+          expectedReturnRevision: 4,
+          expectedOrderRevision: 7,
+          disposition: ReturnDisposition.damaged,
+          recordedAtUtc: utcNow,
+        ),
+        grant: adminReturnGrant(),
+        actor: user(adminId),
+        resource: resourceContext(),
+        returnRecord: returnRecord(revision: 4, state: ReturnState.received),
+        orderRead: orderRead(units: 5),
+        custody: shopCustody(),
+      ).transition!;
+      expect(t.reservationEffect!.disposition, ReturnDisposition.damaged);
+      expect(
+        t.reservationEffect!.units,
+        5,
+        reason: 'the single disposition covers all five reserved units',
+      );
     });
   });
 }

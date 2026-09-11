@@ -166,6 +166,39 @@ Stock is **never** restored:
 A source-swept test enumerates **all nine** executable transitions and asserts
 exactly one increases available stock and exactly one moves custody.
 
+### Scope: whole-order returns only
+
+**B3B models a WHOLE-ORDER return, and nothing smaller.** This is a normative
+limit of the contract, not a rule a backend enforces — the API simply cannot
+represent anything else.
+
+- One `ReturnDisposition` applies to the **entire committed reservation** for
+  that order.
+- **Partial returns are not modelled.** Neither are per-line, per-item or
+  per-quantity dispositions.
+- **A caller cannot choose the quantity restored.** No request type in this
+  slice carries a `units`, `quantity`, `returnedUnits` or line-item field; the
+  inspection request carries only revisions, one disposition and a timestamp.
+- A `restockable` inspection restores **exactly** the canonical
+  `order.reservedUnits`, read from the validated order aggregate.
+- A `damaged` or `quarantined` inspection restores **zero**.
+- A **mixed** outcome — *"three of the five items are fine, two are broken"* —
+  is **not representable**. There is no way to express it, and no disposition
+  combination means it.
+
+That last point is the reason for the limit. If mixed returns were silently
+squeezed into a single disposition, the only two available answers would be
+*over-restock the whole order* or *write off goods that were perfectly
+sellable*. Both are wrong, and the first one puts damaged stock back on the
+shelf — exactly the failure this slice exists to prevent. Refusing to represent
+the case is safer than representing it badly.
+
+**Future partial-return support requires its own additive contract** with
+explicit per-line or per-quantity semantics, and **must not reinterpret this
+API**: `ReturnDisposition` must not be overloaded to mean "the disposition of
+some unspecified subset", and `InventoryEffect.restore` here must keep meaning
+the whole canonical reserved quantity.
+
 ### Disposition decides inventory, never fault
 
 `ReturnDisposition` answers exactly one question — *may these units be sold
