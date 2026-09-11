@@ -88,9 +88,13 @@ all, it states **zero-based index 12** and **13th declared value** together.
 ### Semantic sweep of the full FIX-002 report
 
 Every occurrence of `39th`, `38th`, `13th declared`, `38`, `39` and
-`agent.return.record_receipt` was classified:
+`agent.return.record_receipt` was classified. Line numbers below are the
+**pre-edit** ones, against `origin/main` @ `5385935` — that is the document the
+sweep read, and the `Action` column records what was then done to each hit.
+They are a record of the sweep, not a current index; the durable references are
+the section anchors used in the next subsection.
 
-| Line | Occurrence | Classification | Action |
+| Line (pre-edit) | Occurrence | Classification | Action |
 |---|---|---|---|
 | 85 | ``FND-003B3B (`agent.return.record_receipt`, the 39th) — **39 permissions**.`` | **Verbatim quotation** of the `docs/contracts/permission-matrix.md` header | **Left intact** — see below |
 | 94 | "FND-003B3B's 39th permission" | The report's **own prose assertion** | **CORRECTED** |
@@ -104,15 +108,25 @@ Every occurrence of `39th`, `38th`, `13th declared`, `38`, `39` and
 
 ### Why two copies were deliberately not edited
 
-Line 85 is a **verbatim quotation** of the `docs/contracts/permission-matrix.md`
-header, and line 101 is **recorded probe output**. Correcting either would turn
-a faithful quotation into a misquotation, or falsify recorded evidence — the
-opposite of the honesty rule in `AGENTS.md` §7. Both are annotated by the marked
-block added at line 94, so a reader is not left to trip over them.
+Both live in **§4 "The correction"** of the FND-003C1-FIX-002 report, and each is
+identified here by its section and content rather than by a line number, so the
+reference survives any later edit that moves it:
+
+- the **verbatim quotation** of the `docs/contracts/permission-matrix.md` header
+  — the fenced `text` block that opens §4; and
+- the **recorded probe output** — the fenced `text` block under §4's subsection
+  *"The 'byte-for-byte what 0.10 generated' claim is verified, not asserted"*,
+  the one reporting `table rows at cdb5f35b … identical=True`.
+
+Correcting either would turn a faithful quotation into a misquotation, or falsify
+recorded evidence — the opposite of the honesty rule in `AGENTS.md` §7. Both are
+annotated by the marked **"Corrected by FND-003D1-BOOKKEEPING-FIX-002"**
+blockquote in the same section, so a reader is not left to trip over them.
 
 ### Newly found debt — NOT fixed here, out of scope
 
-The phrase originates in **`docs/contracts/permission-matrix.md` line 8**:
+The phrase originates in the **vocabulary-history sentence of
+`docs/contracts/permission-matrix.md`'s header**, which read, when this task ran:
 
 ```text
 FND-003B3B (`agent.return.record_receipt`, the 39th) — **39 permissions**.
@@ -121,7 +135,8 @@ FND-003B3B (`agent.return.record_receipt`, the 39th) — **39 permissions**.
 That is a **contract document this task is explicitly prohibited from
 changing**. It is the root cause: the FIX-002 report quotes it, which is how the
 wording spread. It is recorded as outstanding debt in the ledger and needs its
-own bounded task. Until it is fixed, the quotation at line 85 must stay as it is.
+own bounded task. Until it is fixed, §4's opening quotation block must stay as it
+is.
 
 ---
 
@@ -216,13 +231,33 @@ pending", "awaiting publication", "published") was introduced; git history stays
 the authority on publication state.
 
 **No unrelated task status changed** — proven by extracting the `ID :: Status`
-pair for every row before and after:
+pair for every **task row** before and after. A task row is a ledger table row
+whose first cell is a task id; owner-action rows (`O1`…`O7`) and the
+contract-version table are not task rows. Run from the repository root, in bash:
+
+```bash
+rows() {
+  git show "$1:docs/task-ledger/TASK_LEDGER.md" \
+    | grep -E '^\| (FND|ROLE|HARD|E2E)[A-Z0-9-]* \|' \
+    | awk -F'|' '{gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$6); print $2" :: "$6}'
+}
+diff <(rows 5385935) <(rows 4b22173)
+```
 
 ```text
-base rows: 42   now rows: 43
+task rows: 37 at 5385935, 38 at 4b22173
 35a36
 > FND-003D1-BOOKKEEPING-FIX-002 :: **DONE**
 ```
+
+> **Corrected by FND-003D1-BOOKKEEPING-FIX-003** — bookkeeping accuracy only.
+> This block previously reported `base rows: 42   now rows: 43` without stating
+> the extraction, and those totals are not reproducible: a row count depends
+> entirely on which rows are counted, and no filter yielding 42/43 was recorded.
+> The command is now given in full and the figures above are what it prints. The
+> quoted `diff` hunk and the conclusion are unchanged and were always
+> reproducible — exactly one task row was added, and no pre-existing
+> `ID :: Status` pair changed.
 
 That is the only difference: one row added, every pre-existing status
 byte-identical.
@@ -309,13 +344,22 @@ ALL CHECKS PASSED
 
 | Item | Owner |
 |---|---|
-| `docs/contracts/permission-matrix.md` line 8 still reads *"`agent.return.record_receipt`, the 39th"* — the root cause of this wording. Prohibited to this task. | needs its own bounded task |
+| `docs/contracts/permission-matrix.md` carried the same ordinal wording in its vocabulary-history header — the root cause, and prohibited to this task. **Discharged by FND-003D1-BOOKKEEPING-FIX-003**, which replaced it with the total-count transition and added a guard against its return. | closed |
 | O7 — hosted CI does not exist (no `.github`) | FND-004 |
 
 Once the permission-matrix wording is fixed, the two deliberately preserved
-copies in the FND-003C1-FIX-002 report (the verbatim quotation at line 85 and
-the recorded probe output at line 101) should be re-examined by that task — the
-quotation will then be quoting corrected text.
+copies in the FND-003C1-FIX-002 report — §4's opening quotation block and the
+probe-output block under its *"byte-for-byte what 0.10 generated"* subsection —
+should be re-examined by that task, because the quotation then reproduces a
+header that has since been superseded.
+
+> **Note added by FND-003D1-BOOKKEEPING-FIX-003.** That re-examination is now
+> due and is **not** done: FIX-003 corrected the header but is explicitly
+> prohibited from editing the FND-003C1-FIX-002 report, so §4's quotation there
+> still faithfully reproduces the **superseded** wording and its correction
+> blockquote still describes the root wording as outstanding. Both remain
+> accurate as history and neither was altered; the re-labelling they now need is
+> recorded as a fresh debt in the ledger and needs its own bounded task.
 
 ---
 

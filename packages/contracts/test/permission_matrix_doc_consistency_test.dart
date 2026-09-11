@@ -34,7 +34,201 @@ Directory? findRepositoryRoot() {
   return null;
 }
 
+/// The document's **prose**, with the generated table and fenced code removed.
+///
+/// The ordinal guard below must read the narrative header — where the
+/// vocabulary's count history is told — and must not read the generated table,
+/// whose `Restriction` cells are free prose owned by
+/// `permission_matrix.dart` rather than by this document.
+String permissionMatrixProse(String markdown) {
+  final StringBuffer prose = StringBuffer();
+  bool insideFence = false;
+  for (final String line in markdown.split('\n')) {
+    if (line.trimLeft().startsWith('```')) {
+      insideFence = !insideFence;
+      continue;
+    }
+    if (insideFence || line.trimLeft().startsWith('|')) {
+      continue;
+    }
+    prose.writeln(line);
+  }
+  return prose.toString();
+}
+
+/// Every **declaration ordinal** in [prose] — `the 39th`, `13th`, `1st`.
+///
+/// An ordinal is a claim about a value's *position in `Permission.values`*.
+/// This document neither derives nor regenerates declaration positions, so it
+/// has no way to keep such a claim true: FND-003C1-FIX-002 called
+/// `agent.return.record_receipt` "the 39th" because it took the permission that
+/// moved the **count** to 39 for the value **declared** 39th. They are
+/// different facts — that permission sits at zero-based index 12 — and the
+/// wording survived three tasks before anything caught it.
+///
+/// Counts belong here as cardinals (`39 permissions`) and changes as
+/// transitions (`38 → 39`); neither form can be read as a position, so neither
+/// is matched.
+List<String> declarationOrdinalsIn(String prose) => RegExp(r'\b\d+(?:st|nd|rd|th)\b')
+    .allMatches(prose)
+    .map((RegExpMatch m) => m.group(0)!)
+    .toList();
+
+/// Every **total-count transition** in [prose] as `[from, to]` — `38 → 39`,
+/// `38 -> 39`, `38 to 39`.
+///
+/// Markdown emphasis is stripped first so a bolded `**38 → 39**` counts. The
+/// lookbehind rejects a dotted neighbour so a version range such as
+/// `0.10 to 0.11` is never mistaken for a count transition, while the lookahead
+/// rejects only a decimal continuation — a sentence-final `38 → 39.` still
+/// counts.
+List<List<int>> countTransitionsIn(String prose) {
+  final String plain = prose.replaceAll(RegExp(r'[*`]'), '');
+  return RegExp(r'(?<![\d.])(\d+)\s*(?:→|-+>|to)\s*(\d+)(?!\.?\d)')
+      .allMatches(plain)
+      .map((RegExpMatch m) =>
+          <int>[int.parse(m.group(1)!), int.parse(m.group(2)!)])
+      .toList();
+}
+
 void main() {
+  group('permission-matrix.md states counts without declaration ordinals', () {
+    late String prose;
+
+    setUp(() {
+      final Directory? root = findRepositoryRoot();
+      expect(root, isNotNull);
+      prose = permissionMatrixProse(
+        File('${root!.path}/docs/contracts/permission-matrix.md')
+            .readAsStringSync(),
+      );
+    });
+
+    test('its prose attaches no declaration ordinal to the vocabulary', () {
+      final List<String> ordinals = declarationOrdinalsIn(prose);
+      expect(
+        ordinals,
+        isEmpty,
+        reason:
+            'docs/contracts/permission-matrix.md prose contains the declaration '
+            'ordinal(s) ${ordinals.join(', ')}. An ordinal claims a position in '
+            'Permission.values, which this document never derives, so it cannot '
+            'stay true — "the 39th" here meant the permission that moved the '
+            'COUNT to 39, which is declared 13th. State the size as a cardinal '
+            '("39 permissions") and a change as a transition ("38 -> 39").',
+      );
+    });
+
+    test('a count change is recorded as a transition to the live total', () {
+      // Derived from the vocabulary, never a literal: the document must show
+      // the size it reached, whatever that size becomes. A slice that replaces
+      // the transition with a positional claim fails here as well as above.
+      final int live = Permission.values.length;
+      final List<List<int>> transitions = countTransitionsIn(prose);
+      expect(
+        transitions.any((List<int> t) => t[1] == live && t[0] < live),
+        isTrue,
+        reason:
+            'docs/contracts/permission-matrix.md prose records no total-count '
+            'transition ending at the live Permission.values.length ($live); '
+            'found ${transitions.map((List<int> t) => '${t[0]} -> ${t[1]}').toList()}. '
+            'Express a vocabulary change as the total moving from its previous '
+            'size to its new one, not as the position of the value added.',
+      );
+    });
+  });
+
+  group('the ordinal guard, proved against material outside the worktree', () {
+    // Negative and positive controls. A guard that has never been shown to
+    // fail proves nothing (AGENTS.md section 6), and it must fail on the real
+    // historical defect rather than on a pattern invented to match it. The
+    // fixtures are written to the system temp directory, never into the
+    // repository tree.
+    late Directory sandbox;
+
+    setUp(() {
+      sandbox = Directory.systemTemp.createTempSync('permission_matrix_guard');
+    });
+
+    tearDown(() {
+      if (sandbox.existsSync()) {
+        sandbox.deleteSync(recursive: true);
+      }
+    });
+
+    String proseOfFixture(String name, String body) {
+      final File fixture = File('${sandbox.path}/$name.md')
+        ..writeAsStringSync(body);
+      return permissionMatrixProse(fixture.readAsStringSync());
+    }
+
+    test('the published pre-fix wording is rejected', () {
+      // Verbatim from permission-matrix.md line 8 at 4b22173, the last commit
+      // that carried it. Quoted, not paraphrased, so the control cannot drift
+      // into testing a defect that never shipped.
+      final String prose = proseOfFixture(
+        'pre_fix',
+        'FND-003B3B (`agent.return.record_receipt`, the 39th) '
+            '— **39 permissions**.\n',
+      );
+      expect(declarationOrdinalsIn(prose), <String>['39th']);
+    });
+
+    test('the corrected wording is accepted', () {
+      final int live = Permission.values.length;
+      final String prose = proseOfFixture(
+        'corrected',
+        'FND-003B3B (`agent.return.record_receipt`, which took the total from\n'
+            '**${live - 1} → $live**) — **$live permissions**.\n',
+      );
+      expect(declarationOrdinalsIn(prose), isEmpty);
+      expect(
+        countTransitionsIn(prose)
+            .any((List<int> t) => t[1] == live && t[0] < live),
+        isTrue,
+      );
+    });
+
+    test('historical count-transition wording is not an ordinal error', () {
+      final String prose = proseOfFixture(
+        'transitions',
+        '`Permission.values` and `permissionMatrix` go **38 → 39**.\n'
+            'FND-003B3B took the total permission count from 38 to 39.\n'
+            'That slice added one permission, so the total rose 38 -> 39.\n',
+      );
+      expect(declarationOrdinalsIn(prose), isEmpty);
+      expect(
+        countTransitionsIn(prose),
+        <List<int>>[
+          <int>[38, 39],
+          <int>[38, 39],
+          <int>[38, 39],
+        ],
+      );
+    });
+
+    test('a version range is not read as a count transition', () {
+      final String prose = proseOfFixture(
+        'versions',
+        'The contract moved 0.10 to 0.11 without touching the vocabulary.\n',
+      );
+      expect(countTransitionsIn(prose), isEmpty);
+    });
+
+    test('the generated table is not searched for ordinals', () {
+      // Restriction cells are prose owned by permission_matrix.dart. A future
+      // rule legitimately describing, say, "the 1st attempt" must not fail a
+      // guard aimed at this document's own header.
+      final String prose = proseOfFixture(
+        'table',
+        '| Permission id | Role |\n'
+            '|---|---|\n'
+            '| `delivery.attempt.record` | rider | Only the 1st attempt. |\n',
+      );
+      expect(declarationOrdinalsIn(prose), isEmpty);
+    });
+  });
+
   group('permission-matrix.md declares the current contract version', () {
     test('its declared version equals ContractVersion.current', () {
       // The expected value is DERIVED, never duplicated as a literal. A future
