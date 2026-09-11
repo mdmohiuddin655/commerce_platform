@@ -72,7 +72,9 @@ command, state, event or permission. Corrected in place by **FIX-001** and
 
 **Successful delivery is still NOT executable.** FND-003D2A adds the *result* of
 evaluating a policy — **not the policy**, and **not a proof mechanism**. It adds
-**no command and no permission** (`Permission.values` stays at 38);
+**no command and no permission** — `Permission.values` was **38** at the end of
+FND-003D2A, and is **39** today only because FND-003B3B later added
+`agent.return.record_receipt`, which changed nothing about D2A —
 `OrderState.delivered`, `CustodyHolderKind.customer` and rider
 `AssignmentState.completed` all remain unreachable.
 
@@ -157,10 +159,10 @@ blocked, and saying so is the correct outcome.
 |---|---|---|
 | **Lifecycle — successful delivery** (FND-003B3, remaining) | Delivery **confirmation**, customer custody, and rider assignment `completed` (**B3-C2**). Delivery attempts, refusal, failure and the direct `rider → shop` return are **done** (FND-003B3B) — but a *successful* delivery needs the proof-satisfaction policy, which is undefined. The **failed-attempt** retry/return consequence and the **via-picker** return route are also still undecided: B3B enumerates and refuses both rather than guessing. | FND-003B3A (**done**), FND-003B3B (**done**), **Proof policy** |
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
-| **Inventory — post-dispatch, remaining** | Whole-order return restoration is **done** (FND-003B3B): stock becomes available again only after shop receipt **and** a `restockable` inspection, exactly once, and `damaged` / `quarantined` restore zero. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). Still undefined: **partial / per-item returns** — B3B cannot represent a mixed return and must not be reinterpreted to — and any post-dispatch **cancellation** stock consequence. | A separate additive contract (ADR-0010) |
+| **Inventory — post-dispatch cancellation** | The stock consequence of a **cancellation** after dispatch. Return-path restoration is **done** (FND-003B3B) — stock becomes available again only after shop receipt **and** a `restockable` inspection, exactly once, with `damaged` / `quarantined` restoring zero — and pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). What a *cancellation* after dispatch does to stock is **not decided**: FND-003B3A recorded that no post-pickup cancellation behaviour was invented, and FND-003B3B lists it among the consequences it does not decide. | The cancellation policy itself, deferred by FND-003B3A and FND-003B3B; its fee/liability half is **Owner decision O6** and FND-003C |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
 | **Proof policy** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed. Required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
-| **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C, FND-003B3B |
+| **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C. FND-003B3B (**done**) defines the refused-order return and decides **no** dispute outcome, fault or money |
 
 ## Rules that already bind every later slice
 
