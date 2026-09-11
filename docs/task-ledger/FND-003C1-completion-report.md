@@ -243,3 +243,49 @@ roadmap task started.
 
 **O6 is resolved.** **O7** remains outstanding, unchanged. **O2–O5** remain
 outstanding and are the reason the backend/platform criteria above are NOT RUN.
+
+---
+
+# PUBLICATION — FND-003C1-PUBLISH-001
+
+**Appended 2026-09-11. Nothing above is rewritten.**
+
+**FND-003C1-FINAL-REVIEW-002 returned `ACCEPTED`** for candidate head
+**`cfed2c70b5dbdddc9048f019644d34ccc85052eb`**. Publication is performed by the
+bounded task **FND-003C1-PUBLISH-001** as an ordinary **non-force fast-forward**
+of `main` from `79cdfe18996ba5382e727a328226ac3eaa5fce43`.
+
+## The accepted chain
+
+```text
+79cdfe18   base
+  -> 789682c   implementation
+  -> cfed2c70  FND-003C1-FIX-001 (documentation only, zero executable change)
+```
+
+**The accepted FND-003C1 contract is both commits together. `789682c` alone is
+not accepted:** FINAL-REVIEW-001 returned **FIX REQUIRED** on one material
+documentation defect — the ledger simultaneously asserting `PARTIAL` and
+`BLOCKED on O6` for FND-003C — which FIX-001 closed. The **executable contract
+passed that review unchanged**, and FINAL-REVIEW-002 confirmed the
+implementation tree was byte-identical (`b678c4ea…`) and not amended.
+
+## What publication does not change
+
+**No evidence was promoted by publishing.** `CJ1–CJ12` remain **NOT RUN** —
+no backend exists, and FND-004 owns the API shell. **Migration, Firestore rules
+and indexes remain `N/A — contract-only; no persistence exists yet`.
+Device, offline, emulator and deployment remain NOT RUN. No hosted CI ran** —
+the repository has no `.github` directory, and `./tools/run_checks.sh` is local
+evidence only.
+
+**ContractVersion stays 0.11** and **permissions stay 39 / 39**. Successful
+delivery, the proof-satisfaction policy (`CONSTRAINTS.md` invariant 13 **not
+discharged**), customer custody, rider completion, remittance, settlement,
+reconciliation, refusal-fee collection, refunds, compensation, worker pay,
+commission payout, dispute resolution, stock changes and FX all remain
+**unavailable**.
+
+**FND-003C remains PARTIAL** — O6 is resolved, the COD collection and journal
+foundation is integrated, and every other money lifecycle is unimplemented.
+**O7 remains OUTSTANDING.**
