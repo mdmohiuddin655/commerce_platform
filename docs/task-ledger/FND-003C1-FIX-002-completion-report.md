@@ -12,8 +12,13 @@
 - **Contract version:** **0.11 — unchanged.** `ContractVersion.current` was
   already correct; the **document** was wrong. Nothing in this task touches the
   executable version.
-- **Status:** **DONE — LOCAL ONLY.** Committed, **not pushed**. Requires a
-  separate read-only review before any publication decision.
+- **Status:** **DONE — technically accepted** by
+  **FND-003C1-FIX-002-FINAL-REVIEW-002**, which returned **ACCEPTED** with no
+  material defect. Accepted technical commit:
+  **`e90f2ec16ac4c1b2997052f242127be452284955`**. This report states no
+  current publication claim in either direction — whether that commit is on
+  `main` is a property of git history, not of this sentence, and history is
+  the authority.
 
 ## 1. Baseline
 
@@ -283,19 +288,24 @@ and 0.9 slices, and in `delivery-proof-dispute.md:345`, which already says
 
 | Task | Status |
 |---|---|
-| **FND-003C1-FIX-002** | **DONE — LOCAL ONLY**, committed and **not pushed**; needs a separate read-only review |
+| **FND-003C1-FIX-002** | **DONE — technically accepted.** FND-003C1-FIX-002-FINAL-REVIEW-002 returned **ACCEPTED** on `e90f2ec16ac4c1b2997052f242127be452284955`, with no material defect and five non-blocking observations |
 | FND-003C1 | **DONE** — accepted and integrated; unaffected |
 | FND-003C | **PARTIAL** — remittance, settlement, reconciliation, refunds, commission payout and worker pay outstanding |
 | FND-003D | **PARTIAL** — the proof-satisfaction policy is still undone |
 | FND-004 | unchanged (**TODO**) |
 | O7 | **outstanding** |
 
-Nothing was pushed, merged, deployed or turned into a PR; no branch was deleted,
-no tag or release created, no GitHub setting changed and no Firebase resource
-touched.
+**During the original FND-003C1-FIX-002 implementation task**, nothing was
+pushed, merged, deployed or turned into a PR; no branch was deleted, no tag or
+release created, no GitHub setting changed and no Firebase resource touched.
+That is a record of what **that task** did, and it stays true however the
+accepted commit is handled afterwards.
 
-**No technical acceptance is claimed.** This report records what was changed and
-what was run; acceptance is a separate review's decision.
+**The implementation task claimed no technical acceptance for itself**, and was
+right not to: this report records what was changed and what was run, and
+acceptance was a separate review's decision. That decision has since been made —
+**FND-003C1-FIX-002-FINAL-REVIEW-002 returned ACCEPTED** — which is why the
+status above records acceptance. Nothing in this report is self-certified.
 
 ## Owner actions needed
 
