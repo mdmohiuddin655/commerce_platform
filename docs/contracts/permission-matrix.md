@@ -1,10 +1,15 @@
 # Permission matrix
 
-**Contract version 0.10.** Introduced by FND-003A (0.2) and extended by
-FND-003B2A (`agent.assignment.revoke_picker`), FND-003B2B
+**Contract version 0.11.** That is the *overall* contract version, which this
+header tracks. The permission vocabulary itself last changed at **0.10**:
+introduced by FND-003A (0.2) and extended by FND-003B2A
+(`agent.assignment.revoke_picker`), FND-003B2B
 (`picker.assignment.offer_rider`, `picker.assignment.revoke_rider`) and
-FND-003B3B (`agent.return.record_receipt`) — **39 permissions**. This
-table is **generated from
+FND-003B3B (`agent.return.record_receipt`, the 39th) — **39 permissions**.
+**FND-003C1 (0.11) added no permission**: its COD-collection slice is authorized
+entirely by permissions that already existed, so the table below is byte-for-byte
+what 0.10 generated. A version here that is newer than the last vocabulary change
+is therefore normal and expected. This table is **generated from
 `packages/contracts/lib/src/permission_matrix.dart`** — the single source of
 truth that all five apps and the backend consume. Regenerate with:
 
