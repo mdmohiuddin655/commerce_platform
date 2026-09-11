@@ -202,6 +202,17 @@ check, and — if it changes tooling strategy — an ADR.
 
 `docs/decisions/` — ADR-0001 modular monorepo · ADR-0002 pub workspaces without
 Melos · ADR-0003 `cp_` package prefix · ADR-0004 strict analysis and guard
-rails · ADR-0005 notification stack decision required · ADR-0006 / ADR-0007
-admin assignment override governance · ADR-0008 bounded delivery-proof policy
-reference. Read the relevant ADR before changing what it decided.
+rails · ADR-0005 notification stack decision required *(Proposed — blocked on an
+owner decision; not accepted)* · ADR-0006 / ADR-0007 admin assignment override
+governance · ADR-0008 bounded delivery-proof policy reference · ADR-0009
+Delivery-proof assessment is trusted, immutable and append-only *(Accepted;
+amended by FND-003D2A-FIX-001)* · ADR-0010 The first executable return route is
+direct rider→shop, and returned stock is separate from liability · ADR-0011 O6
+resolved: BDT-only v1, quoted customer price, commission as an allocation, and
+rider cash as custody. Read the relevant ADR before changing what it decided.
+
+Every entry above is **Accepted** unless its own parenthetical says otherwise,
+and the list is the complete inventory — eleven decisions, each appearing
+exactly once, no gap and none beyond the last. `docs/decisions/` remains the
+authority: if the directory and this index ever disagree, the directory wins and
+this index is the defect.

@@ -91,9 +91,31 @@ is therefore normal and expected. This table is **generated from ...**
 
 The three facts the task required are now stated separately and explicitly:
 the **overall** version is 0.11; the **permission vocabulary** last changed at
-**0.10** (FND-003B3B's 39th permission); **FND-003C1 added no permission**. The
+**0.10** (FND-003B3B added `agent.return.record_receipt`, taking the total
+permission count from **38 → 39**); **FND-003C1 added no permission**. The
 last sentence exists so the next reader does not "correct" 0.11 back to 0.10 on
 seeing that the vocabulary is older than the header.
+
+> **Corrected by FND-003D1-BOOKKEEPING-FIX-002** — documentation accuracy only,
+> no executable change. The parenthetical above previously read *"(FND-003B3B's
+> 39th permission)"*, which conflated **the permission that took the count to
+> 39** with **the 39th declared value**. They are not the same thing:
+> `agent.return.record_receipt` sits at **zero-based index 12 — the 13th
+> declared value**, while the 38th declared is `admin.cash.record_reconciliation`
+> and the 39th is `admin.release.view_health`
+> (`Permission.values.indexOf(Permission.agentRecordReturnReceipt)` → `12`,
+> probed against the tree, not grepped). The chronological fact was and remains
+> correct: FND-003B3B added `agent.return.record_receipt` at contract **0.10**,
+> taking the total from **38 to 39**, and the live total is **39**.
+>
+> The same phrase survives twice more in this report and is **deliberately left
+> unedited**: the quoted block above reproduces the
+> `docs/contracts/permission-matrix.md` header **verbatim**, and the probe output
+> below is **recorded command evidence**. Correcting either would turn a faithful
+> quotation into a misquotation or falsify recorded output. The phrase originates
+> in `docs/contracts/permission-matrix.md` line 8 — a contract document this task
+> is **not authorized to change** — so it is recorded as **outstanding** debt in
+> the ledger and needs its own task.
 
 ### The "byte-for-byte what 0.10 generated" claim is verified, not asserted
 
