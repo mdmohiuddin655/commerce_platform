@@ -232,7 +232,8 @@ a free cancellation. A backend must refuse to derive an amount from
 `deferredToFinancialSlice`.
 
 No amount, currency, rate, refund, commission, settlement or posting appears in
-this slice. Money is **FND-003C**, blocked on **O6**.
+this slice. Money is **FND-003C** — **O6 is resolved** (ADR-0011), and the
+remaining money lifecycle work is still unimplemented.
 
 ## Reservation expiry
 

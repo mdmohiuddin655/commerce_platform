@@ -454,7 +454,7 @@ or financial result.
 | Fallback dispute workflow | **DONE** (0.9) — see [delivery-proof-dispute.md](delivery-proof-dispute.md) | **FND-003D2B** |
 | **How a dispute resolves** | **DEFERRED** — enumerated and refused, never guessed | resolution slice, **O6**, FND-003C |
 | Delivery attempts, refusal, returns | **DONE** (0.10) — the non-success path only; see [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md). Successful delivery is still **not** executable | **FND-003B3B** |
-| Any money at all | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
+| Any money at all | **UNKNOWN / DEFERRED** | **FND-003C** — **O6 resolved** (ADR-0011); the remaining money lifecycle work is unimplemented |
 | Manual/admin assessment override | **NOT INVENTED** — separate audited workflow if ever needed | future ADR |
 
 `customer.delivery.confirm_proof` keeps its exact accepted meaning:

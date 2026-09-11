@@ -682,7 +682,7 @@ Therefore:
 |---|---|---|
 | **How a dispute resolves** — who prevails, on what standard | **DEFERRED** — enumerated and refused | resolution slice + **O6** |
 | Delivery, refusal or return consequence of a dispute | **DEFERRED** — FND-003B3B (**done**) defines the refused-order return but decides no *dispute* consequence | resolution slice + **O6** |
-| Any fee, refund, compensation, liability or settlement | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
+| Any fee, refund, compensation, liability or settlement | **UNKNOWN / DEFERRED** | **FND-003C** — **O6 resolved** (ADR-0011); the remaining money lifecycle work is unimplemented |
 | Withdrawal, closure, expiry, escalation, reassignment of a dispute | **NOT INVENTED** | resolution slice |
 | **Separation of duties** between raiser and reviewer | **NOT DECIDED** — an invented `reviewerIsRaiser` denial was removed by FND-003D2B-FIX-001; the accepted permission requires no approval | future permission + ADR |
 | SLA, deadline or response window | **NOT INVENTED** | operational policy |

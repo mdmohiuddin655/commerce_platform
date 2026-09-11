@@ -115,7 +115,9 @@ added `agent.return.record_receipt` — mutates **no assessment**, and leaves `O
 **FND-003D is PARTIAL**: the proof-satisfaction *policy itself* is still
 undefined, so `CONSTRAINTS.md` invariant 13 is **not discharged** and delivery
 confirmation may not be coded. **How a dispute resolves** is a separate
-undecided question, blocked on **O6** and **FND-003C**. *(FND-003B3B has since
+undecided question, needing the remaining **FND-003C** money work — **O6 itself
+is resolved** by [ADR-0011](../decisions/ADR-0011-o6-currency-fees-commission-and-cash-custody.md) —
+and a resolution slice. *(FND-003B3B has since
 been accepted and integrated; it defines the refused-order return and decides
 **no** dispute outcome, fault or money.)*
 

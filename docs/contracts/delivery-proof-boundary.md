@@ -284,7 +284,8 @@ That slice must then reconcile, in one design:
 - fresh authorization;
 - command idempotency;
 - atomic dedupe and outbox;
-- any COD or payment consequence, which is **FND-003C's and blocked on O6**.
+- any COD or payment consequence, which is **FND-003C's** — **O6 is resolved**
+  (ADR-0011), and the remaining money lifecycle work is unimplemented.
 
 **FND-003D1 decides none of those edges.**
 

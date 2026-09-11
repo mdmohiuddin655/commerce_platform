@@ -78,7 +78,8 @@ Splitting the two would allow a refusal with nothing saying the goods must come
 back, and a return nobody asked for.
 
 **`deferredToFinancialSlice` means unknown.** Whether a refusal fee, a refund, a
-redelivery charge or any liability follows is **FND-003C**'s, blocked on **O6**.
+redelivery charge or any liability follows is **FND-003C**'s — **O6 is resolved**
+(ADR-0011), and the remaining money lifecycle work is still unimplemented.
 Reading it as "free" is the misreading the type exists to prevent.
 
 ## 4. Failure decides nothing
@@ -204,7 +205,8 @@ the whole canonical reserved quantity.
 `ReturnDisposition` answers exactly one question — *may these units be sold
 again?* It deliberately cannot express who damaged them, who owes for them,
 whether a refund or replacement is due, or what commission applies. Those belong
-to **FND-003C** (blocked on **O6**) and to a dispute-resolution slice that does
+to **FND-003C** (**O6 resolved** by ADR-0011; the remaining money lifecycle work
+is still unimplemented) and to a dispute-resolution slice that does
 not exist.
 
 `quarantined` is kept distinct from `damaged` — inventory-identical — because
