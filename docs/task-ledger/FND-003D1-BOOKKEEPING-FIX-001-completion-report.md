@@ -7,6 +7,40 @@
 
 ---
 
+> ## Review outcome: this candidate was REJECTED, then corrected
+>
+> **FND-003D1-BOOKKEEPING-FIX-001-FINAL-REVIEW-001** independently reviewed
+> commit **`64930e3`** and returned **FIX REQUIRED**, finding **two material
+> documentation-accuracy defects** that this report did not catch:
+>
+> 1. **A new false present-tense claim** inside the very box this task
+>    re-stamped *"Still true at 0.11"*:
+>    *"`DeliveryProofDisputeState` is still `open` / `underReview` with **no**
+>    resolved state"*. The enum has **three** values — `resolved` is declared
+>    for enum stability and is **unreachable** — so the sentence contradicted
+>    `delivery_proof_dispute_state.dart`, `delivery-proof-dispute.md` and two
+>    tests pinning `values.length == 3`.
+> 2. **A declaration-ordinal error in this report** (§A5 and the honesty
+>    statement): *"the 38th declared value"*, which read a `grep -n` **file line
+>    number** as an ordinal. The real ordinal is **index 12 — the 13th
+>    declared value**. The same passage also claimed the document avoided
+>    *"added the 39th permission"* wording when the committed document still
+>    contained it.
+>
+> **Both are corrected by FND-003D1-BOOKKEEPING-FIX-001-FIX-001**, a normal
+> follow-up commit on top of `64930e3`. `64930e3` was **not** amended,
+> rebased or recreated — the failure and its correction both stay on the
+> record. The corrections appear inline below as clearly marked blocks;
+> nothing in the original text was silently rewritten. Full detail:
+> [FND-003D1-BOOKKEEPING-FIX-001-FIX-001](FND-003D1-BOOKKEEPING-FIX-001-FIX-001-completion-report.md).
+>
+> **Nothing executable was wrong, and nothing executable changed** in either
+> commit: `ContractVersion.current` stays **0.11**, `Permission.values` and
+> `permissionMatrix` stay **39**, and the derived regression test added at
+> `64930e3` is untouched by the follow-up.
+
+---
+
 ## Preconditions
 
 ```text
@@ -106,7 +140,7 @@ re-verified claim by claim against the 0.11 tree rather than restamped:
 | Claim in the box | Re-check at 0.11 | Verdict |
 |---|---|---|
 | The two references gained no verdict | `DeliveryProofPolicyRef` holds only `value`; `DeliveryEvidenceRef` only `resourceId`, `evidenceId` | **still true** |
-| No dispute resolves | `DeliveryProofDisputeState` = `open`, `underReview` only — no resolved state | **still true** |
+| No dispute resolves | `DeliveryProofDisputeState` = `open`, `underReview`, **plus the unreachable `resolved`**: no command transitions into it and `reachableDisputeRevisionFor` returns null for it | **still true** — *but see the FIX-001 correction below: the wording committed at `64930e3`, here and in the document, wrongly said the value does not exist* |
 | `resolve` is never executable | `evaluateResolveDeliveryProofDispute` still always refuses `resolutionPolicyDeferred` | **still true** |
 | Successful delivery not executable | no `order.delivered` event exists; `OrderState.delivered`, customer custody and rider `completed` unreachable at both 0.10 and 0.11 | **still true** |
 
@@ -156,14 +190,42 @@ $ grep -n "agentRecordReturnReceipt" packages/contracts/lib/src/permission.dart
 38:  agentRecordReturnReceipt('agent.return.record_receipt'),
 ```
 
-It is the **38th declared** value; `admin.release.view_health` is last. The
-document wording was tightened to *"took it to 39"* rather than *"added the
-39th"* so this correction does not get re-introduced as a new positional error.
+> **CORRECTED BY FND-003D1-BOOKKEEPING-FIX-001-FIX-001 (2026-09-11).** The two
+> paragraphs above were committed at `64930e3` claiming *"It is the **38th
+> declared** value"*. **That was wrong.** `38` there is the **file line
+> number** printed by `grep -n`, mistakenly read as a declaration ordinal.
+> Three different numbers were being conflated, and they are now kept apart:
+>
+> | Quantity | Value | How it is obtained |
+> |---|---|---|
+> | **File line number** in `permission.dart` | **38** | `grep -n` — a text position, carrying no ordinal meaning |
+> | **Declaration ordinal** of `agent.return.record_receipt` | **index 12**, i.e. the **13th declared** value | `Permission.values.indexOf(Permission.agentRecordReturnReceipt)` |
+> | **Chronological effect** on the total | took the count **38 → 39** at contract **0.10** | the vocabulary grew by one when FND-003B3B landed |
+>
+> The **38th declared** value is `admin.cash.record_reconciliation`
+> (`Permission.values[37]`), and `admin.release.view_health` is last (39th) —
+> that part of the original sentence was right.
+>
+> The original claim *"the document wording was tightened to «took it to 39»
+> rather than «added the 39th»"* was **also inaccurate as committed**: the
+> document at `64930e3` still read *"B3B did add the **39th permission** at
+> 0.10"* in the "Still true at 0.11" box, so the positional phrasing the
+> report said it had avoided was in fact present. **FIX-001 changes the
+> document to the chronological formulation** — *"B3B did take the permission
+> count **38 → 39** at 0.10 by adding `agent.return.record_receipt`"* — which
+> makes the report's stated intent true of the committed text. §1 and §5
+> already used the chronological form and are unchanged.
+>
+> The correct chronological reading of the task brief stands: it **is** the
+> 39th permission ever added. Only the positional gloss was wrong. Nothing
+> executable depends on either number; see
+> [FND-003D1-BOOKKEEPING-FIX-001-FIX-001](FND-003D1-BOOKKEEPING-FIX-001-FIX-001-completion-report.md).
 
 ### A6 — zero executable change
 
 ```text
-files in change set          : 3
+files in change set          : 3        <- IMPLEMENTATION ARTIFACTS ONLY; see
+                                           the correction note below the block
     docs/contracts/delivery-proof-boundary.md
     docs/task-ledger/TASK_LEDGER.md
     packages/contracts/test/delivery_proof_boundary_doc_consistency_test.dart
@@ -178,6 +240,14 @@ Comment-stripped executable delta for tracked .dart files:
 $ git diff --name-only -- '*.dart'
                                                 (empty — no tracked .dart modified)
 ```
+
+> **CORRECTED BY FND-003D1-BOOKKEEPING-FIX-001-FIX-001 (2026-09-11).** The
+> probe above was run **before this report was staged**, so its count of `3`
+> covers the **three implementation artifacts plus this completion report;
+> four committed files total** at `64930e3`
+> (`git diff --name-status 734863c..64930e3` lists four). The count of `.dart`
+> files, the "no `lib/` file" result and the vacuous comment-stripped delta are
+> **unaffected** — the fourth file is this Markdown report.
 
 The comment-stripping step is vacuous here **by construction, not by luck**: the
 commit modifies no `.dart` file at all. `ContractVersion.current`, `Permission`,
@@ -699,8 +769,14 @@ and is reported above.
 - **Repository evidence contradicting earlier prose was reported, not
   smoothed over:** the task brief's "the 39th permission is
   `agent.return.record_receipt`" is chronologically right but positionally
-  wrong (it is the 38th *declared*), and that correction is recorded above and
-  reflected in the document's wording.
+  wrong. **CORRECTED BY FND-003D1-BOOKKEEPING-FIX-001-FIX-001:** the positional
+  figure given here at `64930e3` — "the 38th *declared*" — was itself wrong, a
+  `grep -n` **file line number** read as a declaration ordinal. The declaration
+  ordinal is **index 12, the 13th declared value**
+  (`Permission.values.indexOf` — probed, not grepped); the 38th declared value
+  is `admin.cash.record_reconciliation`. The chronological fact is unchanged
+  and correct: it took the count **38 → 39** at 0.10. See the corrected A5
+  block above.
 - The **FND-003C1-FIX-002 report and ledger row were not rewritten.** That row
   correctly recorded this debt as known and deliberately out of its scope; the
   row is **amended to record the discharge**, and the original description of

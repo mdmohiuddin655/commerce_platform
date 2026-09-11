@@ -37,14 +37,20 @@ platform to a proof method.
 > surface: COD collection and the balanced cash journal). Neither weakens a
 > claim in this box. The two references still carry **no verdict field**
 > (`DeliveryProofPolicyRef` holds only `value`; `DeliveryEvidenceRef` only
-> `resourceId` and `evidenceId`); `DeliveryProofDisputeState` is still
-> `open` / `underReview` with **no** resolved state;
+> `resourceId` and `evidenceId`); `DeliveryProofDisputeState` remains
+> `open` / `underReview` **plus the unreachable `resolved`** — that third value
+> **does exist**, declared for enum stability only, and it stays unreachable:
+> **no command transitions into it** and `reachableDisputeRevisionFor` returns
+> **null** for it, exactly as
+> [delivery-proof-dispute.md](delivery-proof-dispute.md) records. **No
+> resolution policy exists**, and none is implied by the value being declared;
 > `dispute.resolve_delivery_proof` is still enumerated and always refused
 > `resolutionPolicyDeferred`; **no `order.delivered` event exists**; and
 > `OrderState.delivered`, customer custody and rider `completed` all remain
 > unreachable, so `CONSTRAINTS.md` invariant 13 is still undischarged. B3B did
-> add the **39th permission** at 0.10 — that changes the *count* (§1, §5), not
-> any claim above.
+> take the permission count **38 → 39** at 0.10 by adding
+> `agent.return.record_receipt` — that changes the *count* (§1, §5), not any
+> claim above.
 
 ---
 
