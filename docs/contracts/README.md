@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.9** (FND-003D2B).
+**Current contract version: 0.10** (FND-003B3B).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8 → 0.9, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8 → 0.9 → 0.10, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -81,7 +81,6 @@ evaluating a policy — **not the policy**, and **not a proof mechanism**. It ad
 | Document | Covers |
 |---|---|
 | [delivery-proof-dispute.md](delivery-proof-dispute.md) | The **fallback dispute workflow** for a missing, superseded or `notSatisfied` assessment: the two fallback grounds, the immutable dispute basis and its `current` / `superseded` / `indeterminate` standing, one live dispute per order, two named operations under the accepted `customer.dispute.raise` and `admin.dispute.administer` rules, **one evaluator per operation with its own read-set**, an independent dispute revision with compare-and-set, all-NONE effects including the assessment, two privacy-minimal events, the deliberately **non-executable** resolution edge, and the **DPD1–DPD12** backend checklist |
-| [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md) | The **delivery attempt** and **return** lifecycles for the bounded non-success path: `pending → out_for_delivery → refused | failed` with `delivered` enumerated and **never executable**, a refusal that atomically opens a required return, a failed attempt that invents **no** retry or return policy, the direct `rider → shop` return `required → in_transit → received → inspected → closed`, shop receipt as the second receiver-side custody edge (`rider → shop`, exactly once), stock restored **only** after receipt **and** a `restockable` inspection, the terminal `ReservationState.returned` kept distinct from `released`, one new permission `agent.return.record_receipt`, **one evaluator per operation with its own read-set**, and the **ATT1–ATT9 / RET1–RET8** backend checklist |
 
 Corrected in place by **FND-003D2B-FIX-001**: the basis standing now requires the
 **verdict** to still agree, not just the assessment id and revision; an invented
@@ -93,9 +92,9 @@ Corrected again by **FND-003D2B-FIX-002**: a higher assessment revision that
 **reuses the basis's assessment id** is impossible history and now answers
 `indeterminate` rather than `superseded`; and both executable operations now
 require FND-003A's unforgeable **`AuthorizationGrant`**, so a direct evaluator
-call can no longer bypass the canonical authorization decision. **The corrected
-three-commit candidate is not accepted for merge** — it awaits another separate
-read-only final review.
+call can no longer bypass the canonical authorization decision. *(At the time that was written the corrected three-commit candidate was not yet
+accepted. **FND-003D2B was subsequently accepted as a seven-commit chain and
+integrated into `main`** — see the task ledger.)*
 
 Corrected a third time by **FND-003D2B-FIX-003**: the raise read-set now binds
 its **order lifecycle read to a resource** — the accepted `OrderLifecycleFacts`
@@ -106,14 +105,48 @@ compares the grant's resource against itself.
 **Successful delivery is still NOT executable, and no dispute resolves.**
 FND-003D2B records *that* the proof situation is contested and *that* review
 started. It decides **no outcome, fault, fee, refund, compensation, liability,
-return or delivery consequence**, adds **no permission** (`Permission.values`
-stays at 38), mutates **no assessment**, and leaves `OrderState.delivered`,
+return or delivery consequence**, adds **no permission** — `Permission.values` was **38** across
+the whole of FND-003D2B, and is **39** today only because FND-003B3B later
+added `agent.return.record_receipt` — mutates **no assessment**, and leaves `OrderState.delivered`,
 `CustodyHolderKind.customer` and rider `AssignmentState.completed` unreachable.
 
 **FND-003D is PARTIAL**: the proof-satisfaction *policy itself* is still
 undefined, so `CONSTRAINTS.md` invariant 13 is **not discharged** and delivery
 confirmation may not be coded. **How a dispute resolves** is a separate
-undecided question, blocked on **O6**, **FND-003C** and **FND-003B3B**.
+undecided question, blocked on **O6** and **FND-003C**. *(FND-003B3B has since
+been accepted and integrated; it defines the refused-order return and decides
+**no** dispute outcome, fault or money.)*
+
+## Delivered — FND-003B3B
+
+| Document | Covers |
+|---|---|
+| [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md) | The **delivery attempt** and **return** lifecycles for the bounded non-success path: `pending → out_for_delivery → refused | failed` with `delivered` enumerated and **never executable**, a refusal that atomically opens a required return, a failed attempt that invents **no** retry or return policy, the direct `rider → shop` return `required → in_transit → received → inspected → closed`, shop receipt as the second receiver-side custody edge (`rider → shop`, exactly once), stock restored **only** after receipt **and** a `restockable` inspection, the terminal `ReservationState.returned` kept distinct from `released`, one new permission `agent.return.record_receipt`, **one evaluator per operation with its own read-set**, and the **ATT1–ATT9 / RET1–RET8** backend checklist |
+
+**Accepted and integrated.** The accepted contract is the **two-commit** chain
+**`8ccb5aa8` + `cdb5f35b`** — `8ccb5aa8` alone is **not** accepted, because
+FND-003B3B-FINAL-REVIEW-001 found two material documentation defects in it that
+FND-003B3B-FIX-001 (`cdb5f35b`) corrected with **zero executable change**.
+
+Contract **0.9 → 0.10**, additive. `Permission.values` and `permissionMatrix`
+go **38 → 39** — the one addition is `agent.return.record_receipt`, because
+shop-side receipt authority did not exist and
+`agent.fulfillment.record_progress` was deliberately not widened into a custody
+or stock lever.
+
+**The return is whole-order only.** One `ReturnDisposition` covers the entire
+committed reservation, a caller cannot choose the quantity, and a **mixed**
+return is **not representable** — see
+[ADR-0010](../decisions/ADR-0010-direct-rider-to-shop-return-route.md).
+
+**Successful delivery is still NOT executable.** `recordDelivered` is
+enumerated and always refused with `deliveryProofPolicyDeferred`, a `satisfied`
+assessment is **not** consumed as authority for it, and `OrderState.delivered`,
+`CustodyHolderKind.customer` and rider `AssignmentState.completed` all remain
+unreachable — **B3-C2 stays FUTURE** and `CONSTRAINTS.md` invariant 13 is **not
+discharged**. The failed-attempt retry/return consequence, the via-picker return
+route, dispute resolution and every fee/refund/liability/commission/settlement
+rule remain **undecided**.
 
 ## Not yet defined — later FND-003 slices
 
@@ -122,9 +155,9 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle — delivery, refusal, returns** (FND-003B3, remaining) | Delivery attempts, delivery confirmation, refusal/failure, return processing, customer custody, and rider assignment `completed` | FND-003B3A (**done**) |
+| **Lifecycle — successful delivery** (FND-003B3, remaining) | Delivery **confirmation**, customer custody, and rider assignment `completed` (**B3-C2**). Delivery attempts, refusal, failure and the direct `rider → shop` return are **done** (FND-003B3B) — but a *successful* delivery needs the proof-satisfaction policy, which is undefined. The **failed-attempt** retry/return consequence and the **via-picker** return route are also still undecided: B3B enumerates and refuses both rather than guessing. | FND-003B3A (**done**), FND-003B3B (**done**), **Proof policy** |
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
-| **Inventory — post-dispatch** | Return-path restoration: stock cannot become available again until shop receipt **and** inspection. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). | FND-003B3 |
+| **Inventory — post-dispatch, remaining** | Whole-order return restoration is **done** (FND-003B3B): stock becomes available again only after shop receipt **and** a `restockable` inspection, exactly once, and `damaged` / `quarantined` restore zero. Pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). Still undefined: **partial / per-item returns** — B3B cannot represent a mixed return and must not be reinterpreted to — and any post-dispatch **cancellation** stock consequence. | A separate additive contract (ADR-0010) |
 | **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
 | **Proof policy** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed. Required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
 | **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C, FND-003B3B |
