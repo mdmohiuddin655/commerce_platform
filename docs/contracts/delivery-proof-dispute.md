@@ -35,6 +35,12 @@ rider assignment, or touches money.
 | `Permission.values` | **38**, unchanged |
 | **dispute resolution** | **not executable** — see §7 |
 
+> **This table is the state *after 0.9*, not the state today.** FND-003B3B
+> (0.10) later added the delivery-attempt and return commands and one
+> permission, taking `Permission.values` to **39**. `OrderState.delivered`,
+> `CustodyHolderKind.customer`, rider `completed` and dispute resolution are
+> **still** unreachable.
+
 `CONSTRAINTS.md` invariant 13 requires **both** customer proof and the fallback
 dispute workflow before delivery confirmation is coded. This slice delivers the
 second half. **The proof-satisfaction policy itself is still undefined**, so
@@ -335,7 +341,9 @@ Role, membership status, scope and reason are **not** re-checked: they live in
 `permissionMatrix` and are decided in exactly one place. An out-of-region admin,
 an inactive member, a wrong-role principal or an admin who supplied no reason
 simply never obtains the grant, so there is nothing for them to present. The
-matrix is not copied, and `Permission.values` stays at **38**.
+matrix is not copied, and FND-003D2B added no permission of its own —
+`Permission.values` was **38** throughout that slice, and is **39** today only
+because FND-003B3B later added `agent.return.record_receipt`.
 
 One **generic** denial covers every failure — `authorizationGrantMismatch` —
 because a caller must not be able to probe for a resource's existence, owner or
@@ -544,7 +552,9 @@ Resolving a dispute would require deciding, at minimum:
   veto.
 
 **Not one of those is decided anywhere in this repository.** They belong to
-owner decision **O6**, **FND-003C** and **FND-003B3B**. Guessing one here would
+owner decision **O6** and **FND-003C**. *(FND-003D2B also pointed at
+FND-003B3B, which has since run: it defines the refused-order return and
+decides none of these questions, so they remain open.)* Guessing one here would
 bake it into stored history.
 
 **Withdrawal, closure, expiry, escalation and reassignment of a dispute are
@@ -671,7 +681,7 @@ Therefore:
 | Decision | Status | Owner |
 |---|---|---|
 | **How a dispute resolves** — who prevails, on what standard | **DEFERRED** — enumerated and refused | resolution slice + **O6** |
-| Delivery, refusal or return consequence of a dispute | **DEFERRED** | **FND-003B3B** |
+| Delivery, refusal or return consequence of a dispute | **DEFERRED** — FND-003B3B (**done**) defines the refused-order return but decides no *dispute* consequence | resolution slice + **O6** |
 | Any fee, refund, compensation, liability or settlement | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
 | Withdrawal, closure, expiry, escalation, reassignment of a dispute | **NOT INVENTED** | resolution slice |
 | **Separation of duties** between raiser and reviewer | **NOT DECIDED** — an invented `reviewerIsRaiser` denial was removed by FND-003D2B-FIX-001; the accepted permission requires no approval | future permission + ADR |
@@ -680,7 +690,7 @@ Therefore:
 | What a proof policy actually requires | **DEFERRED** | proof-policy slice |
 | **Customer participation requirement** | **POLICY-DEFINED / DEFERRED** — not optional, not mandatory, not sufficient, not a veto | proof-policy slice |
 | Disputing a **satisfied** assessment | **NOT DEFINED** — refused `assessmentSatisfied` | future slice, if ever needed |
-| Whether a dispute may be raised after delivery, refusal, return or post-dispatch cancellation | **DEFERRED** — none of those states is reachable | **FND-003B3B** |
+| Whether a dispute may be raised after delivery, refusal, return or post-dispatch cancellation | **DEFERRED** — refusal and return became reachable in FND-003B3B (**done**), which decided nothing about disputing them; delivery and post-dispatch cancellation remain unreachable | resolution slice + **O6** |
 | Manual/admin proof override | **NOT INVENTED** — none exists, and none was added | future ADR |
 | Dispute visibility, retention and deletion | **DEFERRED** (as for evidence, unchanged from D1) | privacy/retention slice |
 

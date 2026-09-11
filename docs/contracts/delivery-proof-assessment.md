@@ -28,6 +28,11 @@ rider assignment, or touches money.
 | delivery / refusal / return commands | **none exist** |
 | `Permission.values` | **38**, unchanged |
 
+> **This table is the state *after 0.8*, not the state today.** FND-003B3B
+> (0.10) later added the delivery-attempt and return commands and one
+> permission, taking `Permission.values` to **39**. `OrderState.delivered`,
+> `CustodyHolderKind.customer` and rider `completed` are **still** unreachable.
+
 A test sweeps every command type across `LifecycleCommand`,
 `AssignmentCommand`, `CustodyCommand` and — since FND-003D2B widened it —
 `DeliveryProofDisputeCommand`, and asserts nothing containing `proof`,
@@ -447,8 +452,8 @@ or financial result.
 | Evidence retention, visibility, deletion, legal hold | **DEFERRED** (unchanged from D1) | privacy/retention slice |
 | **Customer participation requirement** | **POLICY-DEFINED / DEFERRED** — not optional, not mandatory, not sufficient, not a veto | proof-policy slice |
 | Fallback dispute workflow | **DONE** (0.9) — see [delivery-proof-dispute.md](delivery-proof-dispute.md) | **FND-003D2B** |
-| **How a dispute resolves** | **DEFERRED** — enumerated and refused, never guessed | resolution slice, **O6**, FND-003C, FND-003B3B |
-| Delivery attempts, refusal, returns | **NOT STARTED** | **FND-003B3B** |
+| **How a dispute resolves** | **DEFERRED** — enumerated and refused, never guessed | resolution slice, **O6**, FND-003C |
+| Delivery attempts, refusal, returns | **DONE** (0.10) — the non-success path only; see [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md). Successful delivery is still **not** executable | **FND-003B3B** |
 | Any money at all | **UNKNOWN / DEFERRED** | **FND-003C**, blocked on **O6** |
 | Manual/admin assessment override | **NOT INVENTED** — separate audited workflow if ever needed | future ADR |
 
