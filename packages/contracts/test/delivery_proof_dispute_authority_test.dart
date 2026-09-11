@@ -44,9 +44,13 @@ AuthorizationDecision decide({
 
 void main() {
   group('the two dispute permissions are the accepted ones, unchanged', () {
-    test('no permission was added by this slice', () {
-      expect(Permission.values.length, 38);
-      expect(permissionMatrix.length, 38);
+    test('D2B added no permission; the only later addition is B3B\'s', () {
+      // FND-003B3B added exactly one permission — `agent.return.record_receipt`,
+      // for shop-side receipt of returned goods — taking the count 38 -> 39.
+      // The guard below is unchanged and still the point of this test: no
+      // permission bearing any of these forbidden fragments exists.
+      expect(Permission.values.length, 39);
+      expect(permissionMatrix.length, 39);
       for (final Permission p in Permission.values) {
         for (final String forbidden in <String>[
           'dispute.resolve',

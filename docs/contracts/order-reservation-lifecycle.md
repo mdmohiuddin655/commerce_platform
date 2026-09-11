@@ -76,7 +76,17 @@ trusted facts loaded
 | `ready` | `committed` |
 | `rejected` | `released` |
 | `cancelled` | `released` |
-| `in_delivery` | `committed` |
+| `in_delivery` | `committed`, `returned` |
+
+`in_delivery ↔ returned` was added by **FND-003B3B**. After a refused delivery
+whose goods came back to the shop and were inspected, the order is **still**
+`in_delivery` — no accepted slice defines a post-dispatch order state for "came
+back", and inventing one would be inventing the commercial outcome — while its
+reservation has ended. `ReservationState.returned` is deliberately **not**
+`released`: `released` promises the units went back to available stock, and a
+damaged or quarantined return makes no such promise. See
+[delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md)
+and [ADR-0010](../decisions/ADR-0010-direct-rider-to-shop-return-route.md).
 
 `in_delivery ↔ committed` was added by **FND-003B3A** and is produced by the
 **custody slice**, not by this evaluator: rider receipt moves the order there,

@@ -33,7 +33,35 @@ enum ReservationState {
   ///
   /// Distinct from [released] so audit can tell "nobody acted" from "someone
   /// rejected or cancelled"; the inventory effect of both is identical.
-  expired;
+  expired,
+
+  /// The goods came back after dispatch, the shop received them, and an
+  /// inspection recorded a disposition. **Terminal.**
+  ///
+  /// ## Why this is not [released]
+  ///
+  /// [released] carries a promise: *its units were restored to available
+  /// stock*. That promise is true for every path into it, and code and audit
+  /// both rely on it — `holdsUnits` false plus "released" has always meant the
+  /// shelf count went back up.
+  ///
+  /// A returned reservation cannot make that promise. Whether the units became
+  /// available again depends on the inspection's `ReturnDisposition`:
+  /// `restockable` restores them, while `damaged` and `quarantined` restore
+  /// **nothing** and must not. Overloading [released] would either make its
+  /// promise false for damaged goods — silently turning breakage into sellable
+  /// stock in every downstream reader — or force every reader to re-derive the
+  /// disposition before trusting a state name.
+  ///
+  /// So this state says only: *the reservation is over and the goods are
+  /// physically back*. The stock consequence is carried explicitly by the
+  /// transition's `InventoryEffect`, which is `restore(units)` exactly once for
+  /// a restockable disposition and `none()` otherwise.
+  ///
+  /// Like the other terminal states it is reached exactly once, on the
+  /// inspection transition, so a replayed inspection or a later close cannot
+  /// restore a second time.
+  returned;
 
   /// Stable wire identifier.
   String get id => switch (this) {
@@ -41,6 +69,7 @@ enum ReservationState {
     ReservationState.committed => 'committed',
     ReservationState.released => 'released',
     ReservationState.expired => 'expired',
+    ReservationState.returned => 'returned',
   };
 
   /// Whether the reservation still holds units that available stock is
@@ -48,9 +77,14 @@ enum ReservationState {
   bool get holdsUnits =>
       this == ReservationState.active || this == ReservationState.committed;
 
-  /// Whether the units have already been given back. True for [released] and
-  /// [expired] — the states in which a further restoration would be a double
-  /// restore.
+  /// Whether the reservation is over and no further restoration may happen.
+  /// True for [released], [expired] and [returned] — the states in which a
+  /// further restoration would be a double restore.
+  ///
+  /// **Not a claim that stock went back up.** [released] and [expired] do carry
+  /// that; [returned] deliberately does not, because a damaged or quarantined
+  /// return restores nothing. Read the transition's `InventoryEffect` for the
+  /// stock consequence, never a state name.
   bool get isFinal => !holdsUnits;
 
   /// Only an [active] reservation can expire. This single rule is what makes

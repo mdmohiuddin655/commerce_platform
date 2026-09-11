@@ -97,6 +97,7 @@ export 'package:cp_contracts/src/custody_command.dart';
 export 'package:cp_contracts/src/custody_effect.dart';
 export 'package:cp_contracts/src/custody_lifecycle.dart';
 export 'package:cp_contracts/src/custody_state.dart';
+export 'package:cp_contracts/src/delivery_attempt_return.dart';
 export 'package:cp_contracts/src/delivery_proof.dart';
 export 'package:cp_contracts/src/delivery_proof_assessment.dart';
 export 'package:cp_contracts/src/delivery_proof_dispute.dart';

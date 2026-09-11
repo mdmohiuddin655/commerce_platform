@@ -22,6 +22,21 @@ enum Permission {
   agentOfferRiderAssignment('agent.assignment.offer_rider'),
   agentRevokePickerAssignment('agent.assignment.revoke_picker'),
 
+  /// **Added by FND-003B3B.** The shop records that returned goods physically
+  /// arrived back at its counter, moving custody `rider -> shop`.
+  ///
+  /// A separate permission because no existing one represents shop-side
+  /// receipt authority. `agent.fulfillment.record_progress` was deliberately
+  /// **not** reused: its own rule says it never writes trusted stock, order
+  /// status or cash fields, and a return receipt is the fact the whole restock
+  /// invariant hangs from. Widening it into a custody mutation would turn a
+  /// progress note into an inventory lever.
+  ///
+  /// It confers **only** receipt. It cannot restore stock — that needs a
+  /// separate inspection — cannot change order state, cannot complete a rider
+  /// and decides no money.
+  agentRecordReturnReceipt('agent.return.record_receipt'),
+
   // ------------------------------------------------------------------ picker
   pickerViewAssignedWork('picker.assignment.view_assigned'),
   pickerAcceptAssignment('picker.assignment.accept'),

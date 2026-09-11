@@ -248,7 +248,16 @@ const Map<OrderState, Set<ReservationState>> canonicalAggregatePairs =
   // evaluator owns. The reservation stays committed: dispatch does not restore
   // stock, and stock cannot become available again until the return lifecycle
   // proves shop receipt AND inspection.
-  OrderState.inDelivery: <ReservationState>{ReservationState.committed},
+  //
+  // FND-003B3B adds `returned`: after a refused delivery whose goods came back
+  // and were inspected, the order is still `in_delivery` — no accepted slice
+  // defines a post-dispatch order state for "came back", and inventing one
+  // would be inventing the commercial outcome — while its reservation has
+  // ended. Both pairings are canonical; only the reservation moved.
+  OrderState.inDelivery: <ReservationState>{
+    ReservationState.committed,
+    ReservationState.returned,
+  },
 };
 
 /// Rejects trusted facts that cannot be a real aggregate, before any

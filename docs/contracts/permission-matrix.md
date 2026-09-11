@@ -1,8 +1,9 @@
 # Permission matrix
 
-**Contract version 0.5.** Introduced by FND-003A (0.2) and extended by
-FND-003B2A (`agent.assignment.revoke_picker`) and FND-003B2B
-(`picker.assignment.offer_rider`, `picker.assignment.revoke_rider`). This
+**Contract version 0.10.** Introduced by FND-003A (0.2) and extended by
+FND-003B2A (`agent.assignment.revoke_picker`), FND-003B2B
+(`picker.assignment.offer_rider`, `picker.assignment.revoke_rider`) and
+FND-003B3B (`agent.return.record_receipt`) — **39 permissions**. This
 table is **generated from
 `packages/contracts/lib/src/permission_matrix.dart`** — the single source of
 truth that all five apps and the backend consume. Regenerate with:
@@ -41,6 +42,7 @@ across five apps drift apart, a permission vocabulary does not.
 | `agent.assignment.offer_picker` | agent | active | `ownShop` | no | no | Offers work. An offer is not an assignment and never implies custody. |
 | `agent.assignment.offer_rider` | agent | active | `ownShop` | no | no | Offers work only, within the agent's own shops. RESERVED FOR A FUTURE DIRECT SHOP-TO-RIDER PICKUP FLOW and NOT executable: no implemented command maps to it. The rider lifecycle in FND-003B2B is picker-originated and uses picker.assignment.offer_rider instead, because a direct shop pickup takes custody from the shop rather than from a picker and needs its own lifecycle, order-stage prerequisites and handoff design. |
 | `agent.assignment.revoke_picker` | agent | active | `ownShop` | **yes** | no | Controlled reassignment only: withdraws one accepted picker assignment so the work can be re-offered as a NEW attempt. It cannot replace an assignee, cannot overwrite assignment state, and cannot override custody safety — revocation is refused unless the backend proves the worker never took custody. |
+| `agent.return.record_receipt` | agent | active | `ownShop` | **yes** | no | Records that returned goods physically arrived at this shop, moving custody rider -> shop. Receipt alone restores NO stock: available stock changes only on a separate inspection that records a restockable disposition. Confers no authority over order state, rider assignment, money or liability. |
 | `picker.assignment.view_assigned` | picker | active | `assignedResource` | no | no | Only what the active assignment needs. Not a customer directory and not a browsable order list. |
 | `picker.assignment.accept` | picker | active | `ownRegion` + `offeredResource` | no | no | The offer must have been addressed to this picker: a same-region picker cannot accept another picker's offer. Does NOT require an already accepted assignment. Whether the offer is still live is lifecycle state (FND-003B), not authorization. |
 | `picker.assignment.decline` | picker | active | `ownRegion` + `offeredResource` | no | no | Same target isolation as accepting: only the picker the offer was addressed to may decline it. |

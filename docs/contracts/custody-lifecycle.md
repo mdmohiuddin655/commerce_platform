@@ -375,6 +375,16 @@ unilateral cancellation is allowed.
 - **After receipt** the order is `in_delivery` and the pre-dispatch cancellation
   path cannot act on it at all.
 
+> **Resolved by FND-003B3B.** The return lifecycle now exists, and it is the
+> only thing that can restore stock after dispatch: a `rider -> shop` return
+> whose shop receipt **and** inspection are both recorded, with a `restockable`
+> disposition, restores the reserved units exactly once. Receipt alone restores
+> nothing, and damaged or quarantined goods restore nothing at all. Custody
+> moves `rider -> shop` on that receipt — the second receiver-side custody edge,
+> following the same pattern as `picker -> rider`. The post-dispatch
+> *cancellation* consequence is still **not** decided. See
+> [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md).
+
 **Stock is never restored on pickup or handoff, and no post-pickup cancellation
 behaviour was invented.** Restoration after physical pickup stays deferred until
 the return lifecycle proves shop receipt **and** inspection —

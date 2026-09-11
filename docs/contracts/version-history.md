@@ -513,6 +513,57 @@ a decoder and its tests exist.
   so "unknown fields are ignored" would be an assertion about code that does
   not exist. The decoder that lands first must specify and test it.
 
+## 0.10 — FND-003B3B — delivery attempt and return lifecycles
+
+**2026-09-11. Additive.** The bounded **non-success** path after dispatch.
+
+**Added**
+
+- `DeliveryAttemptState` — `pending`, `outForDelivery`, `refused`, `failed`,
+  plus `delivered` declared for enum stability and **unreachable**.
+- `ReturnState` — `notRequired`, `required`, `inTransit`, `received`,
+  `inspected`, `closed`; `ReturnRoute` (`riderToShop` executable,
+  `riderToPickerToShop` enumerated and refused); `ReturnDisposition`
+  (`restockable`, `damaged`, `quarantined`).
+- `DeliveryAttemptCommand` (4 values, 3 executable) and `ReturnCommand`
+  (4 values); `DeliveryAttemptEventType` (3 ids) and `ReturnEventType` (6 ids).
+- `DeliveryAttemptFacts`, `ReturnFacts`, the resource-bound
+  `AttemptReturnOrderRead`, per-operation request types, transition, outcome and
+  effect types, `AttemptReturnDenial` (32 values),
+  `validateDeliveryAttemptAggregate`, `validateReturnAggregate`,
+  `checkAttemptReturnAuthorization`, `initialiseDeliveryAttempt`, and one
+  evaluator per operation plus three enumerated, never-executable ones.
+
+**Changed, additively**
+
+- `ReservationState.returned` — a new **terminal** state, deliberately distinct
+  from `released`. `released` promises the units went back to available stock;
+  a damaged or quarantined return cannot make that promise, so the stock
+  consequence travels in the transition's `InventoryEffect` instead of being
+  inferred from a state name. `canonicalAggregatePairs[in_delivery]` becomes
+  `{committed, returned}`.
+- **One permission added**: `agent.return.record_receipt`.
+  `Permission.values` and `permissionMatrix` go **38 → 39**. No existing
+  permission was widened — in particular `agent.fulfillment.record_progress`
+  was not turned into a custody or stock lever, and no admin custody override
+  was added.
+
+**Not added, and not decided**
+
+**Successful delivery is still not executable**: the proof-satisfaction policy
+is undefined, `recordDelivered` is always refused with
+`deliveryProofPolicyDeferred`, and a `satisfied` assessment is **not** consumed
+as authority for it. `OrderState.delivered`, `CustodyHolderKind.customer` and
+rider `AssignmentState.completed` remain unreachable; **B3-C2 stays FUTURE**.
+`CONSTRAINTS.md` invariant 13 is **not discharged**. No fee, refund, liability,
+compensation, commission or settlement rule exists; a refusal is
+`deferredToFinancialSlice` — **unknown, never zero**. No failed-attempt
+retry/return policy was invented, no proof mechanism was chosen, the via-picker
+route is refused, and dispute resolution stays deferred.
+
+See [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md)
+and [ADR-0010](../decisions/ADR-0010-direct-rider-to-shop-return-route.md).
+
 ## Migration status
 
 **No migration is required, and none is invented.**
@@ -520,13 +571,14 @@ a decoder and its tests exist.
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 through 0.9 are purely additive, so no stored value changes shape or
+- 0.2 through 0.10 are purely additive, so no stored value changes shape or
   meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003D2B commit returns the contract to 0.8,
+**Rollback:** reverting the FND-003B3B commit returns the contract to 0.9,
+reverting the FND-003D2B chain to 0.8,
 reverting the FND-003D2A chain to 0.7,
 reverting the FND-003D1 chain to 0.6,
 reverting the FND-003B3A chain to 0.5,

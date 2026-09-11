@@ -95,6 +95,44 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   inventory, financial, custody and assignment effect is NONE.
   ///   `delivered`, customer custody and rider `completed` remain unreachable.
   ///
+  /// - **0.10** (FND-003B3B) — additive: the delivery **attempt** and **return**
+  ///   lifecycles for the bounded non-success path — `DeliveryAttemptState`
+  ///   (`pending` / `outForDelivery` / `refused` / `failed`, with `delivered`
+  ///   declared and unreachable), `ReturnState`, `ReturnRoute`,
+  ///   `ReturnDisposition`, the attempt and return aggregates, the
+  ///   resource-bound `AttemptReturnOrderRead`, per-operation requests,
+  ///   transition, outcome, effect and denial vocabulary,
+  ///   `validateDeliveryAttemptAggregate` / `validateReturnAggregate`,
+  ///   `initialiseDeliveryAttempt`, and one evaluator per operation:
+  ///   `evaluateRecordOutForDelivery`, `evaluateRecordDeliveryRefusal`,
+  ///   `evaluateRecordDeliveryFailure`, `evaluateBeginReturnTransit`,
+  ///   `evaluateRecordReturnShopReceipt`, `evaluateRecordReturnInspection`,
+  ///   `evaluateCloseReturn`, plus three enumerated and **never-executable**
+  ///   ones — `evaluateRecordDelivered`,
+  ///   `evaluateFailedAttemptReturnDecision` and `evaluateReturnViaPicker`.
+  ///   Every executable operation requires FND-003A's unforgeable
+  ///   `AuthorizationGrant`, checked by `checkAttemptReturnAuthorization`.
+  ///
+  ///   Two additions touch existing vocabulary, both **additive**: the terminal
+  ///   `ReservationState.returned` — deliberately distinct from `released`,
+  ///   which promises the units went back to available stock, a promise a
+  ///   damaged or quarantined return cannot make — and one new permission,
+  ///   `agent.return.record_receipt`, so `Permission.values` and
+  ///   `permissionMatrix` go **38 -> 39**. No existing permission was widened;
+  ///   in particular `agent.fulfillment.record_progress` was not turned into a
+  ///   custody or stock lever.
+  ///
+  ///   Stock is restored **exactly once**, and only on an inspection that
+  ///   follows shop receipt and records a `restockable` disposition; damaged
+  ///   and quarantined returns end the reservation with an available-stock
+  ///   delta of **zero**. **Successful delivery is still not executable** — the
+  ///   proof-satisfaction policy is undefined, so `OrderState.delivered`,
+  ///   customer custody and rider `completed` remain unreachable and
+  ///   `CONSTRAINTS.md` invariant 13 is undischarged. No fee, refund,
+  ///   liability, compensation, commission or settlement rule is decided, no
+  ///   failed-attempt retry/return policy is invented, no proof mechanism is
+  ///   chosen, and the via-picker return route is enumerated and refused.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -104,7 +142,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 9);
+  static const ContractVersion current = ContractVersion(0, 10);
 
   final int major;
   final int minor;

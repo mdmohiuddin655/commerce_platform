@@ -203,6 +203,17 @@ const Map<Permission, PermissionRule> permissionMatrix =
         'and cannot override custody safety — revocation is refused unless '
         'the backend proves the rider never took custody.',
   ),
+  Permission.agentRecordReturnReceipt: PermissionRule(
+    permission: Permission.agentRecordReturnReceipt,
+    eligibleRoles: <CommerceRole>{CommerceRole.agent},
+    scopes: <ScopeRequirement>{ScopeRequirement.ownShop},
+    reasonRequired: true,
+    restriction: 'Records that returned goods physically arrived at this '
+        'shop, moving custody rider -> shop. Receipt alone restores NO stock: '
+        'available stock changes only on a separate inspection that records a '
+        'restockable disposition. Confers no authority over order state, '
+        'rider assignment, money or liability.',
+  ),
   Permission.pickerRecordShopPickup: PermissionRule(
     permission: Permission.pickerRecordShopPickup,
     eligibleRoles: <CommerceRole>{CommerceRole.picker},

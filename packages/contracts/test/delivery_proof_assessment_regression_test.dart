@@ -129,9 +129,14 @@ class Sample {
       expect(DeliveryProofDisputeCommand.values.length, 3);
     });
 
-    test('Permission.values and permissionMatrix remain 38', () {
-      expect(Permission.values.length, 38);
-      expect(permissionMatrix.length, 38);
+    test('D2A added no permission; the only later addition is B3B\'s', () {
+      // FND-003B3B added exactly one permission — `agent.return.record_receipt`,
+      // for shop-side receipt of returned goods — taking the count 38 -> 39.
+      // The guard below is unchanged and still the point of this test: no
+      // permission bearing any of these forbidden fragments exists.
+      expect(Permission.values.length, 39);
+      expect(permissionMatrix.length, 39);
+      expect(Permission.byId('agent.return.record_receipt'), isNotNull);
       for (final Permission p in Permission.values) {
         for (final String forbidden in <String>[
           'proof.accept',
@@ -247,10 +252,11 @@ class Sample {
     test('D2A itself did not bump the version, and 0.8 stayed a fix', () {
       // FND-003D2A-FIX-001 corrected an unreleased 0.8 candidate in place, so
       // it was not a release event and the version did not move. The build now
-      // reports **0.9** because FND-003D2B added the fallback dispute workflow
-      // additively on top — a separate slice, with its own bump. Nothing D2A
-      // defined changed meaning, which is what makes that bump a minor one.
-      expect(ContractVersion.current.toString(), '0.9');
+      // reports **0.10** because FND-003D2B added the fallback dispute workflow
+      // and FND-003B3B the attempt/return lifecycles, each additively on top —
+      // separate slices with their own bumps. Nothing D2A defined changed
+      // meaning, which is what makes those bumps minor ones.
+      expect(ContractVersion.current.toString(), '0.10');
       expect(
         ContractVersion.current.isVersionCompatibleWith(
           const ContractVersion(0, 8),
