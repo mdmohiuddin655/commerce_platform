@@ -8,7 +8,8 @@ safe way to *refer to* proof policy and protected evidence without embedding
 proof material in events, treating a reference as proof, or committing the
 platform to a proof method.
 
-> **Still true at 0.9.** FND-003D2A added a separate
+> **Still true at 0.11** *(re-verified against the 0.11 tree, not merely
+> restamped)*. FND-003D2A added a separate
 > [delivery-proof **assessment**](delivery-proof-assessment.md) — a
 > trusted-server-produced, immutable *result* stating whether the referenced
 > policy was satisfied. It **does not weaken anything below**:
@@ -29,6 +30,21 @@ platform to a proof method.
 > evidence handle and no verdict copy at all, only a pointer to the assessment
 > being contested. Successful delivery is still **not executable**, and no
 > dispute resolves.
+>
+> **What was re-checked to advance 0.9 → 0.11.** Two slices landed since 0.9:
+> FND-003B3B (**0.10** — the delivery **attempt** and **return** lifecycles for
+> the bounded non-success path) and FND-003C1 (**0.11** — the first money
+> surface: COD collection and the balanced cash journal). Neither weakens a
+> claim in this box. The two references still carry **no verdict field**
+> (`DeliveryProofPolicyRef` holds only `value`; `DeliveryEvidenceRef` only
+> `resourceId` and `evidenceId`); `DeliveryProofDisputeState` is still
+> `open` / `underReview` with **no** resolved state;
+> `dispute.resolve_delivery_proof` is still enumerated and always refused
+> `resolutionPolicyDeferred`; **no `order.delivered` event exists**; and
+> `OrderState.delivered`, customer custody and rider `completed` all remain
+> unreachable, so `CONSTRAINTS.md` invariant 13 is still undischarged. B3B did
+> add the **39th permission** at 0.10 — that changes the *count* (§1, §5), not
+> any claim above.
 
 ---
 
@@ -65,10 +81,18 @@ vocabulary was introduced, and again to include `DeliveryProofDisputeEventType`
 and `DeliveryProofDisputeCommand` at FND-003D2B. A guard that silently stops
 covering a new surface would keep passing while proving nothing.
 
-**Neither FND-003D2A nor FND-003D2B added a permission**: `Permission.values`
-remains **38**. No `CustodyCommand`-style entry exists for assessment, and both
-executable dispute operations map to the accepted `customer.dispute.raise` and
-`admin.dispute.administer` rules, unchanged.
+**Neither FND-003D2A nor FND-003D2B added a permission.** That clause is true
+and is **not the same claim** as the total count, and conflating the two is what
+let this paragraph go stale: `Permission.values` is **39**, not 38. The count
+moved **38 → 39** at contract **0.10**, when FND-003B3B added
+`agent.return.record_receipt` for shop-side receipt of returned goods — a slice
+*later* than this document's own 0.7–0.9 subject matter. FND-003C1 (0.11) added
+none either. **A count newer than this document's slice is normal, not a
+defect**: this document carries a **fixed-origin** header ("Introduced at
+contract version 0.7") and describes what D1, D2A and D2B did; it is not a
+running snapshot of the whole contract. No `CustodyCommand`-style entry exists
+for assessment, and both executable dispute operations map to the accepted
+`customer.dispute.raise` and `admin.dispute.administer` rules, unchanged.
 
 ## 2. The two references
 
@@ -209,8 +233,38 @@ Choosing a mechanism is a later bounded task's decision, made against
 
 `rider.delivery.submit_proof`, `customer.delivery.confirm_proof` and
 `customer.dispute.raise` keep their exact ids, roles, scopes and restrictions.
-**No permission was added** — a test pins the count at 38 for both
-`Permission.values` and `permissionMatrix`.
+**No permission was added by FND-003D1, FND-003D2A or FND-003D2B.** The count
+is not 38 either: FND-003B3B took it to 39 at 0.10 by adding
+`agent.return.record_receipt` (§1). The live figure, for
+both `Permission.values` and `permissionMatrix`, is
+
+> **Permission count: 39**
+
+— written in that fixed form deliberately, so a machine can find it. It is the
+**single** authoritative count claim in this document; §1 explains the history
+in prose and states no competing figure.
+
+Seven test files currently carry that count. Six pin the literal **39** for
+both `Permission.values` and `permissionMatrix`:
+
+| Guard | Note |
+|---|---|
+| [`delivery_proof_test.dart`](../../packages/contracts/test/delivery_proof_test.dart) | this document's own guard — the *"D1 added no permission; the only later addition is B3B's"* test |
+| [`delivery_proof_assessment_regression_test.dart`](../../packages/contracts/test/delivery_proof_assessment_regression_test.dart) | D2A regression |
+| [`delivery_proof_dispute_authority_test.dart`](../../packages/contracts/test/delivery_proof_dispute_authority_test.dart) | D2B authority |
+| [`attempt_return_authority_test.dart`](../../packages/contracts/test/attempt_return_authority_test.dart) | B3B authority |
+| [`cod_collection_authority_test.dart`](../../packages/contracts/test/cod_collection_authority_test.dart) | C1 authority |
+| [`permission_matrix_doc_consistency_test.dart`](../../packages/contracts/test/permission_matrix_doc_consistency_test.dart) | also guards `permission-matrix.md` |
+
+The seventh, [`permission_matrix_test.dart`](../../packages/contracts/test/permission_matrix_test.dart),
+pins no literal: it asserts the id set length equals `Permission.values.length`.
+
+An eighth,
+[`delivery_proof_boundary_doc_consistency_test.dart`](../../packages/contracts/test/delivery_proof_boundary_doc_consistency_test.dart),
+guards **this paragraph itself**. It derives the expected number from
+`Permission.values.length` and hard-codes no count literal, so a 40th
+permission fails it until this document is updated — which is exactly the
+failure that did not happen when the count moved at 0.10.
 
 **`customer.delivery.confirm_proof` is not reinterpreted.** The accepted matrix
 says customer participation in proof **does not settle cash and does not close a
@@ -250,8 +304,18 @@ question open:
 - the **dispute outcome** — how a fallback dispute resolves, and whether any
   delivery, refusal, return, fee, refund, compensation or liability follows.
   The fallback dispute **workflow** itself is **done** (FND-003D2B, 0.9) and
-  deliberately resolves nothing; the outcome needs **O6**, FND-003C and
-  FND-003B3B;
+  deliberately resolves nothing. Of the three things this bullet once said the
+  outcome needed, **two are discharged**: **O6 is RESOLVED** (2026-09-11,
+  [ADR-0011](../decisions/ADR-0011-o6-currency-fees-commission-and-cash-custody.md)
+  — currency, fee policy, commission ownership and cash custody), and
+  **FND-003B3B is DONE and integrated** (0.10, the attempt/return lifecycles),
+  though it deliberately decides **no** dispute outcome, fault or money. Only
+  the remaining **FND-003C** money work still applies: FND-003C1 (0.11)
+  delivered COD collection and the cash journal, while remittance, settlement,
+  reconciliation, refusal-fee collection, refunds, compensation and commission
+  payout are **unimplemented**. **The outcome itself stays UNDECIDED** —
+  discharging a prerequisite is not deciding the question, and a dedicated
+  resolution slice must still do that;
 - whether **customer participation** is required by any policy. Still
   **POLICY-DEFINED / DEFERRED** after 0.9: not optional, not mandatory, not
   sufficient, not a veto, and no `customerConfirmed` flag exists to default it.
