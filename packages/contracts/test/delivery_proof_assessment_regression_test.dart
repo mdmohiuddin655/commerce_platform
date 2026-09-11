@@ -252,11 +252,12 @@ class Sample {
     test('D2A itself did not bump the version, and 0.8 stayed a fix', () {
       // FND-003D2A-FIX-001 corrected an unreleased 0.8 candidate in place, so
       // it was not a release event and the version did not move. The build now
-      // reports **0.10** because FND-003D2B added the fallback dispute workflow
-      // and FND-003B3B the attempt/return lifecycles, each additively on top —
-      // separate slices with their own bumps. Nothing D2A defined changed
-      // meaning, which is what makes those bumps minor ones.
-      expect(ContractVersion.current.toString(), '0.10');
+      // reports **0.11** because FND-003D2B added the fallback dispute workflow,
+      // FND-003B3B the attempt/return lifecycles and FND-003C1 the COD
+      // collection contract, each additively on top — separate slices with
+      // their own bumps. Nothing D2A defined changed meaning, which is what
+      // makes those bumps minor ones.
+      expect(ContractVersion.current.toString(), '0.11');
       expect(
         ContractVersion.current.isVersionCompatibleWith(
           const ContractVersion(0, 8),

@@ -91,6 +91,7 @@ export 'package:cp_contracts/src/assignment_effect.dart';
 export 'package:cp_contracts/src/assignment_integrity.dart';
 export 'package:cp_contracts/src/assignment_state.dart';
 export 'package:cp_contracts/src/authorization.dart';
+export 'package:cp_contracts/src/cash_and_payments.dart';
 export 'package:cp_contracts/src/command_envelope.dart';
 export 'package:cp_contracts/src/contract_version.dart';
 export 'package:cp_contracts/src/custody_command.dart';

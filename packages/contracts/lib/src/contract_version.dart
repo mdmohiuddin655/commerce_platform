@@ -133,6 +133,37 @@ class ContractVersion implements Comparable<ContractVersion> {
   ///   failed-attempt retry/return policy is invented, no proof mechanism is
   ///   chosen, and the via-picker return route is enumerated and refused.
   ///
+  /// - **0.11** (FND-003C1) — additive: the first **money** slice, the
+  ///   normal-path **COD collection** contract and its balanced cash journal —
+  ///   `CurrencyPolicy` (BDT-only in v1, no FX), `FinancialPolicyRef`,
+  ///   `OrderFinancialSnapshot` with `validateOrderFinancialSnapshot`,
+  ///   `PaymentState` (`due` / `partiallyCollected` / `collected`, with
+  ///   `disputed` declared and **not producible**), `PaymentFacts` with
+  ///   `validatePaymentAggregate`, `JournalAccount`, `JournalPosting`,
+  ///   `CashJournalEntry` with `validateCashJournalEntry`,
+  ///   `CodCollectionCommand` (one operation), `CodCollectionEventType` (three
+  ///   ids), the request, transition, effect, outcome and denial vocabulary,
+  ///   `checkCodCollectionAuthorization` and `evaluateReportCodCollection`.
+  ///
+  ///   Money is `cp_core.Money` — **integer minor units with an explicit
+  ///   ISO-4217 currency on every value**. Every journal entry has one
+  ///   currency, a unique business reference and signed postings summing to
+  ///   **exactly zero**; there is no balance setter, no journal edit or delete,
+  ///   no generic payment-state setter and no caller-selected account.
+  ///   Corrections are reversal entries referencing the original.
+  ///
+  ///   **No permission was added** — the operation uses the accepted
+  ///   `rider.cash.report_collection` rule unchanged, so `Permission.values`
+  ///   and `permissionMatrix` stay **39**. **Successful delivery is still not
+  ///   executable**: no proof assessment is read or written, and
+  ///   `OrderState.delivered`, `CustodyHolderKind.customer` and rider
+  ///   `completed` remain unreachable, so `CONSTRAINTS.md` invariant 13 is
+  ///   **not** discharged. Remittance, settlement, reconciliation,
+  ///   refusal-fee collection, refunds, compensation, commission payout,
+  ///   worker pay, dispute resolution and FX conversion are all absent, and a
+  ///   collection changes no order, custody, attempt, assignment, reservation
+  ///   or inventory state.
+  ///
   /// Each bump so far is a **minor** one at the version-policy level: the
   /// major is unchanged, no earlier definition changed meaning, and every
   /// addition is new surface.
@@ -142,7 +173,7 @@ class ContractVersion implements Comparable<ContractVersion> {
   /// has a `toJson`/`fromJson` — so no build can decode another's payload at
   /// all, and no such claim could be tested honestly. No client has ever been
   /// released against any version.
-  static const ContractVersion current = ContractVersion(0, 10);
+  static const ContractVersion current = ContractVersion(0, 11);
 
   final int major;
   final int minor;

@@ -564,6 +564,67 @@ route is refused, and dispute resolution stays deferred.
 See [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md)
 and [ADR-0010](../decisions/ADR-0010-direct-rider-to-shop-return-route.md).
 
+## 0.11 — FND-003C1 — COD collection and the cash journal
+
+**2026-09-11. Additive.** The first executable **money** slice, and the
+resolution of owner action **O6**.
+
+**Added**
+
+- `CurrencyPolicy` — **BDT only in v1**, with the ISO-4217 currency still
+  explicit on every `cp_core.Money` value. **No FX**: a mixed or non-BDT read
+  fails closed with a denial *before* any arithmetic, because `Money` throws on
+  cross-currency operations and a pure evaluator owes a denial, not an
+  exception.
+- `FinancialPolicyRef` and `OrderFinancialSnapshot` with
+  `validateOrderFinancialSnapshot`. Every amount and **both** policy references
+  are required, so a snapshot with a missing fee or commission policy **cannot
+  be constructed** — absence is never zero, while an explicitly published zero
+  is representable.
+- `PaymentState` (`due`, `partiallyCollected`, `collected`, plus `disputed`
+  declared and **not producible here**) and `PaymentFacts` with
+  `validatePaymentAggregate`.
+- `JournalAccount` (a **closed, server-chosen** set of exactly the two accounts
+  an implemented operation needs), `JournalPosting`, `CashJournalEntry` and
+  `validateCashJournalEntry`.
+- `CodCollectionCommand` (one operation), `CodCollectionEventType` (three
+  privacy-minimal ids), the request, transition, effect, outcome and denial
+  vocabulary, `checkCodCollectionAuthorization` and
+  `evaluateReportCodCollection`.
+
+**Decided — ADR-0011, resolving O6**
+
+BDT-only v1; the customer price an immutable quoted snapshot; **platform
+commission an allocation out of merchandise proceeds, never added to what the
+customer pays**; the voluntary-refusal default the order's quoted delivery
+charge, with **nonpayment representable** and fault cases left unresolved rather
+than silently charged or silently waived; **rider cash is custody, not
+ownership**; and `delivered != collected != remitted != reconciled`.
+
+**Journal invariants**
+
+One currency per entry, a unique business reference, signed postings summing to
+**exactly zero**, and a fixed sign convention (`customerCodReceivable` −A,
+`riderCashInTransit` +A). **No edit, no delete, no balance setter** —
+corrections are reversal entries referencing the original, and balances are
+derived from postings.
+
+**Not added, and not decided**
+
+**No permission was added** — the operation uses the accepted
+`rider.cash.report_collection` unchanged, so `Permission.values` and
+`permissionMatrix` stay **39**. **Successful delivery is still not
+executable**: no proof assessment is read or written, and `OrderState.delivered`,
+`CustodyHolderKind.customer` and rider `completed` remain unreachable, so
+`CONSTRAINTS.md` invariant 13 is **not discharged**. Remittance, settlement,
+reconciliation, refusal-fee collection, refunds, compensation, commission
+payout, worker pay, dispute resolution and FX conversion are all absent, and a
+collection changes no order, custody, attempt, assignment, reservation or
+inventory state.
+
+See [cash-and-payments.md](cash-and-payments.md) and
+[ADR-0011](../decisions/ADR-0011-o6-currency-fees-commission-and-cash-custody.md).
+
 ## Migration status
 
 **No migration is required, and none is invented.**
@@ -571,13 +632,14 @@ and [ADR-0010](../decisions/ADR-0010-direct-rider-to-shop-return-route.md).
 - There are no released clients: no app has a platform folder or a build
   (FND-002A), so nothing in the field reads any version of this contract.
 - There is no production data: no Firebase project exists (owner action O5).
-- 0.2 through 0.10 are purely additive, so no stored value changes shape or
+- 0.2 through 0.11 are purely additive, so no stored value changes shape or
   meaning. The 0.5 move of `AssignmentDenial` and
   `reachableSlotRevisionRange` into `assignment_integrity.dart` changed no
   name, no value and no behaviour, and neither has a wire form — but that is
   offered as a statement about the source, **not** as decode evidence.
 
-**Rollback:** reverting the FND-003B3B commit returns the contract to 0.9,
+**Rollback:** reverting the FND-003C1 commit returns the contract to 0.10,
+reverting the FND-003B3B chain to 0.9,
 reverting the FND-003D2B chain to 0.8,
 reverting the FND-003D2A chain to 0.7,
 reverting the FND-003D1 chain to 0.6,

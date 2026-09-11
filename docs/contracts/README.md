@@ -2,7 +2,7 @@
 
 Canonical shared contract. Owner: **FND-003**, delivered in slices.
 
-**Current contract version: 0.10** (FND-003B3B).
+**Current contract version: 0.11** (FND-003C1).
 **Contract baseline: SHARED-BASELINE-v1.0.**
 
 ## Delivered — FND-003A
@@ -14,7 +14,7 @@ Canonical shared contract. Owner: **FND-003**, delivered in slices.
 | [permission-matrix.md](permission-matrix.md) | The one canonical least-privilege matrix (generated from code) |
 | [authorization-invariants.md](authorization-invariants.md) | Evaluation order, deny reasons, App Check boundary |
 | [privacy-and-security-boundaries.md](privacy-and-security-boundaries.md) | PII scope, push payload limits, FND-004 Rules checklist |
-| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8 → 0.9 → 0.10, compatibility and migration status |
+| [version-history.md](version-history.md) | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7 → 0.8 → 0.9 → 0.10 → 0.11, compatibility and migration status |
 
 ## Delivered — FND-003B1
 
@@ -150,6 +150,33 @@ discharged**. The failed-attempt retry/return consequence, the via-picker return
 route, dispute resolution and every fee/refund/liability/commission/settlement
 rule remain **undecided**.
 
+## Delivered — FND-003C1
+
+| Document | Covers |
+|---|---|
+| [cash-and-payments.md](cash-and-payments.md) | The first **money** slice: the normal-path **COD collection** contract and its balanced cash journal — `cp_core.Money` integer minor units with an explicit currency, **BDT-only v1 with no FX**, the immutable `OrderFinancialSnapshot` where **absence is never zero**, `PaymentState` (`due` / `partiallyCollected` / `collected`, with `disputed` declared and **not producible**), the `CashJournalEntry` model with one currency, a unique business reference and postings summing to **exactly zero**, reversal-only correction, a closed server-chosen account set, one operation under the **unchanged** `rider.cash.report_collection`, and the **CJ1–CJ12** backend checklist |
+
+**Owner action O6 is resolved** — see
+[ADR-0011](../decisions/ADR-0011-o6-currency-fees-commission-and-cash-custody.md):
+BDT-only v1 with the currency still explicit on every value, the customer price
+an immutable quoted snapshot, **platform commission an allocation out of
+merchandise proceeds and never a customer charge**, the voluntary-refusal
+default the order's quoted delivery charge with **nonpayment representable** and
+fault cases left unresolved rather than charged or waived, and **rider cash as
+custody, not ownership**.
+
+**No permission was added** — `Permission.values` and `permissionMatrix` stay
+at **39**.
+
+**Collecting cash is not delivering.** The transition has no field for an
+order, custody, attempt, assignment, inventory or proof effect, so
+`OrderState.delivered`, `CustodyHolderKind.customer` and rider
+`AssignmentState.completed` all remain unreachable, **B3-C2 stays FUTURE** and
+`CONSTRAINTS.md` invariant 13 is **not discharged**. Remittance, settlement,
+reconciliation, refusal-fee collection, refunds, compensation, commission
+payout, worker pay, dispute resolution and FX are all **absent** — not stubbed,
+simply not expressible.
+
 ## Not yet defined — later FND-003 slices
 
 **No feature may guess any of these.** If it is not written down, the work is
@@ -160,7 +187,7 @@ blocked, and saying so is the correct outcome.
 | **Lifecycle — successful delivery** (FND-003B3, remaining) | Delivery **confirmation**, customer custody, and rider assignment `completed` (**B3-C2**). Delivery attempts, refusal, failure and the direct `rider → shop` return are **done** (FND-003B3B) — but a *successful* delivery needs the proof-satisfaction policy, which is undefined. The **failed-attempt** retry/return consequence and the **via-picker** return route are also still undecided: B3B enumerates and refuses both rather than guessing. | FND-003B3A (**done**), FND-003B3B (**done**), **Proof policy** |
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch cancellation** | The stock consequence of a **cancellation** after dispatch. Return-path restoration is **done** (FND-003B3B) — stock becomes available again only after shop receipt **and** a `restockable` inspection, exactly once, with `damaged` / `quarantined` restoring zero — and pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). What a *cancellation* after dispatch does to stock is **not decided**: FND-003B3A recorded that no post-pickup cancellation behaviour was invented, and FND-003B3B lists it among the consequences it does not decide. | The cancellation policy itself, deferred by FND-003B3A and FND-003B3B; its fee/liability half is **Owner decision O6** and FND-003C |
-| **Money** | Payment/COD lifecycle, cash journal postings, fee amounts, refusal fee policy and versioning, commission ownership, settlement and remittance. | **Owner decision O6** (currency, fee policy, commission ownership) |
+| **Money — remaining** | Remittance, settlement, reconciliation, refusal-fee collection, refunds, compensation, commission payout and worker pay. The **normal-path COD collection** and its balanced cash journal are **done** (FND-003C1), and **O6 is resolved** (ADR-0011): currency, the quoted customer price, commission ownership and rider cash custody are all decided. | FND-003C1 (**done**); the remaining lifecycles await their own slices |
 | **Proof policy** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed. Required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
 | **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C. FND-003B3B (**done**) defines the refused-order return and decides **no** dispute outcome, fault or money |
 

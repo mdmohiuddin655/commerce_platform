@@ -44,9 +44,10 @@ void main() {
       // 0.6 -> 0.7 delivery-proof references (FND-003D1);
       // 0.7 -> 0.8 the delivery-proof assessment result (FND-003D2A);
       // 0.8 -> 0.9 the fallback delivery-proof dispute workflow (FND-003D2B);
-      // 0.9 -> 0.10 the delivery attempt and return lifecycles (FND-003B3B).
+      // 0.9 -> 0.10 the delivery attempt and return lifecycles (FND-003B3B);
+      // 0.10 -> 0.11 the normal-path COD collection contract (FND-003C1).
       // All additive, so the major stays 0.
-      expect(ContractVersion.current.toString(), '0.10');
+      expect(ContractVersion.current.toString(), '0.11');
     });
 
     test('0.8 and 0.9 share a major, so the policy permits an attempt', () {
@@ -205,7 +206,7 @@ void main() {
       expect(v.isVersionCompatibleWith(const ContractVersion(0, 1)), isTrue);
       expect(
         v.toString(),
-        '0.10',
+        '0.11',
         reason: 'version policy only; decode behaviour is a decoder property',
       );
     });

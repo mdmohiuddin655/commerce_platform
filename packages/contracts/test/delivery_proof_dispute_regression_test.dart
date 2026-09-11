@@ -383,12 +383,12 @@ class Sample {
   });
 
   group('contract version', () {
-    test('the build reports 0.10', () {
+    test('the build reports 0.11', () {
       // D2B shipped at 0.9. FND-003B3B then added the attempt and return
-      // lifecycles additively, so the build now reports 0.10 — nothing D2B
-      // defined changed meaning.
-      expect(ContractVersion.current.toString(), '0.10');
-      expect(ContractVersion.current, const ContractVersion(0, 10));
+      // lifecycles and FND-003C1 the COD collection contract, both additively,
+      // so the build now reports 0.11 — nothing D2B defined changed meaning.
+      expect(ContractVersion.current.toString(), '0.11');
+      expect(ContractVersion.current, const ContractVersion(0, 11));
     });
 
     test('0.8 and 0.9 share a major, and no payload claim is made', () {

@@ -410,8 +410,10 @@ void main() {
       }
     });
 
-    test('the contract version is 0.10 and the major did not move', () {
-      expect(ContractVersion.current, const ContractVersion(0, 10));
+    test('the contract version is 0.11 and the major did not move', () {
+      // B3B shipped at 0.10; FND-003C1 then added the COD collection contract
+      // additively, so the build reports 0.11 and nothing B3B defined moved.
+      expect(ContractVersion.current, const ContractVersion(0, 11));
       expect(ContractVersion.current.major, 0);
       expect(
         ContractVersion.current.isVersionCompatibleWith(
