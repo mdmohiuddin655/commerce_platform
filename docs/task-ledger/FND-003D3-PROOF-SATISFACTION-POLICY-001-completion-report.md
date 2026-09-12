@@ -60,7 +60,7 @@ customer side and verified server-side, fail-closed.**
 | **Replay-resistant** | Single-use, consumed **atomically with the check**; regeneration invalidates superseded challenges; regeneration and submission are rate-limited; duplicate submissions are idempotent. |
 | **Auditable** | Append-only reassessment (ADR-0009) unchanged; the verification outcome, safe references, assessor identity and revisions checked are recorded. Exception reviews carry reason, reference and deciding principal. |
 | **Privacy-minimizing** | The raw challenge value never enters an event, payload, notification, log, crash report or audit record. Comparison is server-side. Photo/GPS capture is **not** made mandatory. |
-| **Configurable without silently weakening** | A policy version may tune window, length, routes, rate limits and captured context. It may **not** make any insufficient signal sufficient, remove customer fulfilment, move verification to a client, disable single-use/binding/expiry, unaudit the exception path, or set a limit to unlimited — each needs a **superseding ADR**. |
+| **Configurable without silently weakening** | A policy version may tune window, length, routes, rate limits and captured context. It may **not** make any insufficient signal sufficient, remove, downgrade or substitute customer fulfilment, move verification to a client, disable single-use/binding/expiry, unaudit the exception-recording path, let an unresolvable policy version behave permissively, or set a limit to unlimited — each needs a **superseding ADR**. *(Sharpened by FIX-001, findings F1 and F4.)* |
 | **Unreliable-network compatible** | Local capture permitted; **local satisfaction is not**. Absence stays `DeliveryProofAssessmentFacts.absent` — **no `pending` verdict was introduced**. Queued capture does not extend a challenge's life. |
 | **Jurisdiction-neutral** | An explicit section states the ADR makes **no** compliance claim of any kind and forecloses no stricter requirement. |
 | **Capture ≠ satisfaction** | Stated as the ADR's one-sentence core, and reinforced in the canonical definitions table. |
@@ -92,11 +92,18 @@ unchanged.
 
 ### Exception path — bounded, not created
 
-An accessibility-safe ADMIN exception review must be separately authorized,
-reason- and reference-bearing, audited, bound to the same resource and attempt,
-append-only and **distinguishable afterwards**. **ADR-0012 does not create that
-workflow and creates no permission for it**, consistent with ADR-0009's rule
-that `executableProofAssessorKinds` is widened only deliberately.
+*(As corrected by FIX-001 after finding **F1** — see §6a. The wording this task
+originally shipped said such a review "may conclude satisfaction", which
+contradicted mandatory customer participation and is withdrawn.)*
+
+An ADMIN exception review must be separately authorized, reason- and
+reference-bearing, audited, bound to the same resource and attempt, append-only
+and **distinguishable afterwards** — and its authority is **recording,
+classifying and auditing an unresolved case**. It **cannot conclude
+satisfaction** where no customer-side fulfilment occurred. **ADR-0012 does not
+create that workflow and creates no permission for it**, consistent with
+ADR-0009's rule that `executableProofAssessorKinds` is widened only
+deliberately.
 
 ---
 
@@ -126,8 +133,22 @@ document.
 
 ## 4. Semantic consistency sweep
 
-Every occurrence of the brief's sweep terms was classified across the changed
-files and the repository.
+> **Corrected by FND-003D3-PROOF-SATISFACTION-POLICY-001-FIX-001 — sweep
+> overclaim.** This section originally said the sweep ran *"across the changed
+> files and the repository"*. **It did not.** It covered the changed files and a
+> `grep` for the exact phrase *"proof-satisfaction policy"*, and that grep was
+> filtered in a way that excluded `docs/contracts/README.md` from review.
+> **FINAL-REVIEW-001 found stale current-state wording there that this task
+> missed** — recorded here rather than quietly repaired, because a sweep that
+> overstates its own coverage is exactly the defect this project keeps finding.
+> The claim below is now narrowed to what was actually swept, and the README is
+> corrected by the follow-up. A wider re-sweep by that follow-up also found
+> stale wording in `docs/contracts/cash-and-payments.md`,
+> `docs/contracts/version-history.md` and `ADR-0010`, none of which is inside the
+> follow-up's authorized file list; that debt is recorded in the ledger.
+
+Every occurrence of the brief's sweep terms was classified across the **eight
+files this task changed**, plus a phrase-level `grep` over the repository.
 
 ### Corrected — stale "policy undefined" claims
 
@@ -271,6 +292,25 @@ exists, delivery confirmation still may not be coded, and the implementing slice
 **No later roadmap task was started.**
 
 ---
+
+## 6a. Independent review outcome — FIX REQUIRED
+
+**FND-003D3-PROOF-SATISFACTION-POLICY-001-FINAL-REVIEW-001 reviewed `6c4c25a`
+and returned FIX REQUIRED on five findings.** They are recorded here in full;
+the candidate was **not** amended, and the corrections landed as the separate
+follow-up commit **FND-003D3-PROOF-SATISFACTION-POLICY-001-FIX-001**.
+
+| # | Severity | Finding | Correction |
+|---|---|---|---|
+| **F1** | **MAJOR** | Decision 9 said an ADMIN exception review *"may conclude satisfaction"* for cases such as a lost handset or a customer who cannot read a value — **contradicting the same ADR's mandatory customer participation** and creating a bypass | Decision 9 rewritten: customer-side fulfilment is **required**; exception review **records, classifies and audits** only, and can never conclude satisfaction. Substitution needs a superseding ADR and migration, accepted before implementation |
+| **F2** | **MAJOR** | The customer must read a challenge, but no permitted retrieval channel was named, and a deferral row implied notification transport would deliver the secret — while Decision 5 forbade the value in any notification | Decision 1 gains a required **channel class**: authenticated, customer-scoped retrieval binding the exact customer and resource; the rider never retrieves it; notification **signals availability only**. Route 1 is **not executable** until that surface exists |
+| **F3** | MINOR | Route 2's rationale claimed it helps a customer with no phone or no signal, which it cannot — it needs an authenticated session on a connected device | Rationale replaced with accurate reasons; the ADR now states plainly that neither route removes the customer-side act |
+| **F4** | MINOR | No explicit fail-closed rule for a **missing, unknown, unresolvable or unsupported** policy version | **New Decision 11**, mirrored into Decision 6, Decision 10's forbidden list, the supersession rule and all three contract documents. **No default policy is inferred** |
+| **F5** | MINOR | This report overclaimed a repository-wide semantic sweep; two stale current-state statements survived in `docs/contracts/README.md` | The overclaim is corrected in §4 above rather than hidden. The follow-up corrects the README — where it found **three** such statements, not two — and records further out-of-scope staleness in the ledger |
+
+**All five are documentation and policy-wording accuracy.** No executable
+contract, no code and no test was wrong, and none changed. `6c4c25a` stays on the
+record with its review failure intact.
 
 ## 7. What this report does not claim
 

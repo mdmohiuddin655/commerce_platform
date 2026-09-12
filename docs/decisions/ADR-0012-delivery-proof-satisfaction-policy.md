@@ -59,7 +59,7 @@ used and **no parallel term is introduced**.
 | **Challenge fulfilment** | A customer-side act that redeems a live challenge: the customer reads the challenge value to the rider, who submits it, **or** the customer confirms in an authenticated User-app session. Both are *inputs*. Neither is proof satisfaction. |
 | **Evidence capture** | Anything recorded at the doorstep — a submitted value, an authenticated confirmation, an optional photograph. Reaches the platform as a `DeliveryEvidenceRef`. **Capture is never satisfaction**; capture happens at the edge, satisfaction is concluded by the server. |
 | **Fail closed** | The absence, expiry, reuse, mis-binding, staleness or corruption of any required fact yields **not satisfied** — never satisfied, and never a silent pass. Absence is `DeliveryProofAssessmentFacts.absent`, exactly as ADR-0009 defines; it is not a third verdict. |
-| **Exception review** | A separately authorized, separately audited ADMIN path that may conclude satisfaction where the primary method is impossible. It is a **different, recorded route to the same verdict**, never a waiver of the requirement. |
+| **Exception review** | A separately authorized, separately audited ADMIN path that **records, classifies and audits** a case the primary method could not complete. It **cannot conclude satisfaction**, and it is never a waiver of the requirement — see Decision 9. |
 
 **One sentence carries the whole decision:** *evidence capture is an input to a
 server-side verification; only that verification produces proof satisfaction.*
@@ -89,19 +89,66 @@ The challenge is:
 **Two fulfilment routes are accepted, and they are equivalent in strength
 because both terminate in the same server-side check:**
 
-1. **Customer-to-rider transfer.** The customer receives the challenge value
-   through a channel the platform controls and reads it to the rider, who
+1. **Customer-to-rider transfer.** The customer retrieves the challenge value
+   through the secure channel defined below, and reads it to the rider, who
    submits it under `rider.delivery.submit_proof`. The rider transports a value;
    the rider does not certify it.
 2. **Authenticated customer confirmation.** The customer confirms in an
-   authenticated User-app session bound to the same order and attempt, under
-   `customer.delivery.confirm_proof`.
+   authenticated first-party customer session bound to the same order and
+   attempt, under `customer.delivery.confirm_proof`.
 
-Route 2 exists because route 1 degrades badly in exactly the conditions this
-marketplace operates in — a customer without their phone to hand, a shared
-handset, a doorstep with no signal on the customer side. Making route 1 the only
-route would push real deliveries into exception review, and an exception path
-that carries ordinary traffic stops being an exception.
+**Both routes require the customer to have an authenticated session on a
+working, connected device.** Route 2 is not a fallback for a customer who has no
+device, no credentials or no connectivity — it cannot be, because the
+confirmation is made *by* the customer *through* that session. Route 2 exists
+for narrower and more honest reasons:
+
+- the customer would rather not read a value aloud at the door, in front of
+  whoever else is there;
+- it removes rider transcription and keypad error from the path, which is a real
+  source of failed submissions on a short value;
+- it gives a **direct authenticated customer act**, with one less hop than
+  reading a value to someone who then types it;
+- a customer already signed in to a first-party session can confirm without
+  going to find the value at all.
+
+Neither route removes the customer-side act. A customer with no usable device,
+no session or no connectivity produces **no** fulfilment on either route, and
+Decision 9 governs what happens then — which is that the case is recorded, **not**
+that someone else satisfies the policy on the customer's behalf.
+
+### How the customer obtains the challenge — the required channel class
+
+This ADR specifies the **class** of channel that is permitted. It does not
+implement one, and **route 1 is not executable until such a surface exists**.
+
+- The raw challenge value is obtained through an **authenticated,
+  customer-scoped pull/retrieval surface controlled by the platform** — the
+  customer's own session asks for it, and the server returns it only to that
+  session.
+- **Authentication must bind the exact customer and the exact resource.** A
+  session may retrieve the challenge for an order that session's principal owns,
+  and for no other.
+- Normally this will be a future **authenticated User-app screen or an
+  equivalent first-party customer session**. No specific UI, API shape or
+  transport is chosen here.
+- **The rider must never retrieve the customer's raw challenge.**
+  `rider.delivery.submit_proof` lets a rider *submit* a value the customer gave
+  them; it confers no read access to the value, and no rider-facing surface may
+  display it.
+- **A notification may signal that a challenge is available.** It may say a
+  confirmation is waiting and deep-link into the authenticated surface. **It must
+  never carry the value**, because a notification payload is routing-and-display
+  material that may be rendered on a lock screen and cached by an operating
+  system.
+- **Events, logs, crash reports and audit records may not contain the raw
+  challenge** (Decision 5).
+
+**This is a specification of what a compliant channel must be, not a claim that
+one exists.** Until an authenticated customer retrieval surface is built and
+accepted, route 1 has no way to reach the customer, and neither route is
+executable — consistent with the whole of this ADR being policy rather than
+implementation.
 
 ### The permission question ADR-0009 left open, answered
 
@@ -201,9 +248,10 @@ a delivery-proof policy:**
 | Possession or custody assertion | `CustodyHolderKind.rider` says the rider holds the goods — the state that exists *before* delivery, not evidence of it. |
 
 **These may be captured as supporting context where policy permits, and they may
-be shown in an exception review.** They never *substitute* for a fulfilled
-challenge, and a policy version that made any of them sufficient would not be a
-configuration change — it would require superseding this ADR (the Supersession rule).
+be recorded in an exception review.** They never *substitute* for a fulfilled
+challenge — not for the verifier, and not for an administrator (Decision 9) — and
+a policy version that made any of them sufficient would not be a configuration
+change; it would require superseding this ADR (the Supersession rule).
 
 **Optional stays optional.** This ADR does **not** make photograph or location
 capture mandatory, and does not authorize any slice to make them mandatory on
@@ -222,9 +270,16 @@ the strength of this decision alone (Decision 5).
   and assignment identifiers, the revisions checked, and server timestamps. All
   are opaque identifiers or enumerated values — the class of value the payload
   rules already permit.
-- **Comparison is server-side.** A challenge value is never returned to a client
-  for local comparison, because a value a client can read is a value a client
-  can replay.
+- **Comparison is server-side.** The value is never returned to a **rider or
+  verifying** client for local comparison, because a value such a client can read
+  is a value it can replay. The **customer's own authenticated session** is the
+  single exception and is not a comparison site: it *displays* the value to the
+  customer who owns the order (Decision 1), and performs no check.
+- **A notification signals availability, never the secret.** A push may say a
+  confirmation is waiting and link into the authenticated surface; the payload
+  carries no challenge value. **The absence of a notification transport is not a
+  licence to deliver the secret some less safe way** — if availability cannot be
+  signalled, the customer opens the surface themselves.
 - **Photograph and location material, where captured at all, stays behind the
   authenticated protected path** the D1 boundary describes. This ADR implements
   no such path and makes no claim about storage rules, encryption, signed URLs
@@ -246,7 +301,11 @@ the strength of this decision alone (Decision 5).
 - the rider submitting is not the currently assigned rider, or the assignment
   generation has moved;
 - the order, custody, rider-slot or assessment revision presented is stale;
-- the aggregate is malformed or internally inconsistent.
+- the aggregate is malformed or internally inconsistent;
+- **no customer-side fulfilment occurred at all** — including where an ADMIN
+  exception review recorded the case (Decision 9);
+- the governing policy version is **missing, unknown, unresolvable, unsupported
+  or unverifiable** (Decision 11).
 
 **Corruption is never downgraded to a verdict.** ADR-0009's `canonicalVerdict`
 rule stands: a torn aggregate yields *no* verdict, not `notSatisfied` and
@@ -316,41 +375,86 @@ delivery failure does not automatically justify a customer fee.**
   `assessmentRevision` and a `supersedesAssessmentId` back-pointer. **Nothing in
   this ADR mutates or erases history.**
 
-## Decision 9 — the exception path is authorized and audited, never a waiver
+## Decision 9 — exception review records an unresolved case; it cannot conclude satisfaction
 
-Some deliveries genuinely cannot use the primary method: a customer with a
-visual or motor impairment who cannot read or enter a value, a lost or dead
-customer handset, a language barrier, a legitimate delivery to an authorized
-recipient who is not the account holder.
+**The hard rule, stated first because everything else in this section is
+subordinate to it:**
 
-**An ADMIN exception review may conclude satisfaction for such a case**, subject
-to all of the following:
+> **A customer-side fulfilment is REQUIRED for proof satisfaction under this
+> ADR. No ADMIN exception review, and no other administrative act, may produce
+> `DeliveryProofAssessmentVerdict.satisfied` for a delivery where no customer-side
+> fulfilment occurred.** There is no exception to that sentence, and this ADR
+> creates no path around it.
 
-- it is **separately authorized** — it is not reachable through
-  `rider.delivery.submit_proof` or `customer.delivery.confirm_proof`, and no
-  rider or customer can invoke it;
-- it **requires a recorded reason and a reference**, and produces an immutable
-  audit record naming the deciding principal and server time;
-- it is **bound exactly as the primary method is** — same order, same attempt,
-  same assigned rider, same current revisions. An exception relaxes *which
-  evidence is acceptable*, never *which resource it applies to*;
-- it **cannot mutate history**. It produces a new append-only assessment, never
-  an edit to an existing one;
-- it is **visible as an exception** — a satisfaction reached this way is
-  distinguishable in the audit trail from one reached through a fulfilled
-  challenge. An exception that is indistinguishable afterwards is a waiver.
+An earlier draft of this decision said an exception review "may conclude
+satisfaction" for cases such as a lost handset or a customer who cannot read a
+value. **That was a contradiction of the mandatory-participation rule and is
+withdrawn** — it would have made customer participation mandatory in name and
+optional in practice, decided by an administrator after the fact.
+
+### What exception review may do
+
+Some deliveries genuinely cannot complete the primary method: a customer with a
+visual or motor impairment using an interface that does not accommodate them, a
+lost or dead customer handset, a language barrier, or a delivery offered to
+someone other than the account holder. These are real, and they need somewhere
+to go. An ADMIN exception review is that place, and its authority is **recording
+and classification, not conclusion**:
+
+- **record** that an exceptional case occurred, against the exact order and
+  delivery attempt;
+- **classify** what was and was not obtained;
+- **audit** the review — a recorded reason, a reference, the deciding principal
+  and server time, immutable and append-only.
+
+### What exception review may NOT do
+
+It may **not**:
+
+- mark proof **satisfied**;
+- mark the order **delivered**;
+- **waive** the proof requirement, for one order or in general;
+- assign **customer fault**;
+- create a **fee**, refund, compensation or liability;
+- **resolve a dispute**;
+- **substitute** a photograph, a GPS fix, a timestamp, an unbound signature, a
+  rider statement, a cash collection or an administrator's own judgement for a
+  customer-side act.
+
+An exceptional case that is recorded but unresolved **stays unresolved**. The
+order has no satisfaction — canonical absence,
+`DeliveryProofAssessmentFacts.absent` — and Decision 6 governs what that means,
+which is: nothing else happens automatically. Recording the exception is not a
+smaller version of satisfying the policy; it is an honest note that the policy
+was not satisfied and why.
+
+### The one permitted route to widening, and its price
+
+An accessibility-compatible alternative **may** be designed later — a
+larger-type or audio presentation, an assisted flow, a delegated recipient
+rule. Whatever shape it takes, it must remain **an act attributable to the
+customer side under authenticated, server-verified rules**. Changing the
+presentation of a customer act is inside this ADR. Removing the customer act is
+not.
+
+**Any future policy that would allow satisfaction without a customer-side act —
+including any administrative substitution — requires a superseding ADR and a
+contract migration plan, accepted BEFORE implementation.** It cannot arrive as a
+policy version, a configuration change, an implementation detail or a widening
+of `executableProofAssessorKinds`.
+
+**This ADR creates no exception workflow and no permission for one.** ADR-0009
+already requires that any manual assessment be *"a separate audited workflow with
+its own permission, scoped authority, a recorded reason, approval or dual control
+where policy requires it, and immutable audit history — never an arbitrary status
+patch"*, and that `executableProofAssessorKinds` is the single place a later task
+would widen **deliberately**. That stands, and this decision narrows it further:
+such a workflow, when it is built, records and reviews — it does not conclude
+satisfaction absent a customer act.
 
 **It must not silently waive missing proof.** "The rider says it arrived and
-nobody objected" is not an exception case; it is the absence of proof, and Decision 6
-governs it.
-
-**This ADR does not create that workflow.** ADR-0009 already records that manual
-assessment, if ever needed, must be *"a separate audited workflow with its own
-permission, scoped authority, a recorded reason, approval or dual control where
-policy requires it, and immutable audit history — never an arbitrary status
-patch"*, and that `executableProofAssessorKinds` is the single place a later task
-would widen **deliberately**. That remains true: the exception path needs its own
-permission and its own bounded slice, and **no permission for it exists today**.
+nobody objected" is not an exception case; it is the absence of proof, and
+Decision 6 governs it.
 
 ## Decision 10 — configurable, but not silently weakenable
 
@@ -367,18 +471,28 @@ under.*
 - which fulfilment routes are enabled (either, or both);
 - rate limits, within non-unlimited bounds;
 - which supporting context is captured alongside;
-- whether an exception path is available for that policy.
+- whether an exception-**recording** path is available for that policy — one
+  that records and audits an unresolved case and, per Decision 9, **cannot
+  conclude satisfaction**.
 
 **What no policy version may configure, because doing so would weaken the
 invariant rather than parameterize it:**
 
 - making any Decision 4 signal sufficient on its own;
-- removing the customer-side fulfilment requirement entirely;
+- **removing, downgrading, narrowing or substituting the mandatory customer-side
+  fulfilment requirement, in whole or in part** — no configuration may make it
+  optional for any order, route, region, customer class or exceptional case;
+- **enabling any exception path that concludes satisfaction without a
+  customer-side act**, however it is labelled (Decision 9);
 - allowing client-side verification, client-proposed challenges or client clocks
   as authority;
 - disabling single-use, binding or expiry;
-- making an exception path unaudited, unauthorized or indistinguishable;
-- setting a rate limit to unlimited.
+- making an exception-recording path unaudited, unauthorized or
+  indistinguishable;
+- setting a rate limit, retry budget or regeneration budget to unlimited, or
+  leaving expiry unset;
+- causing a **missing, unknown, unresolvable or unsupported policy version** to
+  behave permissively (Decision 11).
 
 Any of those requires **superseding this ADR** (the Supersession rule), not publishing a policy
 version. The distinction is the entire point of separating configuration from
@@ -386,6 +500,42 @@ decision: a knob that can turn the invariant off is not a knob.
 
 **Orders keep the policy version they were quoted under.** A later policy change
 does not retroactively re-decide an order already assessed.
+
+## Decision 11 — a policy that cannot be resolved cannot be satisfied
+
+Every rule above is stated relative to *the policy named by the order's
+`DeliveryProofPolicyRef`*. If that name cannot be turned into a specific,
+loaded, verified policy version, there is no policy to satisfy, and **no
+satisfaction may be produced**.
+
+**Each of these fails closed, and each is distinct:**
+
+| Condition | Outcome |
+|---|---|
+| The order carries **no** `DeliveryProofPolicyRef` | **not satisfied** |
+| The reference is present but names an **unknown** policy version | **not satisfied** |
+| The reference names a version that is **unresolvable** — it cannot be located in trusted policy state | **not satisfied** |
+| The version resolves but is **unsupported** by the verifying build | **not satisfied** |
+| The version loads but **cannot be verified** — corrupt, truncated, or failing its own integrity check | **not satisfied** |
+
+**No default policy is inferred, ever.** In particular the verifier must not:
+
+- fall back to a **built-in** or **hard-coded** default;
+- silently substitute the **latest** published version;
+- silently substitute the version used by a **previous** attempt, a previous
+  order, or a neighbouring resource;
+- treat an unresolvable reference as "no policy required" and pass;
+- treat an unsupported version as a weaker version it does understand.
+
+**A substitution is a different policy.** Orders keep the policy version they
+were quoted under (Decision 10), so quietly evaluating an order under some other
+version would decide that order under rules it was never quoted, which is worse
+than refusing.
+
+These failures are **operational, not fault-bearing**: an order whose policy
+cannot be resolved has no satisfaction, and nothing else follows automatically —
+no refusal, no customer fault, no fee, no dispute outcome. Decision 6 governs
+what absence means, and it means the same thing here.
 
 ## Consequences
 
@@ -407,8 +557,9 @@ does not retroactively re-decide an order already assessed.
 - **`ContractVersion.current` stays 0.11** and no contract document gains an
   executable specification. A policy decision is not a contract change.
 - **`Permission.values` and `permissionMatrix` stay 39.** The primary method
-  reuses two accepted permissions unchanged; the exception path's permission is
-  deliberately **not** created here.
+  reuses two accepted permissions unchanged; the exception-recording path's
+  permission is deliberately **not** created here, and Decision 9 limits what
+  such a permission could ever do.
 - **Dispute resolution stays undecided.** This ADR gives a dispute something
   concrete to be about — whether a challenge was genuinely fulfilled — but
   decides no outcome, no fault, no fee and no liability. `dispute.resolve_delivery_proof`
@@ -424,14 +575,15 @@ does not retroactively re-decide an order already assessed.
 | Question | Status | Owner |
 |---|---|---|
 | The executable challenge lifecycle — issuance, storage, consumption, its types and events | **DEFERRED** | the implementing proof-satisfaction slice |
+| The **authenticated customer retrieval surface** that displays the raw challenge | **DEFERRED** — its required *class* is specified in Decision 1; no UI, API or transport is chosen, and **route 1 is not executable until it exists** | the implementing proof-satisfaction slice |
 | The successful-delivery transaction (`in_delivery → delivered`, custody `rider → customer`, rider completion and **B3-C2**) | **DEFERRED** | a separately reviewed delivery slice |
-| The exception-review workflow and **its permission** | **DEFERRED** — bounded, audited, its own slice | future slice + this ADR's Decision 9 |
+| The exception-review workflow and **its permission** | **DEFERRED** — bounded, audited, its own slice. Its authority is limited by Decision 9 to **recording, classifying and auditing** an unresolved exceptional case; it may **not** conclude satisfaction without a customer-side act, and any substitution requires a **superseding ADR and contract migration** accepted before implementation | future slice, under ADR-0012 Decision 9 |
 | Concrete challenge length, alphabet, window and rate-limit values | **DEFERRED** — operational configuration within Decision 10's bounds | policy configuration |
 | Evidence retention, visibility, deletion, legal hold | **DEFERRED** (unchanged) | privacy/retention slice |
 | How a dispute resolves, and any fault, fee, refund, compensation or liability | **DEFERRED** (unchanged) | resolution slice, FND-003C |
 | Remittance, settlement, reconciliation, commission payout, worker pay | **DEFERRED** (unchanged) | FND-003C |
-| Notification transport for delivering a challenge to a customer | **DEFERRED** — ADR-0005 is still *Proposed, blocked on an owner decision* | notification slice |
-| Whether an authorized recipient other than the account holder may ever fulfil | **DEFERRED** — Decision 9 treats it as an exception case, and decides no delegation rule | future slice |
+| Notification transport for **signalling challenge availability** | **DEFERRED** — [ADR-0005](ADR-0005-notification-stack-decision-required.md) governs notification transport and is still *Proposed — blocked on an owner decision*. Notification is **optional signalling, never secret delivery**; its absence does **not** authorize delivering the raw challenge by any less safe route | notification slice |
+| Whether an authorized recipient other than the account holder may ever fulfil | **DEFERRED** — Decision 9 lets such a case be **recorded**, and decides no delegation rule. Any rule that let a non-customer's act satisfy the policy would be a substitution for customer fulfilment and needs a **superseding ADR** | future slice |
 
 **Zero is never used as a substitute for undecided policy**, and neither is
 `false`. No flag is added here whose default would quietly answer any row above.
@@ -468,8 +620,9 @@ does not retroactively re-decide an order already assessed.
 | **Long-lived or reusable challenge** | A reusable secret is a credential, and a long window is an offline attack surface against a short value. |
 | **A `pending` verdict for offline capture** | ADR-0009 already rejected `pending`: absence means it, and two representations of one fact drift. Reconfirmed here (Decision 3). |
 | **Storing the challenge value for audit** | Would put a credential in exactly the caches, logs and notification payloads the D1 privacy boundary exists to keep clean. The outcome and safe references are audited instead (Decision 5). |
-| **No exception path at all** | Would make the policy inaccessible to customers with impairments and push real deliveries into permanent non-satisfaction. Rejected as both an accessibility failure and a pressure toward dishonest workarounds. |
-| **Unaudited admin override** | The arbitrary status patch `ProhibitedCapability` forbids, aimed at the highest-value status in the system. Decision 9 requires authorization, reason, reference and immutable audit. |
+| **No exception-recording path at all** | Would leave genuinely exceptional cases — an inaccessible interface, a dead handset, a delegated recipient — with nowhere to be recorded, which is a pressure toward dishonest workarounds. Decision 9 gives them a recorded, audited home **without** letting that record conclude satisfaction. An accessibility-compatible *customer act* may be designed later; removing the customer act needs a superseding ADR. |
+| **Unaudited admin override** | The arbitrary status patch `ProhibitedCapability` forbids, aimed at the highest-value status in the system. |
+| **Any admin override, audited or not, that concludes satisfaction** | Rejected outright in Decision 9. An administrator concluding satisfaction where the customer did nothing makes mandatory participation optional in practice, decided after the fact by the party furthest from the doorstep. Exception review records and audits; it does not conclude. Substitution needs a superseding ADR and a migration plan. |
 | **Biometric or device attestation as the primary method** | Adds a hardware and privacy dependency, excludes low-end devices that dominate this market, and buys no binding the challenge does not already give. |
 | **Deciding the executable contract in this task** | Would merge a policy decision with a cross-aggregate delivery transaction touching order, custody, assignment, reservation and money — the exact combination the boundary documents require to be reviewed on its own. |
 
@@ -481,11 +634,21 @@ following requires a superseding ADR **and** a contract migration plan — never
 policy-version edit, a configuration change or an in-place amendment:
 
 - making any Decision 4 signal sufficient on its own;
-- removing or downgrading the mandatory customer-side fulfilment;
+- **removing, downgrading or substituting the mandatory customer-side
+  fulfilment** — in whole or in part, for any order, route, region, customer
+  class or exceptional case;
+- **granting any exception, review or administrative path the authority to
+  conclude satisfaction without a customer-side act** (Decision 9);
 - moving verification authority off the trusted backend;
 - weakening single-use, binding, expiry or fail-closed behaviour;
-- making the exception path unaudited or indistinguishable;
+- making an exception-recording path unaudited or indistinguishable;
+- allowing a missing, unknown, unresolvable or unsupported policy version to
+  behave permissively (Decision 11);
 - adding a permission that can assert proof satisfaction directly.
+
+**A superseding ADR must be accepted BEFORE any implementation relies on the
+change.** Building the weaker behaviour first and recording it afterwards is the
+failure mode this rule exists to prevent.
 
 Because orders keep the policy version they were quoted under, a superseding ADR
 must also say what happens to orders already assessed under this one. Silence on

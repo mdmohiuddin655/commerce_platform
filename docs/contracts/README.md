@@ -112,9 +112,16 @@ the whole of FND-003D2B, and is **39** today only because FND-003B3B later
 added `agent.return.record_receipt` — mutates **no assessment**, and leaves `OrderState.delivered`,
 `CustodyHolderKind.customer` and rider `AssignmentState.completed` unreachable.
 
-**FND-003D is PARTIAL**: the proof-satisfaction *policy itself* is still
-undefined, so `CONSTRAINTS.md` invariant 13 is **not discharged** and delivery
-confirmation may not be coded. **How a dispute resolves** is a separate
+**FND-003D is PARTIAL**: the proof-satisfaction *policy itself* is **DECIDED**
+(2026-09-12,
+[ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md), owner
+decision **O8**) — a server-issued, single-use, resource-bound confirmation
+challenge, verified server-side and fail-closed, with **mandatory but not
+sufficient** customer participation — but **no executable proof satisfaction
+exists**: that ADR adds no challenge lifecycle, evaluator, command, event, state
+or permission. `CONSTRAINTS.md` invariant 13 is therefore **still not
+discharged**, delivery confirmation may not be coded, and the implementing slice
+**must conform to ADR-0012**. **How a dispute resolves** is a separate
 undecided question, needing the remaining **FND-003C** money work — **O6 itself
 is resolved** by [ADR-0011](../decisions/ADR-0011-o6-currency-fees-commission-and-cash-custody.md) —
 and a resolution slice. *(FND-003B3B has since
@@ -186,11 +193,11 @@ blocked, and saying so is the correct outcome.
 
 | Slice | Owns | Blocked on |
 |---|---|---|
-| **Lifecycle — successful delivery** (FND-003B3, remaining) | Delivery **confirmation**, customer custody, and rider assignment `completed` (**B3-C2**). Delivery attempts, refusal, failure and the direct `rider → shop` return are **done** (FND-003B3B) — but a *successful* delivery needs the proof-satisfaction policy, which is undefined. The **failed-attempt** retry/return consequence and the **via-picker** return route are also still undecided: B3B enumerates and refuses both rather than guessing. | FND-003B3A (**done**), FND-003B3B (**done**), **Proof policy** |
+| **Lifecycle — successful delivery** (FND-003B3, remaining) | Delivery **confirmation**, customer custody, and rider assignment `completed` (**B3-C2**). Delivery attempts, refusal, failure and the direct `rider → shop` return are **done** (FND-003B3B) — but a *successful* delivery needs the proof-satisfaction policy, which is **decided** ([ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md)) and **not implemented** — no challenge lifecycle, evaluator or delivery transaction exists. The **failed-attempt** retry/return consequence and the **via-picker** return route are also still undecided: B3B enumerates and refuses both rather than guessing. | FND-003B3A (**done**), FND-003B3B (**done**), **Proof policy** |
 | **Lifecycle — direct agent→rider pickup** | Shop-to-rider pickup with no picker: router mapping, order stage, shop authority, shop→rider handoff and custody proof. `agent.assignment.offer_rider` is reserved for it and is **not executable**. | FND-003B3 |
 | **Inventory — post-dispatch cancellation** | The stock consequence of a **cancellation** after dispatch. Return-path restoration is **done** (FND-003B3B) — stock becomes available again only after shop receipt **and** a `restockable` inspection, exactly once, with `damaged` / `quarantined` restoring zero — and pre-dispatch reservation, expiry and restoration are **done** (FND-003B1). What a *cancellation* after dispatch does to stock is **not decided**: FND-003B3A recorded that no post-pickup cancellation behaviour was invented, and FND-003B3B lists it among the consequences it does not decide. | The cancellation policy itself, deferred by FND-003B3A and FND-003B3B; its fee/liability half is **Owner decision O6** and FND-003C |
 | **Money — remaining** | Remittance, settlement, reconciliation, refusal-fee collection, refunds, compensation, commission payout and worker pay. The **normal-path COD collection** and its balanced cash journal are **done** (FND-003C1), and **O6 is resolved** (ADR-0011): currency, the quoted customer price, commission ownership and rider cash custody are all decided. | FND-003C1 (**done**); the remaining lifecycles await their own slices |
-| **Proof policy** (FND-003D, remaining) | The proof-**satisfaction policy itself** — what a policy requires, which mechanism captures evidence, whether customer participation is needed. Required **before** delivery confirmation is coded. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
+| **Proof policy** (FND-003D, remaining) | The **policy is DECIDED** — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md) (2026-09-12, **O8**) says what a policy requires, which mechanism class captures evidence and that customer participation is **mandatory but not sufficient**. What remains is **executable**: the challenge lifecycle, the authenticated customer retrieval surface, the verifier's evaluation and the delivery transaction. Still required **before** delivery confirmation is coded, and it **must conform to ADR-0012**. The reference/privacy boundary is **done** (FND-003D1), the assessment **result** is **done** (FND-003D2A) and the fallback dispute workflow is **done** (FND-003D2B). | — |
 | **Dispute resolution** | How a fallback dispute resolves: who prevails, and whether any delivery, refusal, return, fee, refund, compensation or liability follows. Enumerated and refused `resolutionPolicyDeferred` by FND-003D2B; **never guessed**. | **Owner decision O6**, FND-003C. FND-003B3B (**done**) defines the refused-order return and decides **no** dispute outcome, fault or money |
 
 ## Rules that already bind every later slice

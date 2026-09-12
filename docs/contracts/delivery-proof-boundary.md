@@ -334,8 +334,21 @@ question open:
   or from disabling single-use, binding or expiry;
 - the **exception-review workflow and its permission** — ADR-0012 requires any
   accessibility or impossible-primary-method path to be separately authorized,
-  reason-bearing and audited, and **does not create it**. No such permission
-  exists;
+  reason- and reference-bearing and audited, and **does not create it**. No such
+  permission exists. Its authority is bounded to **recording, classifying and
+  auditing** an unresolved case: it **cannot mark proof satisfied, cannot mark an
+  order delivered, cannot waive the proof requirement, cannot assign customer
+  fault, cannot create a fee and cannot resolve a dispute**, and it may not
+  substitute a photograph, GPS fix, signature, rider statement, cash collection
+  or administrator judgement for a customer-side act. **Any future policy that
+  would allow satisfaction without a customer-side act requires a superseding ADR
+  and a contract migration, accepted before implementation;**
+- the **authenticated customer retrieval surface** that displays the raw
+  challenge to the customer — ADR-0012 specifies the required channel *class*
+  (authenticated, customer-scoped, bound to the exact customer and resource; the
+  rider never retrieves it; a notification may signal availability but never
+  carries the value) and **implements none of it**, so that route is not
+  executable until the surface exists;
 - the **dispute outcome** — how a fallback dispute resolves, and whether any
   delivery, refusal, return, fee, refund, compensation or liability follows.
   The fallback dispute **workflow** itself is **done** (FND-003D2B, 0.9) and
@@ -358,8 +371,11 @@ question open:
   to satisfaction in which the customer side does nothing, and fulfilling a
   challenge is an *input* the server still verifies rather than a verdict. It is
   **not a veto that ends the order**: non-participation yields no satisfaction
-  and nothing else — no refusal, no fault, no fee. It was **POLICY-DEFINED /
-  DEFERRED** through 0.9, and FND-003D2B did not decide it either — **raising a
+  and nothing else — no refusal, no fault, no fee. **No administrative act may
+  supply the customer's part**: an ADMIN exception review records and audits an
+  unresolved case and **cannot conclude satisfaction** (ADR-0012 Decision 9), and
+  any future substitution requires a **superseding ADR and contract migration**.
+  It was **POLICY-DEFINED / DEFERRED** through 0.9, and FND-003D2B did not decide it either — **raising a
   dispute is not participation in proof**. **No `customerConfirmed` flag was
   added by this decision**, and none exists: the requirement is a policy rule
   the implementing slice must satisfy, not a field on an existing type.
@@ -391,6 +407,17 @@ transaction. `OrderState.delivered`, `DeliveryAttemptState.delivered`, customer
 custody and rider `completed` are exactly as unreachable as before. The
 implementing slice **must conform to ADR-0012**, and weakening any part of it
 needs a superseding ADR rather than a configuration change.
+
+**Fail-closed conditions the implementing slice inherits** (ADR-0012 Decisions 6
+and 11), each yielding **no satisfaction**: a missing, expired, replayed,
+mismatched or mis-bound challenge; a rider who is not the currently assigned one,
+or a moved assignment generation; a stale order, custody, rider-slot or
+assessment revision; a malformed or inconsistent aggregate; **no customer-side
+fulfilment at all**; and a governing policy version that is **missing, unknown,
+unresolvable, unsupported or unverifiable**. **No default policy is inferred** —
+no built-in fallback, no silent substitution of the latest or a previous
+version — because an order keeps the policy version it was quoted under, and
+evaluating it under another is worse than refusing.
 
 That slice must then reconcile, in one design:
 
