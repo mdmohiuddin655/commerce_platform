@@ -325,12 +325,17 @@ Surviving instances elsewhere, classified:
 | the guard's doc comments, failure message and pre-fix fixture | **explicit correction** and the **negative-control input** — the defect string is deliberately the fixture |
 | `line 101`, `base rows`, `now rows`, `42/43` | only inside explicit correction notes that quote what they replaced |
 
-**Outstanding defect:** the FND-003C1-FIX-002 report's §4 opening block now
-reproduces a **superseded** header verbatim, and its correction blockquote still
-describes the root wording as outstanding. Both remain accurate as history, and
-this task is **prohibited from editing that report** — it is on the do-not-change
-list — so the re-labelling is recorded in the ledger as a fresh debt needing its
-own bounded task. No other defect, and none introduced here.
+**Relabelling debt, recorded by this task and since discharged.** Correcting the
+canonical header left the FND-003C1-FIX-002 report's §4 opening block quoting a
+**superseded** header, with a correction blockquote that described the root
+wording as outstanding. **During this implementation task, editing that report was
+outside the authorized file list** — it was on the do-not-change list — so the
+debt was recorded rather than scope silently widened.
+**FND-003D1-BOOKKEEPING-FIX-003-FIX-001** subsequently time-scoped that
+annotation's status prose, naming the task each statement belongs to. The
+quotation and the captured probe output were **not** touched by either task and
+remain byte-identical historical evidence. **No follow-up remains required for
+this debt.** No other defect, and none introduced here.
 
 ---
 
@@ -438,7 +443,7 @@ ALL CHECKS PASSED
 
 | Item | Owner |
 |---|---|
-| The FND-003C1-FIX-002 report's §4 quotation now reproduces a superseded `permission-matrix.md` header, and its correction blockquote still calls the root wording outstanding. Both are accurate history; the re-labelling is prohibited to this task. | needs its own bounded task |
+| Relabelling the FND-003C1-FIX-002 report's §4 status annotation, which this implementation task was not authorized to edit. **Discharged by FND-003D1-BOOKKEEPING-FIX-003-FIX-001**, which time-scoped that prose to the task it describes; the quotation and captured output were left byte-identical. | closed |
 | O7 — hosted CI does not exist (no `.github`) | FND-004 |
 
 ---

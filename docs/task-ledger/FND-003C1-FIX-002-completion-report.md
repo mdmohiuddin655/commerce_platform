@@ -112,10 +112,20 @@ seeing that the vocabulary is older than the header.
 > unedited**: the quoted block above reproduces the
 > `docs/contracts/permission-matrix.md` header **verbatim**, and the probe output
 > below is **recorded command evidence**. Correcting either would turn a faithful
-> quotation into a misquotation or falsify recorded output. The phrase originates
-> in `docs/contracts/permission-matrix.md` line 8 — a contract document this task
-> is **not authorized to change** — so it is recorded as **outstanding** debt in
-> the ledger and needs its own task.
+> quotation into a misquotation or falsify recorded output.
+>
+> **Status of the root wording, time-scoped.** At the time of the
+> **FND-003D1-BOOKKEEPING-FIX-002** task the phrase still stood in the canonical
+> `docs/contracts/permission-matrix.md` header — a contract document that task was
+> **not authorized to change** — so the root wording remained **outstanding** and
+> was deliberately outside that task's scope, recorded in the ledger for a later
+> one. **FND-003D1-BOOKKEEPING-FIX-003** later corrected that canonical wording,
+> replacing the ordinal with the total-count transition and adding a guard against
+> its return, and **FND-003D1-BOOKKEEPING-FIX-003-FIX-001** then time-scoped this
+> annotation. The quotation above and the probe output below are **unchanged**:
+> they remain accurate evidence of the repository as it stood when *this* task ran,
+> which is exactly why they were never edited. Task and commit history, not this
+> paragraph, is the authority on when each change landed.
 
 ### The "byte-for-byte what 0.10 generated" claim is verified, not asserted
 
