@@ -173,9 +173,20 @@ false, and are tested.
 
 Still unreachable and untouched: `OrderState.delivered`,
 `CustodyHolderKind.customer`, rider `AssignmentState.completed` (**B3-C2
-FUTURE**), the proof-satisfaction policy, dispute resolution, refusal-fee
-collection, refunds, compensation, commission payout, worker pay, reconciliation
-and FX.
+FUTURE**), the **executable proof-satisfaction mechanism**, dispute resolution,
+refusal-fee collection, refunds, compensation, commission payout, worker pay,
+reconciliation and FX.
+
+**The proof-satisfaction *policy* is decided; its *mechanism* is not.**
+[ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md)
+(2026-09-12, owner decision **O8**) defines what a delivery-proof policy
+requires. It adds no challenge lifecycle, evaluator, command, event, state or
+permission, so the **executable proof-satisfaction mechanism and the
+successful-delivery transaction remain unimplemented and unreachable**,
+`CONSTRAINTS.md` invariant 13 remains **not discharged**, and nothing in this
+document becomes reachable because of it. **Collecting cash still does not
+satisfy a proof policy** — ADR-0012 keeps the two facts separate in both
+directions, exactly as this section already says.
 
 ## 9. Events
 

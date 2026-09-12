@@ -207,7 +207,7 @@ Unrelated README roadmap content is untouched.
 
 ---
 
-## 4. Out-of-scope staleness — found, recorded, NOT fixed
+## 4. Out-of-scope staleness — found and recorded here; classified by FIX-002
 
 A wider re-sweep found three further stale statements. **None of the three files
 is in this task's authorized list**, so they are recorded rather than silently
@@ -219,8 +219,34 @@ widening scope:
 | `docs/contracts/version-history.md:553` | 0.10 entry: *"the proof-satisfaction policy is undefined"* | Slice-scoped historical record of what 0.10 did not decide; present tense makes it borderline. File not authorized. |
 | `ADR-0010:191` | *"the proof-satisfaction policy is still undefined"* | Consequences of a dated, accepted decision record. **Every ADR except ADR-0012 is explicitly prohibited to this task.** |
 
-They need their own bounded task. The debt is recorded in the ledger row for this
-follow-up.
+> **Outcome, recorded by FND-003D3-PROOF-SATISFACTION-POLICY-001-FIX-002.** The
+> discovery evidence above is preserved exactly as this task captured it; only
+> its **conclusion** is corrected. The sentence that stood here — *"They need
+> their own bounded task"* — was right about **one** of the three and wrong about
+> the other two, because it classified dated historical records as open debt.
+>
+> - **`docs/contracts/cash-and-payments.md`** — a genuine **current** canonical
+>   status defect, and **DISCHARGED by FIX-002**, which replaced *"the
+>   proof-satisfaction policy"* in §8's unreachable list with *"the **executable
+>   proof-satisfaction mechanism**"* and added the explicit
+>   policy-versus-mechanism distinction naming ADR-0012. No financial, COD,
+>   journal, fee, commission, settlement or reconciliation semantics changed.
+> - **`docs/contracts/version-history.md:553`** — **an accurate historical
+>   record, not debt.** It sits under the heading `## 0.10 — FND-003B3B —
+>   delivery attempt and return lifecycles`, in that entry's *"Not added, and not
+>   decided"* subsection. It states what contract **0.10** did not decide, which
+>   is true and stays true: the policy was undefined throughout that slice. This
+>   task's *"present tense makes it borderline"* was an over-reading of a
+>   per-version record. **No correction is required, and none was made.**
+> - **`ADR-0010:191`** — **an accurate historical record, not debt.** It is the
+>   *Consequences* section of a dated, Accepted decision (2026-09-11, FND-003B3B,
+>   contract 0.9 → 0.10), describing the state at the time that decision was
+>   taken. ADRs are dated decision records, not running status pages. **No
+>   correction is required, and none was made.**
+>
+> **No current documentation debt remains from these three sweep results.**
+> Publication state is determined by git history, not by this or any other report
+> paragraph.
 
 ---
 
