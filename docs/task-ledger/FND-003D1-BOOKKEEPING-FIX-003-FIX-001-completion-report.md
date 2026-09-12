@@ -183,9 +183,15 @@ Exactly one new row; every pre-existing `ID :: Status` pair byte-identical.
 
 ## 6. Semantic sweep and classification
 
-Across the three pre-existing writable documents:
+Across the three pre-existing writable documents. This table records the sweep
+**as performed during this task** — the occurrence texts and counts are those that
+stood in the tree at that point.
+**FND-003D1-BOOKKEEPING-FIX-003-FIX-002** later re-swept both audited reports
+against the final candidate tree and time-scoped the further stale claims it found,
+including the §12 heading quoted below, which it reworded. Git history is the
+authority on the documents' current shape.
 
-| Occurrence | Where | Class |
+| Occurrence (as swept by this task) | Where | Class |
 |---|---|---|
 | `still outstanding`, `still unauthorized to change`, `still awaiting its own task` | new FIX-003-FIX-001 ledger row | **explicit correction** — quoted as the false assertion being repaired, followed by *"all three false once the header was fixed"* |
 | `remained outstanding`, `not authorized to change` | FIX-002 report §4 annotation | **explicitly historical** — both name the FND-003D1-BOOKKEEPING-FIX-002 task explicitly |
@@ -197,24 +203,29 @@ Across the three pre-existing writable documents:
 | `published` | FIX-003 row (*"the published pre-fix document"*), FIX-003 report §3/§5 | **accurate durable current fact** — describes what `origin/main` contained, not this candidate's state |
 | `pending` ×3, `not published` ×1 | pre-existing unrelated ledger rows | out of this task's scope, untouched |
 
-**Zero defects introduced.** One pre-existing item is reported rather than fixed,
-below.
+**Zero defects introduced.** One pre-existing item was found during this task and
+recorded rather than fixed; it has since been corrected — see below.
 
-### Recorded, not fixed — outside this task's authorized scope
+### Found here, outside this task's authorization, and since corrected
 
-The FIX-002 report's **§12** opens *"`docs/contracts/delivery-proof-boundary.md`
-still asserts the **old permission count in the present tense**"*. That is stale:
-`grep -nE '\b38\b'` over that document now returns only correct `38 → 39`
-transitions and explicit corrections, because
-**FND-003D1-BOOKKEEPING-FIX-001** fixed it. The section's own heading scopes it to
-the FND-003C1-FIX-002 task, so it reads as that task's finding — but the sentence
-itself is present-tense.
+**Discovered during FND-003D1-BOOKKEEPING-FIX-003-FIX-001:** the FIX-002 report's
+**§12** opened *"`docs/contracts/delivery-proof-boundary.md` still asserts the
+**old permission count in the present tense**"*. That sentence was stale —
+`grep -nE '\b38\b'` over that document returned only correct `38 → 39` transitions
+and explicit corrections, because **FND-003D1-BOOKKEEPING-FIX-001** had already
+fixed it. The section's heading scoped it to the FND-003C1-FIX-002 task, so it read
+as that task's finding, but the sentence itself was present-tense.
 
-This task's authorization for that file is *"only correct the surrounding
-present-state annotation"* about the **root wording**, and §12 concerns a
-different document and a different debt that this task's own change did not make
-stale. Widening scope silently is worse than recording the debt, so it is recorded
-here and in no way claimed as fixed. It needs its own bounded task.
+**This task's authorization for that file was narrow** — *"only correct the
+surrounding present-state annotation"* about the **root wording** — and §12 concerns
+a different document and a different debt that this task's own change did not make
+stale. Widening scope silently is worse than recording the debt, so it was recorded
+rather than fixed here.
+
+**FND-003D1-BOOKKEEPING-FIX-003-FIX-002 subsequently corrected it**, time-scoping
+§12 and the owner-actions line to the FND-003C1-FIX-002 task and naming
+FND-003D1-BOOKKEEPING-FIX-001 as the task that discharged the debt, with the quoted
+evidence left byte-identical. **No follow-up remains required for that debt.**
 
 ---
 
@@ -300,7 +311,7 @@ ALL CHECKS PASSED
 
 | Item | Owner |
 |---|---|
-| FIX-002 report §12's present-tense *"still asserts the old permission count"* about `delivery-proof-boundary.md`, already fixed by FND-003D1-BOOKKEEPING-FIX-001 — outside this task's authorized scope (§6) | needs its own bounded task |
+| FIX-002 report §12's present-tense *"still asserts the old permission count"* about `delivery-proof-boundary.md` — found during this task, outside its narrow authorization (§6). **Discharged by FND-003D1-BOOKKEEPING-FIX-003-FIX-002**, which time-scoped §12 and the owner-actions line and left the quoted evidence byte-identical. | closed |
 | O7 — hosted CI does not exist (no `.github`) | FND-004 |
 
 ---

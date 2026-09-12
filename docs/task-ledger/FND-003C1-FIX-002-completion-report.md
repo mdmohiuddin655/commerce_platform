@@ -143,8 +143,16 @@ IDENTICAL      : True
 ## 5. The regression guard
 
 **New file:** `packages/contracts/test/permission_matrix_doc_consistency_test.dart`
-(2 tests). It reads the canonical document from disk and compares its declared
-version to `ContractVersion.current`.
+— **2 tests as created by this task**. It reads the canonical document from disk
+and compares its declared version to `ContractVersion.current`.
+
+> **Time-scoped by FND-003D1-BOOKKEEPING-FIX-003-FIX-002.** Every count and
+> position in this section describes the file **as this task created it**.
+> **FND-003D1-BOOKKEEPING-FIX-003** later extended the same file with an
+> ordinal/count-conflation guard and its controls, so it now carries more tests
+> than the two described here. The two original tests are unchanged in substance;
+> the file's current shape is a property of the tree, and git history is the
+> authority on it.
 
 **It hard-codes no version literal.** The expected value is derived:
 
@@ -164,13 +172,16 @@ misleading message. That draft was corrected before commit, and both variants'
 messages are shown in §6.
 
 **No new dependency.** `dart:io` and the existing `test` package only. Reading
-files from disk in a test is established convention here — 13 existing test files
-already do it.
+files from disk in a test is established convention here — **13 existing test
+files did so when this task ran**, and more do now; the convention is the point,
+not the count.
 
-The second test guards the other half: `Permission.values` and `permissionMatrix`
-are both 39, the document states the live count, and the generated table still
-carries exactly one row per matrix entry. The version header and the permission
-count are independent facts, and C1 moved only the first.
+The **second of this task's two tests** guards the other half: `Permission.values`
+and `permissionMatrix` are both 39, the document states the live count, and the
+generated table still carries exactly one row per matrix entry. The version header
+and the permission count are independent facts, and C1 moved only the first. (It is
+no longer the second test *in the file* — FND-003D1-BOOKKEEPING-FIX-003 added a
+group ahead of it — but it is unchanged and still present.)
 
 ## 6. The guard is meaningful — four failure modes, each proven
 
@@ -219,7 +230,7 @@ absolute path and no fixed `..` count.
 | Path | Change |
 |---|---|
 | `docs/contracts/permission-matrix.md` | header 0.10 → 0.11 + the vocabulary/overall distinction. **Table untouched** |
-| `packages/contracts/test/permission_matrix_doc_consistency_test.dart` | **new** — the regression guard (2 tests) |
+| `packages/contracts/test/permission_matrix_doc_consistency_test.dart` | **new** — the regression guard (2 tests as created by this task; later extended — see §5) |
 | `docs/task-ledger/TASK_LEDGER.md` | one bounded FND-003C1-FIX-002 row |
 | `docs/task-ledger/FND-003C1-FIX-002-completion-report.md` | **new** — this report |
 
@@ -287,10 +298,17 @@ promotes nothing.
   rule, evaluator, request shape, denial, export or event id moved.
 - All FND-003C1 financial behaviour is untouched.
 
-## 12. Out of scope — recorded, not fixed
+## 12. Out of scope for this task — recorded here, corrected later
 
-`docs/contracts/delivery-proof-boundary.md` still asserts the **old permission
-count in the present tense**, in two places:
+**At the time of the original FND-003C1-FIX-002 task**,
+`docs/contracts/delivery-proof-boundary.md` still asserted the **old permission
+count in present-tense prose**, in the two places quoted below.
+**FND-003D1-BOOKKEEPING-FIX-001 later corrected that document and added a derived
+consistency guard**, so the debt recorded in this section has since been
+discharged. The quotation below is preserved **exactly as captured**: it is
+evidence of what that document said when this task ran, not a claim about the
+document today. Task and commit history is the authority on when each change
+landed.
 
 ```text
 :69   "**Neither FND-003D2A nor FND-003D2B added a permission**: `Permission.values`
@@ -299,11 +317,14 @@ count in the present tense**, in two places:
        `Permission.values` and `permissionMatrix`."
 ```
 
-The first clause of `:69` is historically accurate — neither D2A nor D2B did add
-one — but *"remains 38"* is present tense and false since 0.10. `:212` is simply
-false today: the test pins **39**. Both are **stale and not corrected here**,
-because this task's declared file list does not include that document and
-widening scope silently is worse than recording the debt.
+The analysis this task recorded of those two quoted lines stands: the first clause
+of `:69` was historically accurate — neither D2A nor D2B did add one — but
+*"remains 38"* was present tense and false from 0.10 onward, and `:212` was false
+as written because the test pinned **39**. Both were **stale and deliberately not
+corrected by this task**, because its declared file list did not include that
+document and widening scope silently is worse than recording the debt. Neither
+sentence survives in that document: **FND-003D1-BOOKKEEPING-FIX-001** replaced both
+with chronological wording and guarded the claim with a derived regression test.
 
 That document's own header, *"Introduced at contract version 0.7"*, is **correct
 and must not be "fixed"** — it is an origin stamp, not a running version. The new
@@ -342,4 +363,6 @@ status above records acceptance. Nothing in this report is self-certified.
 ## Owner actions needed
 
 None new. **O7** remains outstanding, unchanged. The
-`delivery-proof-boundary.md` permission-count debt in §12 needs a scoped task.
+`delivery-proof-boundary.md` permission-count debt recorded in §12 needed a scoped
+task when this report was written; **FND-003D1-BOOKKEEPING-FIX-001 has since
+discharged it**, and no owner action remains for it.
