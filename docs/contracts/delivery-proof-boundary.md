@@ -47,7 +47,11 @@ platform to a proof method.
 > `dispute.resolve_delivery_proof` is still enumerated and always refused
 > `resolutionPolicyDeferred`; **no `order.delivered` event exists**; and
 > `OrderState.delivered`, customer custody and rider `completed` all remain
-> unreachable, so `CONSTRAINTS.md` invariant 13 is still undischarged. B3B did
+> unreachable, so `CONSTRAINTS.md` invariant 13 is still undischarged —
+> **unchanged by the later acceptance of
+> [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md)**,
+> which decides the proof-satisfaction **policy** and implements none of it
+> (§7, §8). B3B did
 > take the permission count **38 → 39** at 0.10 by adding
 > `agent.return.record_receipt` — that changes the *count* (§1, §5), not any
 > claim above.
@@ -232,8 +236,16 @@ appears in the **code** — so the prose ruling them out cannot mask a real
 declaration. The same test forbids `bytes`, `base64`, `blob`, `url`, `path`,
 `address`, `phone`, `amount`, `retention`, `expires`, `duration` and `datetime`.
 
-Choosing a mechanism is a later bounded task's decision, made against
-`CONSTRAINTS.md` invariant 13.
+Choosing a mechanism was a later bounded task's decision, made against
+`CONSTRAINTS.md` invariant 13. **It has since been made, at the policy level
+only**, by
+[ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md): a
+**server-issued, single-use, resource-bound confirmation challenge**, verified
+server-side and fail-closed. **Nothing in this section changes.** ADR-0012 adds
+no code, so the source sweep above still passes unchanged — the challenge is
+backend policy state, not contract vocabulary, and none of the terms listed
+above is defined, required, implied or reserved *in this contract*. Naming a
+mechanism in a decision document is not declaring one here.
 
 ## 5. Permissions — unchanged
 
@@ -304,9 +316,26 @@ question open:
 - proof evidence **retention period**;
 - evidence **visibility** for customer, rider, agent and admin;
 - **deletion and legal-hold** policy;
-- **proof acceptance / satisfaction** policy — *what a policy actually
-  requires*. FND-003D2A added a place to record the **result** of evaluating
-  one, and deliberately not the policy itself;
+- ~~**proof acceptance / satisfaction** policy — *what a policy actually
+  requires*~~ — **DECIDED 2026-09-12** by
+  [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md)
+  (owner decision **O8**). FND-003D2A added a place to record the **result** of
+  evaluating a policy, and deliberately not the policy itself; ADR-0012 now
+  says what a v1 policy requires — a server-issued, short-lived, single-use
+  challenge bound to one order, attempt, customer and assigned rider, fulfilled
+  by the customer side and **verified by the trusted backend**, fail-closed.
+  Rider photograph, GPS, timestamp, unbound signature, rider assertion, cash
+  collection, customer non-response, attempt completion and custody possession
+  are each **insufficient alone**. **The executable contract is still
+  DEFERRED**: no challenge lifecycle, evaluator or delivery transaction exists;
+- **the concrete challenge parameters** — length, alphabet, validity window and
+  rate limits — **DEFERRED** as operational configuration within ADR-0012's
+  bounds, which forbid a policy version from setting any of them to unlimited
+  or from disabling single-use, binding or expiry;
+- the **exception-review workflow and its permission** — ADR-0012 requires any
+  accessibility or impossible-primary-method path to be separately authorized,
+  reason-bearing and audited, and **does not create it**. No such permission
+  exists;
 - the **dispute outcome** — how a fallback dispute resolves, and whether any
   delivery, refusal, return, fee, refund, compensation or liability follows.
   The fallback dispute **workflow** itself is **done** (FND-003D2B, 0.9) and
@@ -322,11 +351,20 @@ question open:
   payout are **unimplemented**. **The outcome itself stays UNDECIDED** —
   discharging a prerequisite is not deciding the question, and a dedicated
   resolution slice must still do that;
-- whether **customer participation** is required by any policy. Still
-  **POLICY-DEFINED / DEFERRED** after 0.9: not optional, not mandatory, not
-  sufficient, not a veto, and no `customerConfirmed` flag exists to default it.
-  FND-003D2B did not decide it either — **raising a dispute is not
-  participation in proof**.
+- ~~whether **customer participation** is required by any policy~~ —
+  **DECIDED 2026-09-12** by
+  [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md):
+  customer participation is **MANDATORY and NOT SUFFICIENT**. There is no route
+  to satisfaction in which the customer side does nothing, and fulfilling a
+  challenge is an *input* the server still verifies rather than a verdict. It is
+  **not a veto that ends the order**: non-participation yields no satisfaction
+  and nothing else — no refusal, no fault, no fee. It was **POLICY-DEFINED /
+  DEFERRED** through 0.9, and FND-003D2B did not decide it either — **raising a
+  dispute is not participation in proof**. **No `customerConfirmed` flag was
+  added by this decision**, and none exists: the requirement is a policy rule
+  the implementing slice must satisfy, not a field on an existing type.
+  `customer.delivery.confirm_proof` keeps its exact accepted meaning —
+  participation only, settling no cash and closing no dispute (§5).
 
 ## 8. What the eventual delivery slice must reconcile
 
@@ -334,15 +372,25 @@ Before a successful-delivery command can exist, a later bounded task must first
 define the **proof-satisfaction and fallback-dispute contract** that
 `CONSTRAINTS.md` invariant 13 requires.
 
-**Partially advanced by FND-003D2A and FND-003D2B, and only partially.** There
-is now a trusted, immutable place to record *whether* a policy was satisfied
-([delivery-proof-assessment.md](delivery-proof-assessment.md)), so a later
-delivery transaction has something to consume, and a defined fallback for when
+**Advanced by FND-003D2A, FND-003D2B and ADR-0012 — and still not complete.**
+There is now a trusted, immutable place to record *whether* a policy was
+satisfied ([delivery-proof-assessment.md](delivery-proof-assessment.md)), so a
+later delivery transaction has something to consume; a defined fallback for when
 that result is missing, superseded or `notSatisfied`
 ([delivery-proof-dispute.md](delivery-proof-dispute.md)) — which resolves
-nothing and decides no outcome. What a policy **requires** is still undone, so
-invariant 13 is **not** discharged and delivery confirmation still may not be
-coded.
+nothing and decides no outcome; and, since 2026-09-12, an accepted answer to
+what a policy **requires**
+([ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md)).
+
+**What is still missing is the executable contract.** ADR-0012 is a policy
+decision and adds no type, command, event, state, permission or evaluator, so
+**invariant 13 is not discharged and delivery confirmation still may not be
+coded**. No current command can manufacture proof satisfaction: there is no
+challenge lifecycle, no verifier evaluation against the policy, and no delivery
+transaction. `OrderState.delivered`, `DeliveryAttemptState.delivered`, customer
+custody and rider `completed` are exactly as unreachable as before. The
+implementing slice **must conform to ADR-0012**, and weakening any part of it
+needs a superseding ADR rather than a configuration change.
 
 That slice must then reconcile, in one design:
 

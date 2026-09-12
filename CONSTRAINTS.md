@@ -35,6 +35,23 @@ it. Nothing here may be downgraded by an implementing task on its own.
 12. Stock cannot become available again until shop receipt **and** inspection.
 13. Customer OTP/proof and the fallback dispute workflow must be defined before
     delivery confirmation is coded.
+    **Both halves are now DEFINED; the invariant is NOT discharged.** The
+    fallback dispute workflow was defined by FND-003D2B (contract 0.9), and the
+    proof-satisfaction **policy** by
+    [ADR-0012](docs/decisions/ADR-0012-delivery-proof-satisfaction-policy.md)
+    (Accepted 2026-09-12, owner decision **O8**) — a server-issued, single-use,
+    resource-bound confirmation challenge, verified server-side and fail-closed,
+    with mandatory-but-not-sufficient customer participation.
+    **Defining the policy is not implementing it.** No executable proof
+    satisfaction exists: no challenge lifecycle, no evaluator and no delivery
+    transaction was added, `ContractVersion.current` stays **0.11**, and
+    `OrderState.delivered`, `DeliveryAttemptState.delivered`,
+    `CustodyHolderKind.customer` and rider `AssignmentState.completed` all
+    remain **unreachable**. **Delivery confirmation still may not be coded**
+    until a separately reviewed slice implements the policy, and that slice
+    **must conform to ADR-0012** — weakening any part of it requires a
+    superseding ADR, not a policy-version or configuration change. This item is
+    discharged only when the executable implementation exists and is accepted.
 14. Server authorization is always required, even where App Check is
     unavailable.
 

@@ -446,16 +446,16 @@ or financial result.
 
 | Decision | Status | Owner |
 |---|---|---|
-| Proof mechanism (OTP/QR/signature/photo/GPS/biometric/attestation) | **DEFERRED** — none selected, named or implied | proof-policy slice |
-| What a policy actually requires | **DEFERRED** | proof-policy slice |
+| Proof mechanism (OTP/QR/signature/photo/GPS/biometric/attestation) | **POLICY DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md) selects a server-issued, single-use, resource-bound confirmation challenge. **None is selected, named or implied *in this contract***: no type, field, enum or event represents one, and the source sweep is unchanged | decided; **executable form DEFERRED** to the implementing slice |
+| What a policy actually requires | **DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md): a live, bound challenge fulfilled by the customer side and **verified server-side**, fail-closed. Photo, GPS, timestamp, unbound signature, rider assertion, cash collection, non-response, attempt completion and custody possession are each **insufficient alone** | ADR-0012; **implementation DEFERRED** |
 | Evidence cardinality and internal material | **DEFERRED** — one D1 handle, no count | storage/policy design |
 | Evidence retention, visibility, deletion, legal hold | **DEFERRED** (unchanged from D1) | privacy/retention slice |
-| **Customer participation requirement** | **POLICY-DEFINED / DEFERRED** — not optional, not mandatory, not sufficient, not a veto | proof-policy slice |
+| **Customer participation requirement** | **DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md): **MANDATORY and NOT SUFFICIENT**, and not a veto that ends the order. **No `customerConfirmed` flag was added, and none exists** — the requirement binds the implementing slice, not this contract | ADR-0012; **implementation DEFERRED** |
 | Fallback dispute workflow | **DONE** (0.9) — see [delivery-proof-dispute.md](delivery-proof-dispute.md) | **FND-003D2B** |
 | **How a dispute resolves** | **DEFERRED** — enumerated and refused, never guessed | resolution slice, **O6**, FND-003C |
 | Delivery attempts, refusal, returns | **DONE** (0.10) — the non-success path only; see [delivery-attempt-return-lifecycle.md](delivery-attempt-return-lifecycle.md). Successful delivery is still **not** executable | **FND-003B3B** |
 | Any money at all | **UNKNOWN / DEFERRED** | **FND-003C** — **O6 resolved** (ADR-0011); the remaining money lifecycle work is unimplemented |
-| Manual/admin assessment override | **NOT INVENTED** — separate audited workflow if ever needed | future ADR |
+| Manual/admin assessment override | **STILL NOT INVENTED** — none exists, and none was added. [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md) now sets the boundary for one: an exception review must be separately authorized, reason- and reference-bearing, audited, bound to the same resource and attempt, append-only, and **distinguishable afterwards** — never a silent waiver. It **does not create the workflow, and no permission for it exists** | future bounded slice, under ADR-0012 |
 
 `customer.delivery.confirm_proof` keeps its exact accepted meaning:
 **participation only**, settling no cash and closing no dispute. No

@@ -209,10 +209,13 @@ Delivery-proof assessment is trusted, immutable and append-only *(Accepted;
 amended by FND-003D2A-FIX-001)* · ADR-0010 The first executable return route is
 direct rider→shop, and returned stock is separate from liability · ADR-0011 O6
 resolved: BDT-only v1, quoted customer price, commission as an allocation, and
-rider cash as custody. Read the relevant ADR before changing what it decided.
+rider cash as custody · ADR-0012 O8 resolved: delivery proof satisfaction is a
+server-issued, single-use, resource-bound confirmation challenge, verified
+server-side and fail-closed — **policy only; successful delivery stays
+unimplemented**. Read the relevant ADR before changing what it decided.
 
 Every entry above is **Accepted** unless its own parenthetical says otherwise,
-and the list is the complete inventory — eleven decisions, each appearing
+and the list is the complete inventory — twelve decisions, each appearing
 exactly once, no gap and none beyond the last. `docs/decisions/` remains the
 authority: if the directory and this index ever disagree, the directory wins and
 this index is the defect.

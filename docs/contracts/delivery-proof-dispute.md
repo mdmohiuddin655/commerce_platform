@@ -43,9 +43,17 @@ rider assignment, or touches money.
 
 `CONSTRAINTS.md` invariant 13 requires **both** customer proof and the fallback
 dispute workflow before delivery confirmation is coded. This slice delivers the
-second half. **The proof-satisfaction policy itself is still undefined**, so
-invariant 13 is **not discharged** and delivery confirmation still may not be
-coded.
+second half. The proof-satisfaction **policy** was undefined when this slice
+landed and has since been **decided** — 2026-09-12,
+[ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md), owner
+decision **O8**: a server-issued, single-use, resource-bound confirmation
+challenge, verified server-side and fail-closed. **That is a policy decision, not
+an implementation.** No challenge lifecycle, evaluator, command, event, state or
+permission was added by it, so **invariant 13 is still not discharged and
+delivery confirmation still may not be coded**. Nothing in this dispute contract
+changes: no current command can manufacture proof satisfaction, dispute
+resolution remains undecided, and `dispute.resolve_delivery_proof` is still
+enumerated and always refused `resolutionPolicyDeferred`.
 
 ## 2. The situations, and why each stays distinct
 
@@ -686,12 +694,12 @@ Therefore:
 | Withdrawal, closure, expiry, escalation, reassignment of a dispute | **NOT INVENTED** | resolution slice |
 | **Separation of duties** between raiser and reviewer | **NOT DECIDED** — an invented `reviewerIsRaiser` denial was removed by FND-003D2B-FIX-001; the accepted permission requires no approval | future permission + ADR |
 | SLA, deadline or response window | **NOT INVENTED** | operational policy |
-| Proof mechanism (OTP/QR/signature/photo/GPS/biometric/attestation) | **DEFERRED** — none selected, named or implied | proof-policy slice |
-| What a proof policy actually requires | **DEFERRED** | proof-policy slice |
-| **Customer participation requirement** | **POLICY-DEFINED / DEFERRED** — not optional, not mandatory, not sufficient, not a veto | proof-policy slice |
+| Proof mechanism (OTP/QR/signature/photo/GPS/biometric/attestation) | **POLICY DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md) selects a server-issued, single-use, resource-bound confirmation challenge. **None is selected, named or implied *in any contract***: no type, field, enum or event represents one | decided; **executable form DEFERRED** |
+| What a proof policy actually requires | **DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md): a live, bound challenge fulfilled by the customer side and **verified server-side**, fail-closed; photo, GPS, timestamp, unbound signature, rider assertion, cash collection, non-response, attempt completion and custody possession are each **insufficient alone** | ADR-0012; **implementation DEFERRED** |
+| **Customer participation requirement** | **DECIDED** 2026-09-12 — [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md): **MANDATORY and NOT SUFFICIENT**, and not a veto that ends the order. **Raising a dispute is still not participation in proof** | ADR-0012; **implementation DEFERRED** |
 | Disputing a **satisfied** assessment | **NOT DEFINED** — refused `assessmentSatisfied` | future slice, if ever needed |
 | Whether a dispute may be raised after delivery, refusal, return or post-dispatch cancellation | **DEFERRED** — refusal and return became reachable in FND-003B3B (**done**), which decided nothing about disputing them; delivery and post-dispatch cancellation remain unreachable | resolution slice + **O6** |
-| Manual/admin proof override | **NOT INVENTED** — none exists, and none was added | future ADR |
+| Manual/admin proof override | **STILL NOT INVENTED** — none exists, and none was added. [ADR-0012](../decisions/ADR-0012-delivery-proof-satisfaction-policy.md) sets the boundary for an exception review — separately authorized, reason- and reference-bearing, audited, resource-bound, append-only and **distinguishable afterwards**, never a silent waiver — and **creates neither the workflow nor a permission for it** | future bounded slice, under ADR-0012 |
 | Dispute visibility, retention and deletion | **DEFERRED** (as for evidence, unchanged from D1) | privacy/retention slice |
 
 `customer.delivery.confirm_proof` keeps its exact accepted meaning:
